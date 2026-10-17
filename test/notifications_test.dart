@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:c411_remote/api/c411_socket.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:c411_remote/state/notifications.dart';
+import 'package:c411_remote/ui/chat_page.dart';
 import 'package:c411_remote/ui/notifications_page.dart';
 import 'package:c411_remote/ui/theme.dart';
 import 'package:flutter/material.dart';
@@ -123,11 +124,20 @@ void main() {
     await tester.pump();
 
     expect(find.text('Connecté'), findsOneWidget);
-    expect(find.text('MON COMPTE · EN DIRECT'), findsOneWidget);
-    expect(find.text('Messages privés : 3'), findsOneWidget);
+    expect(find.text('Mon compte'), findsOneWidget);
+    expect(find.text('EN DIRECT'), findsOneWidget);
+    expect(find.text('Messages privés'), findsOneWidget);
 
-    await tester.tap(find.text('Salon · 33 en ligne'));
+    // Le salon a son propre onglet (page ChatPage).
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: ThemeData(extensions: const [AppColors.dark]),
+        home: const ChatPage(),
+      ),
+    ));
     await tester.pump();
+    expect(find.textContaining('33 en ligne'), findsOneWidget, reason: 'en-tête');
     expect(find.text('Premier message'), findsOneWidget);
     expect(find.text('Novice'), findsOneWidget);
     expect(find.text('MembreD écrit…'), findsOneWidget);

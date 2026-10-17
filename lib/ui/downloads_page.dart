@@ -25,6 +25,18 @@ Color torrentColor(Torrent t, AppColors c) {
   return t.isComplete ? c.success.withValues(alpha: 0.6) : c.muted;
 }
 
+/// Icône de l'état d'un torrent (pastille de la ligne).
+IconData torrentIcon(Torrent t) {
+  if (t.hasError) return Icons.error_rounded;
+  if (t.needsMetadata) return Icons.hourglass_top_rounded;
+  if (t.isChecking) return Icons.sync_rounded;
+  if (t.isQueued) return Icons.schedule_rounded;
+  if (t.isDownloading) return Icons.south_rounded;
+  if (t.isSeeding) return Icons.north_rounded;
+  if (t.isComplete) return Icons.check_rounded;
+  return Icons.pause_rounded;
+}
+
 enum _Filter {
   all('Tous'),
   active('Actifs'),
@@ -38,6 +50,18 @@ enum _Filter {
 
   const _Filter(this.label);
   final String label;
+
+  IconData get icon => switch (this) {
+    all => Icons.apps_rounded,
+    active => Icons.bolt_rounded,
+    downloading => Icons.south_rounded,
+    seeding => Icons.north_rounded,
+    complete => Icons.check_circle_outline_rounded,
+    queued => Icons.schedule_rounded,
+    stopped => Icons.pause_circle_outline_rounded,
+    stalled => Icons.hourglass_empty_rounded,
+    error => Icons.error_outline_rounded,
+  };
 
   bool accepts(Torrent t) => switch (this) {
     all => true,
@@ -70,6 +94,21 @@ enum _Sort {
   const _Sort(this.label, {this.ascendingByDefault = false});
   final String label;
   final bool ascendingByDefault;
+
+  IconData get icon => switch (this) {
+    added => Icons.event_rounded,
+    name => Icons.sort_by_alpha_rounded,
+    status => Icons.flag_rounded,
+    queue => Icons.format_list_numbered_rounded,
+    progress => Icons.donut_large_rounded,
+    eta => Icons.timer_outlined,
+    download => Icons.south_rounded,
+    upload => Icons.north_rounded,
+    peers => Icons.people_alt_rounded,
+    ratio => Icons.balance_rounded,
+    uploaded => Icons.cloud_upload_outlined,
+    size => Icons.storage_rounded,
+  };
 
   // eta vaut -1 ou -2 quand il est inconnu : on le place après les autres.
   static int _eta(Torrent t) => t.eta < 0 ? 1 << 40 : t.eta;
@@ -219,13 +258,14 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
           )
         : PageHeader(
             title: 'Transferts',
-            subtitle: const _SpeedPills(),
+            subtitle: const _Summary(),
             actions: [
               SortMenu<_Sort>(
                 options: _Sort.values,
                 selected: sort,
                 ascending: ascending,
                 label: (s) => s.label,
+                icon: (s) => s.icon,
                 ascendingByDefault: (s) => s.ascendingByDefault,
                 onChanged: (s, asc) => ref
                     .read(uiPrefsProvider.notifier)
@@ -310,7 +350,7 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
             )
           else ...[
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: TextField(
                 onChanged: (v) => setState(() => _query = v),
                 decoration: const InputDecoration(
@@ -319,10 +359,8 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                 ),
               ),
             ),
-            ChipRow<_Filter>(
-              items: _Filter.values,
+            _FilterChips(
               selected: _filter,
-              label: (f) => f.label,
               onSelected: (f) => setState(() => _filter = f),
             ),
             if (labels.isNotEmpty) ...[
@@ -331,10 +369,11 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                 items: [null, ...labels],
                 selected: _label,
                 label: (l) => l ?? 'Toutes étiquettes',
+                icon: (l) => l == null ? Icons.label_outline_rounded : Icons.label_rounded,
                 onSelected: (l) => setState(() => _label = l),
               ),
             ],
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             if (error != null)
               ErrorBanner(error, onRetry: () => notifier.refresh(full: true)),
             Divider(height: 1, color: c.border),
@@ -380,39 +419,145 @@ class _View {
   }
 }
 
-/// Vitesses globales et nombre de torrents (seul bloc de l'en-tête qui suit
-/// les rafraîchissements).
-class _SpeedPills extends ConsumerWidget {
-  const _SpeedPills();
+/// En-tête : réception, envoi et nombre de torrents, en tuiles lisibles
+/// (seul bloc de l'en-tête qui suit les rafraîchissements).
+class _Summary extends ConsumerWidget {
+  const _Summary();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (loaded, down, up, count) = ref.watch(
+    final (loaded, down, up, count, active) = ref.watch(
       torrentsProvider.select(
-        (s) => (s.loaded, s.downloadRate, s.uploadRate, s.byId.length),
+        (s) => (
+          s.loaded,
+          s.downloadRate,
+          s.uploadRate,
+          s.byId.length,
+          s.byId.values.where((t) => t.isActive).length,
+        ),
       ),
     );
     if (!loaded) return const SizedBox.shrink();
     final c = context.colors;
+    final tiles = [
+      _StatTile(
+          icon: Icons.south_rounded,
+          color: c.download,
+          value: formatSpeed(down),
+          label: 'Réception'),
+      _StatTile(
+          icon: Icons.north_rounded,
+          color: c.upload,
+          value: formatSpeed(up),
+          label: 'Envoi'),
+      _StatTile(
+          icon: Icons.layers_rounded,
+          color: c.accent,
+          value: '$count',
+          label: active == 0 ? 'Torrents' : '$active actif${active > 1 ? 's' : ''}'),
+    ];
+    final wide = MediaQuery.sizeOf(context).width >= 720;
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: [
-          StatPill(
-            icon: Icons.south_rounded,
-            color: c.download,
-            label: formatSpeed(down),
-          ),
-          StatPill(
-            icon: Icons.north_rounded,
-            color: c.upload,
-            label: formatSpeed(up),
-          ),
-          StatPill(icon: Icons.layers_outlined, label: '$count'),
+      padding: const EdgeInsets.only(top: 10, right: 8),
+      child: Row(children: [
+        for (final (i, t) in tiles.indexed) ...[
+          if (i > 0) const SizedBox(width: 8),
+          wide ? SizedBox(width: 190, child: t) : Expanded(child: t),
         ],
+      ]),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile(
+      {required this.icon,
+      required this.color,
+      required this.value,
+      required this.label});
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    // Téléphone : petite icône près du libellé, toute la largeur pour la
+    // valeur ; PC : pastille ronde à gauche.
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    final text = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              fontFeatures: [FontFeature.tabularFigures()])),
+      Row(children: [
+        if (compact) ...[
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 3),
+        ],
+        Expanded(
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: c.muted)),
+        ),
+      ]),
+    ]);
+    return Container(
+      padding: EdgeInsets.fromLTRB(compact ? 8 : 10, 8, compact ? 6 : 10, 8),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border),
       ),
+      child: compact
+          ? text
+          : Row(children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 18, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: text),
+            ]),
+    );
+  }
+}
+
+/// Filtres d'état avec icône et nombre ; les filtres vides sont masqués (sauf
+/// « Tous » et celui choisi).
+class _FilterChips extends ConsumerWidget {
+  const _FilterChips({required this.selected, required this.onSelected});
+  final _Filter selected;
+  final ValueChanged<_Filter> onSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Clé texte : ne reconstruit que si un compte change.
+    final key = ref.watch(torrentsProvider.select((s) => [
+          for (final f in _Filter.values)
+            s.byId.values.where(f.accepts).length,
+        ].join(',')));
+    final counts = [for (final n in key.split(',')) int.parse(n)];
+    final shown = [
+      for (final (i, f) in _Filter.values.indexed)
+        if (f == _Filter.all || f == selected || counts[i] > 0) f,
+    ];
+    return ChipRow<_Filter>(
+      items: shown,
+      selected: selected,
+      label: (f) => '${f.label} (${counts[f.index]})',
+      icon: (f) => f.icon,
+      onSelected: onSelected,
     );
   }
 }
@@ -560,12 +705,19 @@ class _TorrentRow extends ConsumerWidget {
   final bool selecting;
   final VoidCallback onToggle;
 
-  /// Hauteur de ligne : 64 px, plus si la police du système est agrandie
-  /// (titre 13 / étiquette 10,5 + 4, infos 11,5, interligne 1,25 ; barre 3,
-  /// espacements 10, marges 14).
+  static const _line = 1.3;
+
+  /// Hauteur d'une carte, d'après la taille du texte du système : marges 10,
+  /// rembourrage 24, nom 13,5, barre et pourcentage 12, infos 12,
+  /// espacements 12.
   static double extent(BuildContext context) {
-    final s = MediaQuery.textScalerOf(context).scale(100) / 100;
-    return math.max(64, 29 + (10.5 * 1.3 + 11.5 * 1.25) * s + 4);
+    final s = MediaQuery.textScalerOf(context);
+    return math.max(
+        90,
+        10 + 24 + s.scale(13.5) * _line + 6 +
+            math.max(8, s.scale(12) * _line) + 6 +
+            // Ligne d'infos : texte, ou étiquettes (sur téléphone).
+            math.max(s.scale(12) * _line, s.scale(10.5) * 1.3 + 4) + 2);
   }
 
   @override
@@ -578,191 +730,233 @@ class _TorrentRow extends ConsumerWidget {
         : t.needsMetadata
         ? t.metadataPercentComplete
         : t.percentDone;
-
-    final meta = <String>[
-      if (t.needsMetadata)
-        'Métadonnées ${formatPercent(t.metadataPercentComplete)}'
-      else
-        t.statusLabel,
-      if (t.isQueued) 'n° ${t.queuePosition + 1}',
-      if (t.isStalled) 'bloqué',
-      if (t.percentDone < 1)
-        '${formatBytes(t.sizeWhenDone - t.leftUntilDone)} / ${formatBytes(t.sizeWhenDone)}'
-      else
-        formatBytes(t.sizeWhenDone),
-      if (t.isDownloading && t.eta >= 0) formatDuration(t.eta),
-      'ratio ${formatRatio(t.ratio)}',
-    ];
     const mono = [FontFeature.tabularFigures()];
+    final small = TextStyle(fontSize: 12, height: _line, color: c.muted);
 
-    return InkWell(
-      onLongPress: onToggle,
-      onTap: selecting
-          ? onToggle
-          : () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => TorrentDetailPage(id: t.id, name: t.name),
-              ),
-            ),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 7, 4, 7),
-        decoration: BoxDecoration(
-          color: selected ? c.accent.withValues(alpha: 0.12) : null,
-          border: Border(bottom: BorderSide(color: c.border, width: 0.5)),
+    Widget info(IconData icon, String text) => Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: c.muted),
+            const SizedBox(width: 4),
+            Text(text, style: small.copyWith(fontFeatures: mono)),
+          ]),
+        );
+    Widget speed(IconData icon, Color tone, int rate) => Padding(
+          padding: const EdgeInsets.only(left: 10),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: tone),
+            const SizedBox(width: 2),
+            Text(formatSpeed(rate),
+                style: TextStyle(
+                    fontSize: 12,
+                    height: _line,
+                    fontWeight: FontWeight.w700,
+                    color: c.text,
+                    fontFeatures: mono)),
+          ]),
+        );
+
+    final status = t.needsMetadata
+        ? 'Métadonnées'
+        : [
+            t.statusLabel,
+            if (t.isQueued) 'n° ${t.queuePosition + 1}',
+            if (t.isStalled) 'bloqué',
+          ].join(' · ');
+    // Écran étroit : les vitesses en tête de la ligne d'infos (coupée à
+    // droite si besoin) plutôt qu'à part, où elles ne tiendraient pas.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final speeds = [
+      if (t.rateDownload > 0)
+        speed(Icons.south_rounded, c.download, t.rateDownload),
+      if (t.rateUpload > 0) speed(Icons.north_rounded, c.upload, t.rateUpload),
+    ];
+    final details = Row(children: [
+      Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: Text(status,
+            style: small.copyWith(color: color, fontWeight: FontWeight.w700)),
+      ),
+      if (narrow) ...[
+        for (final w in speeds)
+          Padding(padding: const EdgeInsets.only(right: 12), child: w),
+        for (final l in t.labels.take(2))
+          Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Tag(l, color: c.info)),
+      ],
+      info(
+          Icons.storage_rounded,
+          t.percentDone < 1
+              ? '${formatBytes(t.sizeWhenDone - t.leftUntilDone)} / ${formatBytes(t.sizeWhenDone)}'
+              : formatBytes(t.sizeWhenDone)),
+      if (t.isDownloading && t.eta >= 0)
+        info(Icons.timer_outlined, formatDuration(t.eta)),
+      info(Icons.balance_rounded, formatRatio(t.ratio)),
+      if (t.peersConnected > 0)
+        info(Icons.people_alt_rounded, '${t.peersConnected}'),
+    ]);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+      child: Material(
+        color: selected ? c.accent.withValues(alpha: 0.10) : c.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: selected ? c.accent : c.border),
         ),
-        child: Row(
-          children: [
-            if (selecting)
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Icon(
-                  selected
-                      ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked_rounded,
-                  size: 20,
-                  color: selected ? c.accent : c.muted,
+        child: InkWell(
+          onLongPress: onToggle,
+          onTap: selecting
+              ? onToggle
+              : () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => TorrentDetailPage(id: t.id, name: t.name),
+                  ),
                 ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+            child: Row(children: [
+              if (selecting)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 22,
+                    color: selected ? c.accent : c.muted,
+                  ),
+                ),
+              // Pastille d'état.
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(torrentIcon(t), size: 20, color: color),
               ),
-            Container(
-              width: 3,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    children: [
-                      if (t.bandwidthPriority ==
-                          TransmissionClient.priorityHigh)
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(children: [
+                      if (t.bandwidthPriority == TransmissionClient.priorityHigh)
                         Padding(
                           padding: const EdgeInsets.only(right: 4),
-                          child: Icon(
-                            Icons.keyboard_double_arrow_up_rounded,
-                            size: 14,
-                            color: c.warning,
-                          ),
+                          child: Icon(Icons.keyboard_double_arrow_up_rounded,
+                              size: 16, color: c.warning),
                         ),
                       Expanded(
-                        child: Text(
-                          t.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            height: 1.25,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        child: Text(t.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 13.5,
+                                height: _line,
+                                fontWeight: FontWeight.w700)),
                       ),
-                      // Étiquettes : peuvent rétrécir et se couper, pour ne
-                      // jamais pousser le pourcentage hors de la ligne.
-                      if (t.labels.isNotEmpty)
+                      // Étiquettes : peuvent rétrécir et se couper (sur
+                      // téléphone, dans la ligne d'infos).
+                      if (t.labels.isNotEmpty && !narrow)
                         Flexible(
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             physics: const NeverScrollableScrollPhysics(),
-                            child: Row(
-                              children: [
-                                for (final l in t.labels.take(2))
-                                  Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Tag(l, color: c.info),
-                                  ),
-                              ],
-                            ),
+                            child: Row(children: [
+                              for (final l in t.labels.take(2))
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: Tag(l, color: c.info),
+                                ),
+                            ]),
                           ),
                         ),
-                      const SizedBox(width: 8),
-                      Text(
-                        formatPercent(progress),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                          fontFeatures: mono,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  // Coins arrondis dessinés par la barre (pas de découpe).
-                  LinearProgressIndicator(
-                    value: progress,
-                    color: color,
-                    minHeight: 3,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
+                    ]),
+                    const SizedBox(height: 6),
+                    Row(children: [
                       Expanded(
-                        child: Text(
-                          t.hasError ? t.errorString : meta.join('  ·  '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.25,
-                            color: t.hasError ? c.danger : c.muted,
-                          ),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          color: color,
+                          minHeight: 6,
+                          borderRadius: BorderRadius.circular(3),
                         ),
                       ),
-                      // Le texte reste en couleur de texte : seule la flèche
-                      // porte la couleur de la série.
-                      if (t.rateDownload > 0) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.south_rounded, size: 12, color: c.download),
-                        Text(
-                          formatSpeed(t.rateDownload),
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.25,
-                            color: c.text,
-                            fontFeatures: mono,
-                          ),
-                        ),
-                      ],
-                      if (t.rateUpload > 0) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.north_rounded, size: 12, color: c.upload),
-                        Text(
-                          formatSpeed(t.rateUpload),
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.25,
-                            color: c.text,
-                            fontFeatures: mono,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (!selecting)
-              IconButton(
-                icon: Icon(
-                  t.isStopped ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                  size: 22,
-                ),
-                onPressed: () => runTorrentAction(
-                  context,
-                  ref,
-                  (c) => c.action(
-                    t.isStopped ? 'torrent-start' : 'torrent-stop',
-                    [t.id],
-                  ),
+                      // Largeur fixe (barres alignées d'une ligne à l'autre),
+                      // proportionnelle au texte ; jamais sur deux lignes.
+                      SizedBox(
+                        width: MediaQuery.textScalerOf(context).scale(56),
+                        child: Text(formatPercent(progress),
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.clip,
+                            style: TextStyle(
+                                fontSize: 12,
+                                height: _line,
+                                fontWeight: FontWeight.w800,
+                                color: color,
+                                fontFeatures: mono)),
+                      ),
+                    ]),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      Expanded(
+                        child: t.hasError
+                            ? Text(t.errorString,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: small.copyWith(color: c.danger))
+                            // Une ligne, coupée à droite si besoin.
+                            : SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const NeverScrollableScrollPhysics(),
+                                child: details,
+                              ),
+                      ),
+                      if (!narrow) ...speeds,
+                    ]),
+                  ],
                 ),
               ),
-          ],
+              if (!selecting) ...[
+                const SizedBox(width: 6),
+                Material(
+                  color: c.surfaceAlt,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => runTorrentAction(
+                      context,
+                      ref,
+                      (c) => c.action(
+                        t.isStopped ? 'torrent-start' : 'torrent-stop',
+                        [t.id],
+                      ),
+                    ),
+                    child: Tooltip(
+                      message: t.isStopped ? 'Démarrer' : 'Mettre en pause',
+                      child: SizedBox.square(
+                        dimension: 40,
+                        child: Icon(
+                            t.isStopped
+                                ? Icons.play_arrow_rounded
+                                : Icons.pause_rounded,
+                            size: 22,
+                            color: c.text),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ]),
+          ),
         ),
       ),
     );

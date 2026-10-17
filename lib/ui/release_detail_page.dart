@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
 import '../core/format.dart';
+import 'content_art.dart';
 import 'on_disk.dart';
 import 'send_button.dart';
 import 'theme.dart';
@@ -16,7 +17,7 @@ class ReleaseDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final r = release;
-    final jellyfin = jellyfinFor(ref, r);
+    final playable = playableFor(ref, r);
     final downloaded = downloadedFor(ref, r);
     final c = context.colors;
     final theme = Theme.of(context);
@@ -50,7 +51,10 @@ class ReleaseDetailPage extends ConsumerWidget {
           ],
         ),
         child: Poster(r.posterUrl,
-            width: wide ? 150 : 110, height: wide ? 225 : 165, radius: 12),
+            width: wide ? 150 : 110,
+            height: wide ? 225 : 165,
+            radius: 12,
+            fallback: ContentArt(ContentKind.of(r), radius: 12)),
       ),
       const SizedBox(width: 20),
       Expanded(
@@ -87,14 +91,14 @@ class ReleaseDetailPage extends ConsumerWidget {
             if (r.isExclusive) Tag('EXCLU', color: c.info),
           ]),
           const SizedBox(height: 14),
-          if (jellyfin != null || downloaded) ...[
+          if (playable != null || downloaded) ...[
             Row(children: [
               Icon(Icons.inventory_2_outlined, size: 16, color: c.success),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                    jellyfin != null
-                        ? 'Sur le disque : dans ta bibliothèque Jellyfin'
+                    playable != null
+                        ? '${playable.description}'
                             '${downloaded ? ' et téléchargé dans Transmission' : ''}'
                         : 'Sur le disque : téléchargé dans Transmission',
                     style: TextStyle(
@@ -106,12 +110,12 @@ class ReleaseDetailPage extends ConsumerWidget {
             const SizedBox(height: 10),
           ],
           Wrap(spacing: 8, runSpacing: 8, children: [
-            if (jellyfin != null)
+            if (playable != null)
               FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: c.success),
-                onPressed: () => playOnJellyfin(context, jellyfin),
+                onPressed: () => playable.play(context),
                 icon: const Icon(Icons.play_arrow_rounded),
-                label: Text(jellyfin.isSeries ? 'Épisodes' : 'Lire'),
+                label: Text(playable.isSeries ? 'Épisodes' : 'Lire'),
               ),
             SendButton(release: r, large: true),
           ]),

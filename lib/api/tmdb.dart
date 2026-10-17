@@ -425,6 +425,42 @@ class TmdbFeed {
 /// API TMDB v3. La clé est soit la « clé d'API » (v3, 32 caractères), soit le
 /// « jeton d'accès en lecture » (v4, un JWT), tous deux sur
 /// themoviedb.org → Paramètres → API.
+class TmdbEpisode {
+  const TmdbEpisode({
+    required this.season,
+    required this.number,
+    required this.name,
+    this.overview,
+    this.stillUrl,
+    this.airDate,
+    this.runtime,
+  });
+
+  factory TmdbEpisode.fromApi(Map<String, dynamic> json) {
+    final still = json['still_path'] as String?;
+    final overview = (json['overview'] as String?)?.trim();
+    return TmdbEpisode(
+      season: (json['season_number'] as num?)?.toInt() ?? 0,
+      number: (json['episode_number'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      overview: overview == null || overview.isEmpty ? null : overview,
+      stillUrl: still == null ? null : '${TmdbApi.imageBase}$still',
+      airDate: DateTime.tryParse(json['air_date'] as String? ?? ''),
+      runtime: (json['runtime'] as num?)?.toInt(),
+    );
+  }
+
+  final int season;
+  final int number;
+  final String name;
+  final String? overview;
+  final String? stillUrl;
+  final DateTime? airDate;
+
+  /// En minutes.
+  final int? runtime;
+}
+
 class TmdbApi {
   TmdbApi(String key)
       : _jwt = key.startsWith('eyJ'),
@@ -509,6 +545,34 @@ class TmdbApi {
         'include_video_language': 'fr,en',
       }),
       t.type);
+
+  /// Le titre le plus probable pour un nom de fichier : recherche avec
+  /// l'année, puis sans (année du fichier parfois fausse ou absente).
+  Future<TmdbTitle?> identify(String query, TmdbType type, {int? year}) async {
+    final movie = type == TmdbType.movie;
+    for (final y in [?year, null]) {
+      final results = parseTitles(
+          await _get('/search/${type.name}', {
+            'query': query,
+            'include_adult': false,
+            movie ? 'year' : 'first_air_date_year': ?y,
+          }),
+          type);
+      if (results.isNotEmpty) return results.first;
+      if (year == null) break;
+    }
+    return null;
+  }
+
+  /// Épisodes d'une saison : titres, résumés, images.
+  Future<List<TmdbEpisode>> season(int tvId, int season) async {
+    final body = await _get('/tv/$tvId/season/$season');
+    return [
+      for (final e in (body['episodes'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>())
+        TmdbEpisode.fromApi(e),
+    ];
+  }
 
   Future<FrenchDates> frenchDates(int movieId) async =>
       FrenchDates.fromApi(await _get('/movie/$movieId/release_dates'));

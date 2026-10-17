@@ -1,7 +1,7 @@
 import 'package:c411_remote/api/c411_chat.dart';
 import 'package:c411_remote/api/c411_socket.dart';
 import 'package:c411_remote/state/notifications.dart';
-import 'package:c411_remote/ui/notifications_page.dart';
+import 'package:c411_remote/ui/chat_page.dart';
 import 'package:c411_remote/ui/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -158,14 +158,15 @@ void main() {
       container: container,
       child: MaterialApp(
         theme: ThemeData(extensions: const [AppColors.dark]),
-        home: const NotificationsPage(),
+        home: const ChatPage(),
       ),
     ));
-    await tester.tap(find.text('Salon'));
     await tester.pump();
 
     for (final name in ['Général', 'Aide', 'Annonces']) {
-      expect(find.text(name), findsOneWidget, reason: name);
+      // Pastilles des salons (le salon actif figure aussi dans l'en-tête).
+      expect(find.descendant(of: find.byType(ChoiceChip), matching: find.text(name)),
+          findsOneWidget, reason: name);
     }
     expect(find.text('Salon de discussion général'), findsOneWidget);
     expect(find.textContaining('Le guide'), findsOneWidget);

@@ -65,18 +65,20 @@ class AppColors extends ThemeExtension<AppColors> {
       };
 
   // Couleurs relevées sur c411.org.
+  // Vert C411 en accent, sur un fond encre bleutée → vert profond.
   static const dark = AppColors(
-    bg: Color(0xFF061712),
-    surface: Color(0xFF101E19),
-    surfaceAlt: Color(0xFF17302A),
-    border: Color(0xFF21352C),
-    text: Color(0xFFF4FFF8),
-    muted: Color(0xFF9DB9AC),
+    bg: Color(0xFF07141A),
+    surface: Color(0xFF0E1D23),
+    surfaceAlt: Color(0xFF16292E),
+    border: Color(0xFF213840),
+    text: Color(0xFFF1F8F6),
+    muted: Color(0xFF97AFAB),
     accent: Color(0xFF00D492),
-    success: Color(0xFF46C35A),
+    // Vert d'eau et cyan, accordés au fond encre (plus de vert vif ni de violet).
+    success: Color(0xFF3AAE8A),
     warning: Color(0xFFFFB900),
     danger: Color(0xFFF85245),
-    info: Color(0xFFB45CF0),
+    info: Color(0xFF3BB4D4),
     download: Color(0xFF3987E5),
     upload: Color(0xFFD95926),
     onAccent: Color(0xFF04100C),
@@ -95,10 +97,10 @@ class AppColors extends ThemeExtension<AppColors> {
     text: Color(0xFF0B1A14),
     muted: Color(0xFF4F6A5E),
     accent: Color(0xFF00855B),
-    success: Color(0xFF2F8F3E),
+    success: Color(0xFF1E8466),
     warning: Color(0xFFB27800),
     danger: Color(0xFFD63A2E),
-    info: Color(0xFF8B3BD1),
+    info: Color(0xFF0E86A3),
     download: Color(0xFF2A78D6),
     upload: Color(0xFFEB6834),
     onAccent: Color(0xFFFFFFFF),
@@ -238,6 +240,8 @@ ThemeData buildTheme(Brightness brightness) {
     appBarTheme: AppBarTheme(
       backgroundColor: c.bg,
       foregroundColor: c.text,
+      // Icônes de la barre du haut plus grandes que celles des listes.
+      actionsIconTheme: IconThemeData(size: 26, color: c.muted),
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
@@ -283,7 +287,7 @@ ThemeData buildTheme(Brightness brightness) {
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: radius),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(fontFamily: font, fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -292,7 +296,7 @@ ThemeData buildTheme(Brightness brightness) {
         side: BorderSide(color: c.border),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: radius),
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(fontFamily: font, fontWeight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -320,14 +324,16 @@ ThemeData buildTheme(Brightness brightness) {
       // Les puces résolvent la *couleur* du libellé selon l'état (pas le
       // TextStyle entier) : la couleur doit donc être une WidgetStateColor.
       labelStyle: TextStyle(
+        fontFamily: font,
         fontSize: 13,
         fontWeight: FontWeight.w500,
         color: WidgetStateColor.resolveWith(
           (s) => s.contains(WidgetState.selected) ? c.onAccent : c.text,
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+      // Picto (avatar) à 8 px du bord et 4 px du libellé.
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: c.surface,
@@ -458,4 +464,28 @@ ThemeData buildTheme(Brightness brightness) {
       ),
     ),
   );
+}
+
+/// Panneau opaque à bord fin et coins arrondis (tuiles, blocs, barre de
+/// navigation). Pas de transparence ni de flou : rien de coûteux à peindre.
+class Panel extends StatelessWidget {
+  const Panel({super.key, required this.child, this.radius = 16});
+  final Widget child;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    // Une couche Material (et non une simple boîte peinte) : les lignes
+    // cliquables (ListTile) y dessinent leur survol et leur appui.
+    return Material(
+      color: c.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radius),
+        side: BorderSide(color: c.border),
+      ),
+      child: child,
+    );
+  }
 }

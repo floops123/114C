@@ -5,12 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/astra.dart';
 import '../api/c411_socket.dart';
+import '../api/ftp.dart';
 import '../api/jellyfin.dart';
 import '../api/tmdb.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/settings.dart';
 import '../core/preferences.dart';
+import '../state/media_library.dart';
 import 'server_settings_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -39,11 +41,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _jellyfinKey = TextEditingController();
   String? _jellyfinStatus;
   String? _tmdbStatus;
+  final _ftpHost = TextEditingController();
+  final _ftpPort = TextEditingController(text: '21');
+  final _ftpUser = TextEditingController();
+  final _ftpPassword = TextEditingController();
+  final _mediaFolders = TextEditingController();
+  bool _ftpTls = true;
+  String? _ftpStatus;
 
   @override
   void dispose() {
     for (final c in [
       _url, _user, _password, _cookie, _tmdb, _jellyfinUrl, _jellyfinKey,
+      _ftpHost, _ftpPort, _ftpUser, _ftpPassword, _mediaFolders,
       ..._apiKeys.values,
     ]) {
       c.dispose();
@@ -63,7 +73,46 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     tmdbKey: _tmdb.text.trim(),
     jellyfinUrl: _jellyfinUrl.text.trim(),
     jellyfinKey: _jellyfinKey.text.trim(),
+    ftpHost: _ftpHost.text.trim(),
+    ftpPort: int.tryParse(_ftpPort.text.trim()) ?? 21,
+    ftpUser: _ftpUser.text.trim(),
+    ftpPassword: _ftpPassword.text,
+    ftpTls: _ftpTls,
+    mediaFolders: [
+      for (final line in _mediaFolders.text.split('\n'))
+        if (line.trim().isNotEmpty)
+          line.trim().startsWith('/') ? line.trim() : '/${line.trim()}',
+    ],
   );
+
+  /// Connexion, puis liste de la racine : aide à choisir les dossiers.
+  Future<void> _testFtp() async {
+    final form = _form;
+    if (!form.hasFtp) {
+      _setStatus(() => _ftpStatus = '✗ Hôte ou identifiant manquant');
+      return;
+    }
+    _setStatus(() => _ftpStatus = 'Connexion…');
+    final ftp = FtpClient(ftpConfigOf(form));
+    try {
+      await ftp.connect();
+      final root = await ftp.list('/');
+      final dirs = [for (final e in root) if (e.isDir) e.name];
+      final missing = [
+        for (final f in form.mediaFolders)
+          if (await ftp.list(f).then((l) => l.isEmpty, onError: (_) => true)) f,
+      ];
+      _setStatus(() => _ftpStatus = [
+            '✓ Connecté',
+            if (dirs.isNotEmpty) 'dossiers à la racine : ${dirs.take(12).join(', ')}',
+            if (missing.isNotEmpty) 'vides ou introuvables : ${missing.join(', ')}',
+          ].join(' · '));
+    } on FtpException catch (e) {
+      _setStatus(() => _ftpStatus = '✗ ${e.message}');
+    } finally {
+      await ftp.close();
+    }
+  }
 
   Future<void> _testJellyfin() async {
     final url = _jellyfinUrl.text.trim(), key = _jellyfinKey.text.trim();
@@ -248,6 +297,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _tmdb.text = saved.tmdbKey;
       _jellyfinUrl.text = saved.jellyfinUrl;
       _jellyfinKey.text = saved.jellyfinKey;
+      _ftpHost.text = saved.ftpHost;
+      _ftpPort.text = '${saved.ftpPort}';
+      _ftpUser.text = saved.ftpUser;
+      _ftpPassword.text = saved.ftpPassword;
+      _ftpTls = saved.ftpTls;
+      _mediaFolders.text = saved.mediaFolders.join('\n');
     }
     final c = context.colors;
     final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
@@ -485,6 +540,87 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                   ),
                                   const SizedBox(width: 12),
                                   status(_tmdbStatus),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Section(
+                            title: 'Serveur de fichiers (FTP)',
+                            children: [
+                              Text(
+                                'Notre base de films et séries : les fichiers '
+                                'des torrents terminés et des dossiers ci-dessous, '
+                                'lus directement par le lecteur. Appbox : installe '
+                                'l’application Pure-FTPd, hôte '
+                                'ftp.<identifiant>.appbox.co, port 21, TLS.',
+                                style: TextStyle(fontSize: 12.5, color: c.muted),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _ftpHost,
+                                    keyboardType: TextInputType.url,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Hôte',
+                                      hintText: 'ftp.moi.appbox.co',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  width: 90,
+                                  child: TextField(
+                                    controller: _ftpPort,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(labelText: 'Port'),
+                                  ),
+                                ),
+                              ]),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _ftpUser,
+                                decoration: const InputDecoration(
+                                    labelText: 'Identifiant'),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _ftpPassword,
+                                obscureText: !_showSecrets,
+                                decoration: const InputDecoration(
+                                    labelText: 'Mot de passe'),
+                              ),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Chiffrement TLS'),
+                                subtitle: const Text('FTP sur TLS explicite (FTPES)'),
+                                value: _ftpTls,
+                                onChanged: (v) => setState(() => _ftpTls = v),
+                              ),
+                              TextField(
+                                controller: _mediaFolders,
+                                minLines: 2,
+                                maxLines: 6,
+                                decoration: const InputDecoration(
+                                  labelText: 'Dossiers à parcourir (un par ligne)',
+                                  hintText: '/Films\n/Séries',
+                                  helperMaxLines: 3,
+                                  helperText:
+                                      'Facultatif : les torrents terminés de '
+                                      'Transmission sont toujours pris en compte.',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _testFtp,
+                                    child: const Text('Tester'),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  status(_ftpStatus),
                                 ],
                               ),
                             ],

@@ -20,8 +20,10 @@ class Tag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
+        // Opaque (sur une affiche) : fond de la couleur, texte blanc ; sans
+        // couleur, voile sombre.
         color: solid
-            ? Colors.black.withValues(alpha: 0.65)
+            ? (color ?? Colors.black).withValues(alpha: color == null ? 0.65 : 0.9)
             : (color ?? c.muted).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(5),
       ),
@@ -32,7 +34,7 @@ class Tag extends StatelessWidget {
           height: 1.3,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.2,
-          color: solid ? (color ?? Colors.white) : fg,
+          color: solid ? Colors.white : fg,
         ),
       ),
     );
@@ -56,20 +58,26 @@ String tmdbSized(String url, double pixels) {
 /// Affiche TMDB. Sans dimensions, elle remplit l'espace disponible.
 /// Les coins arrondis sont dessinés avec l'image (pas de découpe séparée).
 class Poster extends StatelessWidget {
-  const Poster(this.url, {super.key, this.width, this.height, this.radius = 8});
+  const Poster(this.url,
+      {super.key, this.width, this.height, this.radius = 8, this.fallback});
   final String? url;
   final double? width;
   final double? height;
   final double radius;
 
+  /// Affiché sans image, ou si elle ne se charge pas (ex. visuel du type de
+  /// contenu, voir ContentArt).
+  final Widget? fallback;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final shape = BorderRadius.circular(radius);
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: shape),
-      child: Center(child: Icon(Icons.movie_outlined, color: c.muted)),
-    );
+    final placeholder = fallback ??
+        DecoratedBox(
+          decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: shape),
+          child: Center(child: Icon(Icons.movie_outlined, color: c.muted)),
+        );
     return SizedBox(
       width: width,
       height: height,
@@ -118,7 +126,7 @@ class PageHeader extends StatelessWidget {
     // Le sous-titre occupe toute la largeur sous la ligne titre + actions :
     // sur téléphone, il ne se tasse pas à côté des boutons.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 6),
+      padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -132,11 +140,125 @@ class PageHeader extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              ...actions,
+              HeaderActions(children: actions),
             ],
           ),
           if (subtitle != null) ...[const SizedBox(height: 2), subtitle!],
         ],
+      ),
+    );
+  }
+}
+
+/// Taille des icônes d'en-tête de page et de barre du haut (plus grandes que
+/// celles des listes).
+const headerIconSize = 26.0;
+
+/// Actions d'en-tête de page : icônes et zone de clic agrandies (boutons
+/// et menus).
+class HeaderActions extends StatelessWidget {
+  const HeaderActions({super.key, required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = IconButtonTheme.of(context);
+    return IconTheme.merge(
+      data: const IconThemeData(size: headerIconSize),
+      child: IconButtonTheme(
+        data: IconButtonThemeData(
+          style: (theme.style ?? const ButtonStyle()).copyWith(
+            iconSize: const WidgetStatePropertyAll(headerIconSize),
+            minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
+            padding: const WidgetStatePropertyAll(EdgeInsets.all(8)),
+          ),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: children),
+      ),
+    );
+  }
+}
+
+/// Grand bouton décoré : dégradé, pastille ou icône, titre et sous-titre.
+/// Choisi : couleurs franches, liseré clair et coche ; sinon atténué (sans
+/// perdre son décor). Pas d'animation ni de transparence.
+class FeatureButton extends StatelessWidget {
+  const FeatureButton({
+    super.key,
+    required this.leading,
+    required this.title,
+    required this.subtitle,
+    required this.colors,
+    required this.selected,
+    required this.onTap,
+  });
+  final Widget leading;
+  final String title;
+  final String subtitle;
+  final List<Color> colors;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final shape = BorderRadius.circular(14);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: shape,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: selected
+              ? colors
+              : [for (final x in colors) Color.lerp(x, c.surfaceAlt, 0.45)!],
+        ),
+        border: Border.all(
+            color: selected ? c.text.withValues(alpha: 0.85) : Colors.transparent,
+            width: 2),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: shape,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 14, 9),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconTheme.merge(
+                data: IconThemeData(size: 28, color: c.onAccent),
+                child: leading,
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: c.onAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800)),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: c.onAccent.withValues(alpha: 0.8),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 10),
+                Icon(Icons.check_circle_rounded, size: 18, color: c.onAccent),
+              ],
+            ]),
+          ),
+        ),
       ),
     );
   }
@@ -151,7 +273,8 @@ class Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Panel(
+      radius: 14,
       child: Padding(
         padding: padding ?? const EdgeInsets.all(16),
         child: Column(
@@ -396,30 +519,42 @@ class ChipRow<T> extends StatelessWidget {
     required this.selected,
     required this.label,
     required this.onSelected,
+    this.icon,
   });
   final List<T> items;
   final T selected;
   final String Function(T) label;
   final ValueChanged<T> onSelected;
 
+  /// Picto devant le libellé (catégories…), ou null.
+  final IconData? Function(T)? icon;
+
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return SizedBox(
-      height: 34,
+      height: 38,
       child: HorizontalScroller(
         builder: (controller) => ListView.separated(
           controller: controller,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           itemCount: items.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 6),
-          itemBuilder: (_, i) => Center(
-            child: ChoiceChip(
-              label: Text(label(items[i])),
-              selected: items[i] == selected,
-              onSelected: (_) => onSelected(items[i]),
-            ),
-          ),
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (_, i) {
+            final on = items[i] == selected;
+            final glyph = icon?.call(items[i]);
+            return Center(
+              child: ChoiceChip(
+                avatar: glyph == null
+                    ? null
+                    : Icon(glyph, size: 16, color: on ? c.onAccent : c.muted),
+                label: Text(label(items[i])),
+                selected: on,
+                onSelected: (_) => onSelected(items[i]),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -441,6 +576,7 @@ class SortMenu<T extends Object> extends StatelessWidget {
     required this.ascendingByDefault,
     required this.onChanged,
     this.note,
+    this.icon,
   });
 
   final List<T> options;
@@ -453,9 +589,20 @@ class SortMenu<T extends Object> extends StatelessWidget {
   /// Précision affichée en tête du menu (ex. tri local).
   final String? note;
 
+  /// Icône de chaque critère (menu et bouton), ou null.
+  final IconData Function(T)? icon;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    Widget entry(IconData? glyph, String text) => Row(children: [
+          if (glyph != null) ...[
+            Icon(glyph, size: 18, color: c.muted),
+            const SizedBox(width: 12),
+          ],
+          Flexible(child: Text(text)),
+        ]);
+    final current = icon?.call(selected) ?? Icons.sort_rounded;
     return PopupMenuButton<Object>(
       tooltip: 'Trier',
       onSelected: (v) {
@@ -477,18 +624,18 @@ class SortMenu<T extends Object> extends StatelessWidget {
           CheckedPopupMenuItem(
             value: o,
             checked: o == selected,
-            child: Text(label(o)),
+            child: entry(icon?.call(o), label(o)),
           ),
         const PopupMenuDivider(),
         CheckedPopupMenuItem(
           value: _SortDirection.ascending,
           checked: ascending,
-          child: const Text('Croissant'),
+          child: entry(Icons.arrow_upward_rounded, 'Croissant'),
         ),
         CheckedPopupMenuItem(
           value: _SortDirection.descending,
           checked: !ascending,
-          child: const Text('Décroissant'),
+          child: entry(Icons.arrow_downward_rounded, 'Décroissant'),
         ),
       ],
       // Écran étroit : icône et sens seulement (critère en info-bulle).
@@ -500,7 +647,7 @@ class SortMenu<T extends Object> extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.sort_rounded, size: 20, color: c.muted),
+                    Icon(current, size: headerIconSize, color: c.muted),
                     Icon(
                       ascending
                           ? Icons.arrow_upward_rounded
@@ -522,7 +669,7 @@ class SortMenu<T extends Object> extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.sort_rounded, size: 16, color: c.muted),
+                  Icon(current, size: 18, color: c.muted),
                   const SizedBox(width: 6),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 140),

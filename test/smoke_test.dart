@@ -143,10 +143,12 @@ void main() {
           ),
         );
         await tester.pump();
+        // Le salon est un onglet comme les autres.
+        expect(find.text('Salon'), findsWidgets);
         final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
         await mouse.addPointer(location: Offset.zero);
         for (var round = 0; round < 3; round++) {
-          for (var tab = 0; tab < 5; tab++) {
+          for (var tab = 0; tab < 6; tab++) {
             final nav = find.byType(
               width < 720 ? NavigationBar : NavigationRail,
             );

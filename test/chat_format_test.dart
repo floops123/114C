@@ -2,6 +2,7 @@ import 'package:c411_remote/api/c411_chat.dart';
 import 'package:c411_remote/api/c411_socket.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:c411_remote/state/notifications.dart';
+import 'package:c411_remote/ui/chat_page.dart';
 import 'package:c411_remote/ui/notifications_page.dart';
 import 'package:c411_remote/ui/rich_text.dart';
 import 'package:c411_remote/ui/theme.dart';
@@ -212,8 +213,11 @@ void main() {
     expect(find.textContaining('Hors ligne'), findsOneWidget);
     expect(find.text('Notification 0'), findsOneWidget);
     expect(find.text('Notification 55'), findsNothing);
-    await tester.tap(find.text('Afficher plus anciennes (10)'));
+    final more = find.text('Afficher plus anciennes (10)');
+    await tester.scrollUntilVisible(more, 400);
+    await tester.tap(more);
     await tester.pump();
+    await tester.scrollUntilVisible(find.text('Notification 59'), 400);
     expect(find.text('Notification 59'), findsOneWidget);
   });
 
@@ -244,10 +248,10 @@ void main() {
     ));
     expect(find.text('Nouvelle réponse'), findsOneWidget);
     await tester.tap(find.text('Nouvelle réponse'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(container.read(notificationsProvider).channelId, 135);
     expect(find.text('Message à ce salon'), findsOneWidget,
-        reason: 'la vue Salon est affichée');
+        reason: 'la page du salon est ouverte');
   });
 
   testWidgets('salon : messages consécutifs regroupés', (tester) async {
@@ -278,10 +282,9 @@ void main() {
       container: container,
       child: MaterialApp(
         theme: ThemeData(extensions: const [AppColors.dark]),
-        home: const NotificationsPage(),
+        home: const ChatPage(),
       ),
     ));
-    await tester.tap(find.text('Salon'));
     await tester.pump();
 
     expect(find.text('message 2'), findsOneWidget);

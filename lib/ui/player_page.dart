@@ -8,18 +8,33 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../api/jellyfin.dart';
+import '../core/format.dart';
+import '../state/media_library.dart';
 import '../state/playback.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// Lecteur intégré (media_kit, basé sur mpv) : lit le fichier d'origine servi
-/// par Jellyfin, sans transcodage. Commandes standard (barre, volume, plein
+/// Lecteur intégré (media_kit, basé sur mpv) : lit le fichier d'origine, sur
+/// le FTP (notre base) ou servi par Jellyfin, sans transcodage. Commandes standard (barre, volume, plein
 /// écran, raccourcis clavier sur PC), choix des pistes audio et sous-titres,
 /// reprise là où on s'était arrêté.
 class PlayerPage extends ConsumerStatefulWidget {
-  const PlayerPage({super.key, required this.item, required this.title});
-  final JellyfinItem item;
+  const PlayerPage(
+      {super.key, this.item, this.file, required this.title, this.sourceId})
+      : assert(item != null || file != null);
+
+  /// Élément Jellyfin, ou [file] : fichier de notre base, lu sur le FTP par
+  /// le relais local.
+  final JellyfinItem? item;
+  final MediaFile? file;
   final String title;
+
+  /// Version choisie (fichier) ; null : version par défaut de Jellyfin.
+  final String? sourceId;
+
+  /// Clé de reprise : par version, deux fichiers n'ayant pas forcément le
+  /// même montage.
+  String get resumeKey => file?.resumeKey ?? sourceId ?? item!.id;
 
   @override
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
@@ -54,20 +69,34 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    final client = ref.read(jellyfinProvider);
-    if (client == null) {
-      _error = 'Jellyfin n’est pas configuré';
-      return;
-    }
-    final id = widget.item.id;
-    final start = _store.load()[id] ?? widget.item.resume;
+    final start = _store.load()[widget.resumeKey] ?? widget.item?.resume;
     // Si media_kit n'a pas pu rendre la vidéo par le GPU, mpv la convertit
     // sur le processeur : mode rapide, un peu moins fin.
     if (_player.platform case final NativePlayer mpv) {
       mpv.setProperty('sw-fast', 'yes');
     }
-    _player.open(Media(client.streamUrl(id).toString(),
-        httpHeaders: client.headers, start: start));
+    if (widget.file case final file?) {
+      final relay = ref.read(mediaRelayProvider);
+      if (relay == null) {
+        _error = 'L’accès FTP n’est pas configuré';
+        return;
+      }
+      relay.urlFor(file.path).then((url) {
+        if (mounted) _player.open(Media(url.toString(), start: start));
+      }, onError: (Object e) {
+        if (mounted) setState(() => _error = '$e');
+      });
+    } else {
+      final client = ref.read(jellyfinProvider);
+      if (client == null) {
+        _error = 'Jellyfin n’est pas configuré';
+        return;
+      }
+      _player.open(Media(
+          client.streamUrl(widget.item!.id, sourceId: widget.sourceId).toString(),
+          httpHeaders: client.headers,
+          start: start));
+    }
     _subscriptions
       ..add(_player.stream.position.listen((p) {
         // Sauvegarde toutes les 10 s de lecture.
@@ -83,9 +112,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final positions = _store.load();
     final point = resumePoint(position, _player.state.duration);
     if (point == null) {
-      positions.remove(widget.item.id);
+      positions.remove(widget.resumeKey);
     } else {
-      positions[widget.item.id] = point;
+      positions[widget.resumeKey] = point;
     }
     _store.save(positions);
   }
@@ -296,96 +325,6 @@ class _TrackMenu extends StatelessWidget {
   }
 }
 
-/// Épisodes d'une série Jellyfin, par saison ; un épisode se lit dans le
-/// lecteur intégré.
-class EpisodesPage extends ConsumerStatefulWidget {
-  const EpisodesPage({super.key, required this.series});
-  final JellyfinItem series;
-
-  @override
-  ConsumerState<EpisodesPage> createState() => _EpisodesPageState();
-}
-
-class _EpisodesPageState extends ConsumerState<EpisodesPage> {
-  late Future<List<JellyfinItem>> _episodes = _load();
-
-  Future<List<JellyfinItem>> _load() async {
-    final client = ref.read(jellyfinProvider);
-    if (client == null) throw const JellyfinException('Jellyfin n’est pas configuré');
-    return client.episodes(widget.series.id);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final resume = ref.read(playbackStoreProvider).load();
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.series.name)),
-      body: FutureBuilder<List<JellyfinItem>>(
-        future: _episodes,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return EmptyState(Icons.error_outline_rounded, '${snapshot.error}',
-                action: OutlinedButton(
-                  onPressed: () => setState(() => _episodes = _load()),
-                  child: const Text('Réessayer'),
-                ));
-          }
-          final episodes = snapshot.data;
-          if (episodes == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (episodes.isEmpty) {
-            return const EmptyState(Icons.video_library_outlined, 'Aucun épisode.');
-          }
-          final rows = <Object>[];
-          int? season;
-          for (final e in episodes) {
-            if (e.season != season) {
-              season = e.season;
-              rows.add(season == null || season == 0
-                  ? 'Hors saison'
-                  : 'Saison $season');
-            }
-            rows.add(e);
-          }
-          return ListView.builder(
-            itemCount: rows.length,
-            itemBuilder: (_, i) => switch (rows[i]) {
-              final String header => Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-                  child: Text(header,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700)),
-                ),
-              final JellyfinItem e => ListTile(
-                  leading: Icon(
-                      e.played
-                          ? Icons.check_circle_rounded
-                          : resume.containsKey(e.id) || e.resume != null
-                              ? Icons.play_circle_outline_rounded
-                              : Icons.play_arrow_rounded,
-                      color: e.played ? c.success : c.accent),
-                  title: Text(
-                      '${e.episode == null ? '' : '${e.episode}. '}${e.name}'),
-                  subtitle: e.overview == null
-                      ? null
-                      : Text(e.overview!,
-                          maxLines: 2, overflow: TextOverflow.ellipsis),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => PlayerPage(
-                          item: e,
-                          title: episodeTitle(widget.series, e)))),
-                ),
-              _ => const SizedBox.shrink(),
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
 /// « The Bear · S03E01 · Demain ».
 String episodeTitle(JellyfinItem series, JellyfinItem e) {
   String two(int? n) => (n ?? 0).toString().padLeft(2, '0');
@@ -394,4 +333,109 @@ String episodeTitle(JellyfinItem series, JellyfinItem e) {
     if (e.season != null || e.episode != null) 'S${two(e.season)}E${two(e.episode)}',
     e.name,
   ].join(' · ');
+}
+
+/// Lit l'un de ces éléments (un film et ses doublons, ou un épisode) : une
+/// seule version → lecture directe ; plusieurs → choix de la version. Si
+/// Jellyfin ne répond pas, version par défaut du premier élément.
+Future<void> playVersions(
+    BuildContext context, List<JellyfinItem> items, String title) async {
+  final container = ProviderScope.containerOf(context);
+  final client = container.read(jellyfinProvider);
+  final navigator = Navigator.of(context);
+  void play(JellyfinItem item, [String? sourceId]) => navigator.push(
+      MaterialPageRoute(
+          builder: (_) =>
+              PlayerPage(item: item, title: title, sourceId: sourceId)));
+
+  List<JellyfinVersion> versions;
+  try {
+    versions = client == null
+        ? const []
+        : await client.versions(items).timeout(const Duration(seconds: 8));
+  } on Object {
+    versions = const [];
+  }
+  if (!context.mounted) return;
+  if (versions.length <= 1) {
+    final v = versions.firstOrNull;
+    play(v?.item ?? items.first, v?.sourceId);
+    return;
+  }
+  // La meilleure d'abord : résolution, puis taille.
+  versions = [...versions]..sort((a, b) {
+      final w = (b.width ?? 0).compareTo(a.width ?? 0);
+      return w != 0 ? w : (b.size ?? 0).compareTo(a.size ?? 0);
+    });
+  final resume = container.read(playbackStoreProvider).load();
+  final chosen = await showModalBottomSheet<JellyfinVersion>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => _VersionSheet(
+        title: title, versions: versions, resume: resume.keys.toSet()),
+  );
+  if (chosen != null) play(chosen.item, chosen.sourceId);
+}
+
+class _VersionSheet extends StatelessWidget {
+  const _VersionSheet(
+      {required this.title, required this.versions, required this.resume});
+  final String title;
+  final List<JellyfinVersion> versions;
+
+  /// Versions dont la lecture est entamée (clé de reprise).
+  final Set<String> resume;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.7),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Quelle version ?',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              Text('$title · ${versions.length} versions sur le disque',
+                  style: TextStyle(fontSize: 12.5, color: c.muted)),
+            ]),
+          ),
+          Flexible(
+            child: ListView(shrinkWrap: true, children: [
+              for (final v in versions)
+                ListTile(
+                  leading: Icon(
+                      resume.contains(v.sourceId)
+                          ? Icons.play_circle_outline_rounded
+                          : Icons.play_arrow_rounded,
+                      color: c.accent),
+                  title: Text(
+                      [
+                        ?v.resolution,
+                        ?v.videoCodec,
+                        ?v.hdr,
+                        if (v.size != null) formatBytes(v.size!),
+                      ].join(' · '),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(
+                      [
+                        ?v.audio,
+                        ?(v.fileName ?? v.name),
+                        if (resume.contains(v.sourceId)) 'lecture entamée',
+                      ].join('\n'),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis),
+                  isThreeLine: true,
+                  onTap: () => Navigator.of(context).pop(v),
+                ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
 }

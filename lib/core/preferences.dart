@@ -23,6 +23,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'crossSeedDirections', // CrossSeedDirectionsNotifier
         'wishlist', // PrefsWishlistStore
         'playback', // PrefsPlaybackStore
+        'mediaLibrary', // PrefsMediaLibraryStore
         'revive', // PrefsReviveStore
       }),
     );
@@ -76,7 +77,12 @@ class UiPrefsNotifier extends Notifier<UiPrefs> {
 
   @override
   UiPrefs build() {
-    final prefs = ref.watch(sharedPrefsProvider);
+    final SharedPreferencesWithCache prefs;
+    try {
+      prefs = ref.watch(sharedPrefsProvider);
+    } on Object {
+      return const UiPrefs(); // Préférences non initialisées (tests).
+    }
     return UiPrefs(
       themeMode: ThemeMode.values.asNameMap()[prefs.getString(_themeKey)] ??
           ThemeMode.system,
@@ -94,7 +100,11 @@ class UiPrefsNotifier extends Notifier<UiPrefs> {
   }
 
   void setReleasesGrid(bool grid) {
-    _prefs.setBool(_gridKey, grid);
+    try {
+      _prefs.setBool(_gridKey, grid);
+    } on Object {
+      // Préférences non initialisées (tests) : en mémoire seulement.
+    }
     state = state.copyWith(releasesGrid: grid);
   }
 

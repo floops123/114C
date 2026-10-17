@@ -7,6 +7,7 @@ import '../core/format.dart';
 import '../state/cross_seed.dart';
 import '../state/revive.dart';
 import '../state/torrents.dart';
+import 'content_art.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -192,6 +193,7 @@ class _RevivePageState extends ConsumerState<RevivePage> {
             items: [null, ...list.map((cat) => cat.id)],
             selected: _categoryId,
             label: (id) => id == null ? 'Toutes catégories' : names[id]!,
+            icon: (id) => categoryIcon(id == null ? null : names[id]),
             onSelected: state.running
                 ? (_) {}
                 : (id) => setState(() {
@@ -207,6 +209,10 @@ class _RevivePageState extends ConsumerState<RevivePage> {
               label: (id) => id == null
                   ? 'Toutes'
                   : current.subcategories.firstWhere((s) => s.id == id).name,
+              icon: (id) => id == null
+                  ? null
+                  : categoryIcon(
+                      current.subcategories.firstWhere((s) => s.id == id).name),
               onSelected: state.running
                   ? (_) {}
                   : (id) => setState(() => _subcategoryId = id),

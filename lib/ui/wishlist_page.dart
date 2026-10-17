@@ -9,14 +9,18 @@ import '../api/tmdb.dart';
 import '../api/transmission.dart';
 import '../api/tracker.dart';
 import '../core/format.dart';
+import '../core/preferences.dart';
 import '../core/release_profile.dart';
+import '../state/media_library.dart';
 import '../state/wishlist.dart';
+import 'disk_page.dart';
 import 'on_disk.dart';
 import 'releases_page.dart';
+import 'series_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum _Mode { list, discover }
+enum _Mode { list, discover, disk }
 
 /// Liste de souhaits : recherche TMDB, page Découvrir (rangées par catégorie,
 /// genres) et recherche manuelle d'un souhait sur les trackers.
@@ -66,6 +70,8 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
       body = _SearchResults(query: _query);
     } else if (mode == _Mode.discover) {
       body = const _Discover();
+    } else if (mode == _Mode.disk) {
+      body = const DiskView();
     } else if (wishes.isEmpty) {
       body = const EmptyState(
         Icons.bookmark_border_rounded,
@@ -88,8 +94,27 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
               : Text('${wishes.length} dans la liste',
                   style: TextStyle(color: c.muted, fontSize: 12.5)),
         ),
+        // Ma liste / Découvrir : bien visible, au-dessus de la recherche. Une
+        // recherche en cours s'affiche à la place des deux.
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: _ModeSwitch(
+                selected: _query.isEmpty ? mode : null,
+                count: wishes.length,
+                onSelected: (m) {
+                  if (_query.isNotEmpty) _clear();
+                  setState(() => _mode = m);
+                },
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: TextField(
             controller: _search,
             textInputAction: TextInputAction.search,
@@ -107,22 +132,110 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
             ),
           ),
         ),
-        if (_query.isEmpty) ...[
-          ChipRow<_Mode>(
-            items: _Mode.values,
-            selected: mode,
-            label: (m) => switch (m) {
-              _Mode.list => 'Ma liste (${wishes.length})',
-              _Mode.discover => 'Découvrir',
-            },
-            onSelected: (m) => setState(() => _mode = m),
-          ),
-          const SizedBox(height: 6),
-        ],
         Divider(height: 1, color: c.border),
         Expanded(child: body),
       ]),
     );
+  }
+}
+
+/// Deux boutons : « Découvrir », décoré (dégradé, sous-titre) pour qu'on le
+/// remarque, et « Ma liste », sobre, avec le nombre de souhaits. Le bouton du
+/// mode affiché est marqué ; [selected] null : aucun (recherche en cours).
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch(
+      {required this.selected, required this.count, required this.onSelected});
+  final _Mode? selected;
+  final int count;
+  final ValueChanged<_Mode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final discover = selected == _Mode.discover;
+    final list = selected == _Mode.list;
+    final shape = BorderRadius.circular(14);
+
+    final discoverButton = FeatureButton(
+      leading: const Icon(Icons.explore_rounded),
+      title: 'Découvrir',
+      subtitle: 'Films et séries, sorties en France',
+      colors: [c.accent, c.download],
+      selected: discover,
+      onTap: () => onSelected(_Mode.discover),
+    );
+
+    // Même hauteur que « Découvrir » (titre + sous-titre).
+    final listButton = SizedBox(
+      height: 56,
+      child: (list ? FilledButton.icon : OutlinedButton.icon)(
+        onPressed: () => onSelected(_Mode.list),
+        style: (list ? FilledButton.styleFrom : OutlinedButton.styleFrom)(
+          shape: RoundedRectangleBorder(borderRadius: shape),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        icon: const Icon(Icons.bookmarks_rounded, size: 20),
+        label: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Flexible(
+            child: Text('Ma liste',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+            decoration: BoxDecoration(
+              color: list ? c.onAccent.withValues(alpha: 0.18) : c.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text('$count',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      ),
+    );
+
+    final disk = selected == _Mode.disk;
+    final narrow = MediaQuery.sizeOf(context).width < 520;
+    final diskButton = SizedBox(
+      height: 56,
+      child: (disk ? FilledButton.icon : OutlinedButton.icon)(
+        onPressed: () => onSelected(_Mode.disk),
+        style: (disk ? FilledButton.styleFrom : OutlinedButton.styleFrom)(
+          backgroundColor: disk ? c.success : null,
+          foregroundColor: disk ? Colors.white : c.success,
+          side: disk ? null : BorderSide(color: c.success.withValues(alpha: 0.6)),
+          shape: RoundedRectangleBorder(borderRadius: shape),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+        ),
+        icon: const Icon(Icons.dns_rounded, size: 20),
+        label: Text(narrow ? 'Disque' : 'Sur le disque',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      ),
+    );
+
+    // Écran étroit : « Découvrir » seul sur sa ligne, les deux autres dessous.
+    if (narrow) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        discoverButton,
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: listButton),
+          const SizedBox(width: 10),
+          Expanded(child: diskButton),
+        ]),
+      ]);
+    }
+    return Row(children: [
+      Flexible(child: discoverButton),
+      const SizedBox(width: 10),
+      listButton,
+      const SizedBox(width: 10),
+      diskButton,
+    ]);
   }
 }
 
@@ -596,9 +709,18 @@ class TitleDetailPage extends ConsumerWidget {
                   const SizedBox(height: 14),
                 ],
                 Wrap(spacing: 8, runSpacing: 8, children: [
-                  if (ref.watch(jellyfinItemProvider(t)).value case final item?)
+                  if (localForTmdb(ref, t) case final local?)
                     FilledButton.icon(
-                      style: FilledButton.styleFrom(backgroundColor: c.success),
+                      style: FilledButton.styleFrom(
+                          backgroundColor: c.success, foregroundColor: Colors.white),
+                      onPressed: () => playLocal(context, local),
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(local.isSeries ? 'Épisodes' : 'Lire'),
+                    )
+                  else if (ref.watch(jellyfinItemProvider(t)).value case final item?)
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: c.success, foregroundColor: Colors.white),
                       onPressed: () => playOnJellyfin(context, item),
                       icon: const Icon(Icons.play_arrow_rounded),
                       label: Text(item.isSeries ? 'Épisodes' : 'Lire'),
@@ -611,16 +733,18 @@ class TitleDetailPage extends ConsumerWidget {
                         : Icons.bookmark_add_outlined),
                     label: Text(inList ? 'Retirer de la liste' : 'Ajouter à la liste'),
                   ),
-                  OutlinedButton.icon(
+                  FilledButton.icon(
+                    style: _tinted(c, c.download),
                     onPressed: () => _openSearch(context, t),
                     icon: const Icon(Icons.travel_explore_rounded),
                     label: const Text('Chercher sur les trackers'),
                   ),
                   if (d?.trailer case final url?)
-                    OutlinedButton.icon(
+                    FilledButton.icon(
+                      style: _tinted(c, c.danger),
                       onPressed: () =>
                           launchUrl(url, mode: LaunchMode.externalApplication),
-                      icon: const Icon(Icons.play_circle_outline_rounded),
+                      icon: const Icon(Icons.smart_display_rounded),
                       label: const Text('Bande-annonce'),
                     ),
                 ]),
@@ -629,11 +753,8 @@ class TitleDetailPage extends ConsumerWidget {
                   ErrorBanner('${details.error}',
                       onRetry: () => ref.invalidate(tmdbDetailsProvider(t))),
                 ],
-                _OwnedBlock(title: t),
-                if (t.type == TmdbType.movie)
-                  _FrenchDatesBlock(title: t, dates: d?.french,
-                      loading: details.isLoading),
-                _TrackersBlock(title: t),
+                _InfoBlocks(
+                    title: t, dates: d?.french, loading: details.isLoading),
                 if (d?.tagline case final tagline?) ...[
                   const SizedBox(height: 16),
                   Text('« $tagline »',
@@ -664,6 +785,19 @@ class TitleDetailPage extends ConsumerWidget {
             child: Padding(
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        // Série : les épisodes directement dans la fiche, de notre base, sinon
+        // de Jellyfin s'il est configuré.
+        if (t.type == TmdbType.tv && localForTmdb(ref, t) != null)
+          SliverToBoxAdapter(
+              child: LocalEpisodesSection(title: localForTmdb(ref, t)!))
+        else if (t.type == TmdbType.tv && ref.watch(jellyfinProvider) != null)
+          SliverToBoxAdapter(
+            child: SeriesEpisodesSection(
+              series: ref.watch(jellyfinItemProvider(t)).value,
+              loading: ref.watch(jellyfinItemProvider(t)).isLoading,
+              title: t.originalTitle ?? t.title,
             ),
           ),
         if (d != null && d.cast.isNotEmpty) ...[
@@ -697,9 +831,62 @@ class TitleDetailPage extends ConsumerWidget {
 
 /// Ce qu'on a déjà : le titre dans Jellyfin, et ses torrents dans
 /// Transmission (téléchargés ou en cours). Rien n'est affiché s'il n'y a rien.
+/// « Déjà chez toi », « Sorties en France » et « Sur les trackers » : côte à
+/// côte sur PC (assez de largeur), les uns sous les autres sinon. Seuls les
+/// encadrés qui ont quelque chose à montrer prennent une colonne.
+class _InfoBlocks extends ConsumerWidget {
+  const _InfoBlocks(
+      {required this.title, required this.dates, required this.loading});
+  final TmdbTitle title;
+  final FrenchDates? dates;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final blocks = [
+      if (_OwnedBlock.visible(ref, title)) _OwnedBlock(title: title),
+      if (title.type == TmdbType.movie)
+        _FrenchDatesBlock(title: title, dates: dates, loading: loading),
+      if (ref.watch(trackersProvider).isNotEmpty) _TrackersBlock(title: title),
+    ];
+    if (blocks.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: LayoutBuilder(builder: (context, constraints) {
+        if (constraints.maxWidth < 860 || blocks.length < 2) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final (i, b) in blocks.indexed) ...[
+              if (i > 0) const SizedBox(height: 12),
+              b,
+            ],
+          ]);
+        }
+        // Côte à côte, tous à la hauteur du plus grand.
+        return IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (final (i, b) in blocks.indexed) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(child: b),
+            ],
+          ]),
+        );
+      }),
+    );
+  }
+}
+
 class _OwnedBlock extends ConsumerWidget {
   const _OwnedBlock({required this.title});
   final TmdbTitle title;
+
+  /// Quelque chose à montrer : élément Jellyfin, torrents, ou erreur.
+  static bool visible(WidgetRef ref, TmdbTitle t) {
+    final jellyfin = ref.watch(jellyfinItemProvider(t));
+    return localForTmdb(ref, t) != null ||
+        jellyfin.value != null ||
+        jellyfin.hasError ||
+        ref.watch(localTorrentsProvider(t)).isNotEmpty;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -707,66 +894,190 @@ class _OwnedBlock extends ConsumerWidget {
     final jellyfin = ref.watch(jellyfinItemProvider(title));
     final item = jellyfin.value;
     final torrents = ref.watch(localTorrentsProvider(title));
-    if (item == null && torrents.isEmpty && !jellyfin.hasError) {
+    final local = localForTmdb(ref, title);
+    if (local == null && item == null && torrents.isEmpty && !jellyfin.hasError) {
       return const SizedBox.shrink();
     }
-    final small = TextStyle(fontSize: 12, color: c.muted);
+    return _InfoCard(
+      icon: Icons.inventory_2_rounded,
+      title: 'Déjà chez toi',
+      color: c.success,
+      children: [
+        if (local != null)
+          _InfoRow(
+            leading: Icon(Icons.dns_rounded, size: 20, color: c.success),
+            title: 'Sur le disque',
+            subtitle: local.isSeries
+                ? '${local.files.length} épisode${local.files.length > 1 ? 's' : ''}'
+                    ' · ${local.seasons.length} saison${local.seasons.length > 1 ? 's' : ''}'
+                : [
+                    for (final f in MediaTitle.best(local.files).take(3))
+                      [?f.guess.resolution, formatBytes(f.size)].join(' '),
+                  ].join(' · '),
+            trailing: _PlayButton(
+                series: local.isSeries, onPressed: () => playLocal(context, local)),
+          ),
+        if (item != null && local == null)
+          _InfoRow(
+            leading: Icon(Icons.video_library_rounded, size: 20, color: c.success),
+            title: 'Dans la bibliothèque Jellyfin',
+            subtitle: [
+              item.name,
+              if (item.year != null) '${item.year}',
+              if (item.played)
+                'déjà vu'
+              else if (item.progress case final p?)
+                'vu à ${(p * 100).round()} %',
+            ].join(' · '),
+            trailing: _PlayButton(
+                series: item.isSeries,
+                onPressed: () => playOnJellyfin(context, item)),
+          ),
+        if (jellyfin.hasError && local == null)
+          _InfoRow(
+            leading: Icon(Icons.error_outline_rounded, size: 20, color: c.danger),
+            title: 'Jellyfin',
+            subtitle: '${jellyfin.error}',
+          ),
+        for (final torrent in torrents) _LocalTorrent(torrent: torrent),
+      ],
+    );
+  }
+}
 
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: c.success.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.success.withValues(alpha: 0.35)),
+/// « Lire » / « Épisodes », compact, aux couleurs de « Déjà chez toi ».
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({required this.series, required this.onPressed});
+  final bool series;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: c.success,
+        foregroundColor: Colors.white,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Icon(Icons.inventory_2_outlined, size: 15, color: c.success),
-          const SizedBox(width: 6),
-          Text('Déjà chez toi',
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w700, color: c.success)),
-        ]),
-        if (item != null)
+      onPressed: onPressed,
+      icon: Icon(series ? Icons.video_library_rounded : Icons.play_arrow_rounded,
+          size: 18),
+      label: Text(series ? 'Épisodes' : 'Lire'),
+    );
+  }
+}
+
+/// Encadré de la fiche (« Déjà chez toi », « Sorties en France », « Sur les
+/// trackers ») : même carte, même en-tête, mêmes marges pour tous.
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.children,
+  });
+  final IconData icon;
+  final String title;
+  final Color color;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: c.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
             child: Row(children: [
-              Icon(Icons.video_library_rounded, size: 20, color: c.success),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: Color.lerp(color, c.surface, 0.8),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Dans la bibliothèque Jellyfin',
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w600)),
-                  Text(
-                      [
-                        item.name,
-                        if (item.year != null) '${item.year}',
-                        if (item.played)
-                          'déjà vu'
-                        else if (item.progress case final p?)
-                          'vu à ${(p * 100).round()} %',
-                      ].join(' · '),
-                      style: small),
-                ]),
-              ),
-              TextButton.icon(
-                onPressed: () => playOnJellyfin(context, item),
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                label: Text(item.isSeries ? 'Épisodes' : 'Lire'),
+                child: Text(title,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700)),
               ),
             ]),
           ),
-        if (jellyfin.hasError)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text('Jellyfin : ${jellyfin.error}',
-                style: TextStyle(fontSize: 12, color: c.danger)),
-          ),
-        for (final torrent in torrents) _LocalTorrent(torrent: torrent),
+          Divider(height: 1, color: c.border),
+          const SizedBox(height: 4),
+          ...children,
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ligne d'un encadré : icône, titre, détail, et à droite une action.
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.leading,
+    required this.title,
+    this.subtitle,
+    this.detail,
+    this.trailing,
+    this.onTap,
+  });
+  /// Icône (20 px) ou indicateur de chargement.
+  final Widget leading;
+  final String title;
+  final String? subtitle;
+
+  /// Sous le titre, à la place de [subtitle] (barre de progression…).
+  final Widget? detail;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final row = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+      child: Row(children: [
+        SizedBox(
+          width: 28,
+          child: Center(child: leading),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(subtitle!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: c.muted)),
+            ],
+            if (detail != null) ...[const SizedBox(height: 4), detail!],
+          ]),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
       ]),
     );
+    return onTap == null ? row : InkWell(onTap: onTap, child: row);
   }
 }
 
@@ -784,8 +1095,10 @@ class _OwnedTags extends ConsumerWidget {
     final progress = torrents.isEmpty
         ? null
         : torrents.map((t) => t.percentDone).reduce(math.max);
+    final onDisk = localForTmdb(ref, title) != null;
     return Wrap(spacing: 6, children: [
-      if (inJellyfin) Tag('Dans Jellyfin', color: c.success),
+      if (onDisk) Tag('Sur le disque', color: c.success)
+      else if (inJellyfin) Tag('Dans Jellyfin', color: c.success),
       if (done)
         Tag('Téléchargé', color: c.success)
       else if (progress != null)
@@ -802,41 +1115,39 @@ class _LocalTorrent extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final done = torrent.percentDone >= 1;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(children: [
-        Icon(done ? Icons.download_done_rounded : Icons.downloading_rounded,
-            size: 20, color: done ? c.success : c.info),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(torrent.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 3),
-            if (done)
-              Text('Téléchargé dans Transmission · ${formatBytes(torrent.totalSize)}',
-                  style: TextStyle(fontSize: 12, color: c.muted))
-            else
-              Row(children: [
-                Expanded(
-                  child: LinearProgressIndicator(
-                    value: torrent.percentDone,
-                    minHeight: 4,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+    return _InfoRow(
+      leading: Icon(done ? Icons.download_done_rounded : Icons.downloading_rounded,
+          size: 20, color: done ? c.success : c.info),
+      title: torrent.name,
+      subtitle: done
+          ? 'Téléchargé dans Transmission · ${formatBytes(torrent.totalSize)}'
+          : null,
+      detail: done
+          ? null
+          : Row(children: [
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: torrent.percentDone,
+                  color: c.download,
+                  minHeight: 4,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                const SizedBox(width: 8),
-                Text(formatPercent(torrent.percentDone),
-                    style: TextStyle(fontSize: 12, color: c.muted)),
-              ]),
-          ]),
-        ),
-      ]),
+              ),
+              const SizedBox(width: 8),
+              Text(formatPercent(torrent.percentDone),
+                  style: TextStyle(fontSize: 12, color: c.muted)),
+            ]),
     );
   }
 }
+
+/// Bouton teinté : fond doux et bord de la couleur, texte et icône francs.
+/// Couleurs opaques (mélange avec la surface), sans transparence.
+ButtonStyle _tinted(AppColors c, Color color) => FilledButton.styleFrom(
+      backgroundColor: Color.lerp(color, c.surface, 0.78),
+      foregroundColor: Color.lerp(color, c.text, 0.25),
+      side: BorderSide(color: Color.lerp(color, c.surface, 0.45)!),
+    );
 
 /// Petite info à icône (durée, note…).
 class _Meta extends StatelessWidget {
@@ -877,40 +1188,25 @@ class _TrackersBlockState extends ConsumerState<_TrackersBlock> {
     final c = context.colors;
     final trackers = ref.watch(trackersProvider).keys.toList();
     if (trackers.isEmpty) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      decoration: BoxDecoration(
-        color: c.surfaceAlt,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-          child: Row(children: [
-            Icon(Icons.dns_outlined, size: 15, color: c.muted),
-            const SizedBox(width: 6),
-            Text('Sur les trackers',
-                style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w700, color: c.muted)),
-          ]),
-        ),
+    return _InfoCard(
+      icon: Icons.travel_explore_rounded,
+      title: 'Sur les trackers',
+      color: c.download,
+      children: [
         if (!_started)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => setState(() => _started = true),
-                icon: const Icon(Icons.manage_search_rounded, size: 18),
-                label: const Text('Vérifier la disponibilité'),
-              ),
+          _InfoRow(
+            leading: Icon(Icons.manage_search_rounded, size: 20, color: c.muted),
+            title: 'Pas encore sorti',
+            subtitle: 'La recherche se lance à la demande.',
+            trailing: TextButton(
+              onPressed: () => setState(() => _started = true),
+              child: const Text('Vérifier la disponibilité'),
             ),
           )
         else
           for (final tr in trackers)
             _TrackerSummary(tracker: tr, title: widget.title),
-        if (_started) const SizedBox(height: 4),
-      ]),
+      ],
     );
   }
 }
@@ -952,27 +1248,12 @@ class _TrackerSummary extends ConsumerWidget {
       ].join(' · ');
     }
 
-    return InkWell(
+    return _InfoRow(
+      leading: leading,
+      title: tracker.label,
+      subtitle: detail,
+      trailing: Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
       onTap: () => _openSearch(context, title, tracker),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(children: [
-          leading,
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 104,
-            child: Text(tracker.label,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-          ),
-          Expanded(
-            child: Text(detail,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: c.muted)),
-          ),
-          Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
-        ]),
-      ),
     );
   }
 }
@@ -1008,36 +1289,27 @@ class _FrenchDatesBlock extends StatelessWidget {
           ]),
         );
 
-    return Container(
-      margin: const EdgeInsets.only(top: 14),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: c.surfaceAlt,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(Icons.flag_outlined, size: 15, color: c.muted),
-          const SizedBox(width: 6),
-          Text('Sorties en France',
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w700, color: c.muted)),
-        ]),
-        const SizedBox(height: 6),
-        if (loading && f == null)
-          Text('…', style: TextStyle(color: c.muted))
-        else if (f == null || f.isEmpty)
-          Text(
-              'Pas encore de date en France'
-              '${title.date == null ? '' : ' (sortie mondiale : ${_day(title.date!)})'}',
-              style: TextStyle(fontSize: 12.5, color: c.muted))
-        else
-          Row(children: [
-            cell(Icons.theaters_outlined, 'Cinéma', f.cinema),
-            cell(Icons.ondemand_video_rounded, 'VOD', f.digital),
-            cell(Icons.album_outlined, 'DVD / Blu-ray', f.physical),
-          ]),
-      ]),
+    return _InfoCard(
+      icon: Icons.flag_rounded,
+      title: 'Sorties en France',
+      color: c.accent,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+          child: loading && f == null
+              ? Text('…', style: TextStyle(color: c.muted))
+              : f == null || f.isEmpty
+                  ? Text(
+                      'Pas encore de date en France'
+                      '${title.date == null ? '' : ' (sortie mondiale : ${_day(title.date!)})'}',
+                      style: TextStyle(fontSize: 12.5, color: c.muted))
+                  : Row(children: [
+                      cell(Icons.theaters_outlined, 'Cinéma', f.cinema),
+                      cell(Icons.ondemand_video_rounded, 'VOD', f.digital),
+                      cell(Icons.album_outlined, 'DVD / Blu-ray', f.physical),
+                    ]),
+        ),
+      ],
     );
   }
 }
@@ -1126,76 +1398,88 @@ class _TitleTile extends ConsumerWidget {
         ref.watch(wishlistProvider.select((l) => l.any((i) => i.title == t)));
     final notifier = ref.read(wishlistProvider.notifier);
 
-    return InkWell(
-      onTap: () => openTitle(context, t),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
-        child: Row(children: [
-          Poster(t.posterUrl, width: 50, height: 75, radius: 6),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  [t.title, if (t.year != null) '(${t.year})'].join(' '),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13.5, fontWeight: FontWeight.w600),
-                ),
-                if (t.originalTitle != null && t.originalTitle != t.title)
-                  Text(t.originalTitle!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: c.muted)),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 2,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+    // Carte, comme les transferts et les notifications.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 5, 16, 5),
+      child: Material(
+        color: c.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: c.border),
+        ),
+        child: InkWell(
+          onTap: () => openTitle(context, t),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+            child: Row(children: [
+              Poster(t.posterUrl, width: 56, height: 84, radius: 8),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Tag(t.type.label,
-                        color: t.type == TmdbType.movie ? c.accent : c.info),
-                    Text(_dateLabel(t),
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: t.upcoming ? c.text : c.muted)),
-                    if (wished) _OwnedTags(title: t),
-                  ],
-                ),
-                if (!wished && t.overview != null) ...[
-                  const SizedBox(height: 4),
-                  Text(t.overview!,
+                    Text(
+                      [t.title, if (t.year != null) '(${t.year})'].join(' '),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: c.muted)),
-                ],
-              ],
-            ),
+                      style: const TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w600),
+                    ),
+                    if (t.originalTitle != null && t.originalTitle != t.title)
+                      Text(t.originalTitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: c.muted)),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 2,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Tag(t.type.label,
+                            color: t.type == TmdbType.movie ? c.accent : c.info),
+                        Text(_dateLabel(t),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: t.upcoming ? c.text : c.muted)),
+                        if (wished) _OwnedTags(title: t),
+                      ],
+                    ),
+                    if (!wished && t.overview != null) ...[
+                      const SizedBox(height: 4),
+                      Text(t.overview!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: c.muted)),
+                    ],
+                  ],
+                ),
+              ),
+              if (wished) ...[
+                IconButton(
+                  tooltip: 'Chercher sur les trackers',
+                  icon: const Icon(Icons.travel_explore_rounded),
+                  onPressed: () => _openSearch(context, t),
+                ),
+                IconButton(
+                  tooltip: 'Retirer de la liste',
+                  icon: const Icon(Icons.bookmark_remove_outlined),
+                  onPressed: () => notifier.remove(t),
+                ),
+              ] else
+                IconButton(
+                  tooltip: inList ? 'Retirer de la liste' : 'Ajouter à la liste',
+                  icon: Icon(
+                      inList
+                          ? Icons.bookmark_added_rounded
+                          : Icons.bookmark_add_outlined,
+                      color: inList ? c.accent : null),
+                  onPressed: () => notifier.toggle(t),
+                ),
+            ]),
           ),
-          if (wished) ...[
-            IconButton(
-              tooltip: 'Chercher sur les trackers',
-              icon: const Icon(Icons.travel_explore_rounded),
-              onPressed: () => _openSearch(context, t),
-            ),
-            IconButton(
-              tooltip: 'Retirer de la liste',
-              icon: const Icon(Icons.bookmark_remove_outlined),
-              onPressed: () => notifier.remove(t),
-            ),
-          ] else
-            IconButton(
-              tooltip: inList ? 'Retirer de la liste' : 'Ajouter à la liste',
-              icon: Icon(
-                  inList
-                      ? Icons.bookmark_added_rounded
-                      : Icons.bookmark_add_outlined,
-                  color: inList ? c.accent : null),
-              onPressed: () => notifier.toggle(t),
-            ),
-        ]),
+        ),
       ),
     );
   }
@@ -1233,8 +1517,25 @@ class WishSearchPage extends ConsumerWidget {
             selected: sort,
             ascending: ascending,
             label: (s) => s.label,
+            icon: (s) => switch (s) {
+              WishSort.relevance => Icons.auto_awesome_rounded,
+              WishSort.quality => Icons.hd_rounded,
+              WishSort.profile => Icons.workspace_premium_rounded,
+              WishSort.size => Icons.storage_rounded,
+              WishSort.seeders => Icons.trending_up_rounded,
+              WishSort.date => Icons.event_rounded,
+            },
             ascendingByDefault: (s) => s.ascendingByDefault,
             onChanged: ref.read(wishSortProvider.notifier).set,
+          );
+        }),
+        Builder(builder: (context) {
+          final grid = ref.watch(uiPrefsProvider.select((p) => p.releasesGrid));
+          return IconButton(
+            tooltip: grid ? 'Affichage liste' : 'Affichage grille',
+            icon: Icon(grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
+            onPressed: () =>
+                ref.read(uiPrefsProvider.notifier).setReleasesGrid(!grid),
           );
         }),
         IconButton(
@@ -1338,23 +1639,36 @@ class _TrackerResults extends ConsumerWidget {
               'Rien sur ${tracker.label} pour l’instant.');
         }
         final (sort, ascending) = ref.watch(wishSortProvider);
-        // Intertitres (groupes) et sorties à plat, pour une liste paresseuse.
-        final rows = <Object>[
-          for (final (header, group) in sortWish(items, sort, ascending)) ...[
-            ?(header == null ? null : (header, group.length)),
-            ...group,
-          ],
-        ];
-        return ListView.builder(
-          itemCount: rows.length,
-          itemBuilder: (_, i) => switch (rows[i]) {
-            final Release r => ReleaseRow(release: r),
-            (final String label, final int count) => _GroupHeader(
-                '$label ($count)',
-                subtitle: _profileByLabel[label]?.description),
-            _ => const SizedBox.shrink(),
-          },
-        );
+        final grid = ref.watch(uiPrefsProvider.select((p) => p.releasesGrid));
+        final groups = sortWish(items, sort, ascending);
+        // Par groupe : intertitre, puis ses sorties en grille ou en liste
+        // (construites à l'affichage).
+        return LayoutBuilder(builder: (context, constraints) {
+          return CustomScrollView(slivers: [
+            for (final (header, group) in groups) ...[
+              if (header != null)
+                SliverToBoxAdapter(
+                  child: _GroupHeader('$header (${group.length})',
+                      subtitle: _profileByLabel[header]?.description),
+                ),
+              if (grid)
+                releaseGrid(context, constraints.maxWidth, group.length,
+                    (context, i) => releaseGridItem(context, group[i]))
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  sliver: SliverFixedExtentList(
+                    itemExtent: ReleaseRow.extent(context),
+                    delegate: SliverChildBuilderDelegate(
+                        (context, i) => ReleaseRow(release: group[i]),
+                        childCount: group.length),
+                  ),
+                ),
+              if (grid) const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            ],
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ]);
+        });
       },
     );
   }

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:c411_remote/api/c411.dart';
 import 'package:c411_remote/api/tmdb.dart';
+import 'package:c411_remote/core/preferences.dart';
 import 'package:c411_remote/core/release_profile.dart';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/state/wishlist.dart';
@@ -366,6 +367,7 @@ void main() {
         overrides: [trackersProvider.overrideWithValue({Tracker.c411: api})]);
     addTearDown(container.dispose);
     container.read(wishSortProvider.notifier).set(WishSort.quality, false);
+    container.read(uiPrefsProvider.notifier).setReleasesGrid(false); // liste
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
@@ -414,6 +416,8 @@ void main() {
     expect(find.text('Rien pour l’instant'), findsOneWidget, reason: 'tr4ker');
 
     // Le résumé tr4ker ouvre la recherche sur l'onglet tr4ker.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Rien pour l’instant'));
     await tester.pumpAndSettle();
     expect(find.text('Rien sur tr4ker pour l’instant.'), findsOneWidget);
@@ -511,6 +515,60 @@ void main() {
               originalTitle: 'Chernobyl: Inside the Meltdown'));
       expect(doc.map((r) => r.id), ['766027']);
     });
+  });
+
+  testWidgets('Souhaits : sélecteur Ma liste / Découvrir bien visible', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        tmdbProvider.overrideWithValue(_Tmdb()),
+        wishlistStoreProvider.overrideWithValue(MemoryWishlistStore()),
+        trackersProvider.overrideWithValue(const {}),
+      ],
+      child: MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: const WishlistPage(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.explore_rounded), findsOneWidget);
+    expect(find.text('Au cinéma en France'), findsOneWidget, reason: 'liste vide : Découvrir');
+
+    expect(find.text('Films et séries, sorties en France'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget, reason: 'Découvrir actif');
+    await tester.tap(find.text('Ma liste'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('pour les ajouter à ta liste'), findsOneWidget);
+
+    // Pendant une recherche, toucher un segment l'efface.
+    await tester.enterText(find.byType(TextField), 'dune');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Découvrir'));
+    await tester.pumpAndSettle();
+    expect(find.text('Au cinéma en France'), findsOneWidget);
+    expect(find.text('dune'), findsNothing);
+  });
+
+  testWidgets('Souhaits : les deux boutons tiennent sur un petit téléphone',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        tmdbProvider.overrideWithValue(_Tmdb()),
+        wishlistStoreProvider.overrideWithValue(MemoryWishlistStore()),
+        trackersProvider.overrideWithValue(const {}),
+      ],
+      child: MaterialApp(
+        theme: buildTheme(Brightness.dark),
+        home: const WishlistPage(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Découvrir'), findsOneWidget);
+    expect(find.text('Ma liste'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 

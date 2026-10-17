@@ -13,6 +13,12 @@ class AppSettings {
     this.tmdbKey = '',
     this.jellyfinUrl = '',
     this.jellyfinKey = '',
+    this.ftpHost = '',
+    this.ftpPort = 21,
+    this.ftpUser = '',
+    this.ftpPassword = '',
+    this.ftpTls = true,
+    this.mediaFolders = const [],
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -28,6 +34,12 @@ class AppSettings {
         tmdbKey: json['tmdbKey'] as String? ?? '',
         jellyfinUrl: json['jellyfinUrl'] as String? ?? '',
         jellyfinKey: json['jellyfinKey'] as String? ?? '',
+        ftpHost: json['ftpHost'] as String? ?? '',
+        ftpPort: (json['ftpPort'] as num?)?.toInt() ?? 21,
+        ftpUser: json['ftpUser'] as String? ?? '',
+        ftpPassword: json['ftpPassword'] as String? ?? '',
+        ftpTls: json['ftpTls'] as bool? ?? true,
+        mediaFolders: (json['mediaFolders'] as List? ?? const []).cast<String>(),
       );
 
   final String rpcUrl;
@@ -48,6 +60,19 @@ class AppSettings {
   final String jellyfinUrl;
   final String jellyfinKey;
 
+  /// Accès FTP aux fichiers du serveur (Appbox : Pure-FTPd en TLS explicite),
+  /// pour notre propre base de films et séries et leur lecture directe.
+  final String ftpHost;
+  final int ftpPort;
+  final String ftpUser;
+  final String ftpPassword;
+  final bool ftpTls;
+
+  /// Dossiers du FTP à parcourir, en plus des torrents terminés.
+  final List<String> mediaFolders;
+
+  bool get hasFtp => ftpHost.isNotEmpty && ftpUser.isNotEmpty;
+
   bool get hasTransmission => rpcUrl.isNotEmpty;
   bool get hasTracker => apiKeys.values.any((k) => k.isNotEmpty);
 
@@ -60,6 +85,12 @@ class AppSettings {
         'tmdbKey': tmdbKey,
         'jellyfinUrl': jellyfinUrl,
         'jellyfinKey': jellyfinKey,
+        'ftpHost': ftpHost,
+        'ftpPort': ftpPort,
+        'ftpUser': ftpUser,
+        'ftpPassword': ftpPassword,
+        'ftpTls': ftpTls,
+        'mediaFolders': mediaFolders,
       };
 }
 
