@@ -9,6 +9,7 @@ class AppSettings {
     this.rpcUser = '',
     this.rpcPassword = '',
     this.apiKeys = const {},
+    this.sessionCookie = '',
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -20,6 +21,7 @@ class AppSettings {
           if (json['apiKey'] is String) 'c411': json['apiKey'] as String,
           ...?(json['apiKeys'] as Map?)?.cast<String, String>(),
         },
+        sessionCookie: json['sessionCookie'] as String? ?? '',
       );
 
   final String rpcUrl;
@@ -29,6 +31,10 @@ class AppSettings {
   /// Clé API par tracker, indexée par `Tracker.name`.
   final Map<String, String> apiKeys;
 
+  /// Cookies de session du site C411 (en-tête Cookie copié du navigateur),
+  /// exigés par le WebSocket des notifications.
+  final String sessionCookie;
+
   bool get hasTransmission => rpcUrl.isNotEmpty;
   bool get hasTracker => apiKeys.values.any((k) => k.isNotEmpty);
 
@@ -37,6 +43,7 @@ class AppSettings {
         'rpcUser': rpcUser,
         'rpcPassword': rpcPassword,
         'apiKeys': apiKeys,
+        'sessionCookie': sessionCookie,
       };
 }
 

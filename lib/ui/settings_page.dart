@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/c411_socket.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/settings.dart';
@@ -26,10 +29,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _testing = false;
   String? _rpcStatus;
   final _trackerStatus = <Tracker, String>{};
+  final _cookie = TextEditingController();
+  String? _cookieStatus;
 
   @override
   void dispose() {
-    for (final c in [_url, _user, _password, ..._apiKeys.values]) {
+    for (final c in [_url, _user, _password, _cookie, ..._apiKeys.values]) {
       c.dispose();
     }
     super.dispose();
@@ -43,7 +48,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           for (final MapEntry(:key, :value) in _apiKeys.entries)
             if (value.text.trim().isNotEmpty) key.name: value.text.trim(),
         },
+        sessionCookie: normalizeCookie(_cookie.text),
       );
+
+  /// Teste le cookie sur le WebSocket : connexion acceptée ou refusée.
+  Future<void> _testCookie() async {
+    final cookie = normalizeCookie(_cookie.text);
+    if (cookie.isEmpty) {
+      _setStatus(() => _cookieStatus = '✗ Cookie manquant');
+      return;
+    }
+    _setStatus(() => _cookieStatus = 'Connexion…');
+    final result = Completer<String>();
+    final socket = C411Socket(
+      cookie,
+      onStatus: (s) {
+        if (s == SocketStatus.connected && !result.isCompleted) {
+          result.complete('✓ Session acceptée');
+        }
+      },
+      onError: (e) {
+        if (!result.isCompleted) result.complete('✗ $e');
+      },
+    );
+    await socket.connect();
+    final text = await result.future.timeout(const Duration(seconds: 15),
+        onTimeout: () => '✗ Pas de réponse du serveur');
+    await socket.close();
+    _setStatus(() => _cookieStatus = text);
+  }
 
   void _setStatus(void Function() update) {
     if (mounted) setState(update);
@@ -148,6 +181,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       for (final MapEntry(:key, :value) in _apiKeys.entries) {
         value.text = saved.apiKeys[key.name] ?? '';
       }
+      _cookie.text = saved.sessionCookie;
     }
     final c = context.colors;
     final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
@@ -276,6 +310,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               const SizedBox(width: 12),
                               status(_trackerStatus[t]),
                             ]),
+                            if (t == Tracker.c411) ...[
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: _cookie,
+                                obscureText: !_showSecrets,
+                                decoration: const InputDecoration(
+                                  labelText: 'Cookies de session (notifications)',
+                                  helperMaxLines: 4,
+                                  helperText:
+                                      'Navigateur connecté à c411.org → outils de '
+                                      'développement (F12) → Réseau → une requête '
+                                      'vers c411.org → en-têtes de requête → copier '
+                                      'la valeur de « Cookie ». À recoller quand la '
+                                      'session expire.',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(children: [
+                                OutlinedButton(
+                                    onPressed: _testCookie,
+                                    child: const Text('Tester')),
+                                const SizedBox(width: 12),
+                                status(_cookieStatus),
+                              ]),
+                            ],
                           ]),
                           const SizedBox(height: 12),
                         ],

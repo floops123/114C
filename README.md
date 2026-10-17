@@ -57,6 +57,20 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
   partir du rafraîchissement existant, sans requête supplémentaire). Il
   n'existe pas de statistique d'envoi par fichier dans Transmission.
 
+**Notifications (C411)**
+- Connexion au WebSocket du site (`wss://c411.org/ws/`, Socket.IO / Engine.IO
+  v4) dès que les cookies de session sont renseignés ; reconnexion
+  automatique (2 s → 2 min).
+- Onglet Notifications (pastille du nombre de non-lues, bandeau à
+  l'arrivée) :
+  - Notifications : une alerte quand un compteur de non-lus du site augmente
+    (message privé, salon, demande, staff), compteurs actuels, encadré
+    « Mon compte » mis à jour en direct (envoyé, reçu, crédit, ratio) ;
+  - Salon : choix parmi les salons du site (Général par défaut), description
+    et message épinglé, 50 derniers messages chargés puis suite en direct
+    (pseudo, avatar, badge, réponse citée, réactions, « modifié », images
+    jointes), personnes en ligne, « … écrit ». Lecture seule.
+
 **Réglages**
 - Adresse RPC, identifiants Transmission et clé API C411, stockés dans le
   trousseau du système (`flutter_secure_storage`).
@@ -118,10 +132,13 @@ lib/
 ├── api/
 │   ├── tracker.dart           Modèle commun (Release…), interface TrackerApi, liste des trackers
 │   ├── c411.dart              Client API JSON de C411
+│   ├── c411_socket.dart       Client WebSocket (Socket.IO minimal) des notifications
+│   ├── c411_chat.dart         API de discussion (salons, historique) et modèle des messages
 │   ├── torznab.dart           Client Torznab générique (tr4ker)
 │   └── transmission.dart      Client RPC Transmission + modèle Torrent
 ├── state/                     Logique (Riverpod)
 │   ├── releases.dart          Pagination/filtres des sorties, envoi vers Transmission
+│   ├── notifications.dart     Connexion WebSocket et liste des notifications
 │   ├── speed_history.dart     Historique des vitesses (enregistré par l'app)
 │   └── torrents.dart          Polling Transmission, détail, statistiques
 └── ui/                        Écrans
@@ -134,6 +151,7 @@ lib/
     ├── bandwidth_groups_page.dart  Groupes de bande passante
     ├── charts.dart            Graphiques (courbe des vitesses, barres, jauge)
     ├── stats_page.dart        Statistiques
+    ├── notifications_page.dart  Notifications
     ├── theme.dart             Palette (AppColors) et thème clair / sombre
     └── widgets.dart           Composants partagés (Tag, Poster, Section…)
 ```
@@ -196,7 +214,40 @@ sélecteur de l'onglet Sorties s'adaptent automatiquement.
 - Les erreurs Torznab arrivent en HTTP 200 sous la forme
   `<error code="100" description="…"/>`.
 
-### C411
+### C411 : WebSocket des notifications
+
+- `wss://c411.org/ws/?EIO=4&transport=websocket` : Socket.IO, transport
+  WebSocket uniquement (le polling répond « Transport unknown »).
+- L'en-tête `Origin: https://c411.org` est obligatoire (sinon fermeture
+  immédiate, code 1006).
+- Authentification **par cookie de session du site uniquement** : la clé API
+  est refusée (header Bearer, `auth` Socket.IO ou paramètre d'URL). Sans
+  cookie : `44{"message":"Authentication required","data":{"code":"no_cookies"}}` ;
+  cookie inconnu : `no_session_cookie`. L'application envoie l'en-tête Cookie
+  copié depuis le navigateur ; il faut le recoller à l'expiration de la session.
+- Échanges : `0{…pingInterval…}` → `40` → `40{sid}` (accepté) ou `44{…}`
+  (refusé) ; `2` → `3` (ping/pong) ; `42["événement", données]`.
+- Événements observés : `unread:update` (compteurs `privateMessages`,
+  `channelMessages`, `pendingRequests`, `staffMessages`, `total`),
+  `channel:message` (message de salon, parfois envoyé deux fois : dédoublonné
+  par `id`), `channel:typing`, `channel:viewers`, `stats:update` (`uploaded`,
+  `downloaded`, `upload_credit` du compte). Les événements inconnus sont
+  affichés tels quels comme notifications.
+- Salons : le client émet `42["channel:join",{"channelId":N}]` (et
+  `channel:leave` pour l'ancien) ; le serveur ne diffuse les messages d'un
+  salon qu'aux clients qui l'ont rejoint. L'application rejoint à nouveau son
+  salon après chaque reconnexion.
+- Le contenu des messages est encodé en HTML (`c&#x27;est`) : décodé avant
+  affichage.
+- API de discussion (même cookie de session ; 401 sinon) :
+  `GET /api/messages/channels` (salons par espace : nom, description,
+  couleur, `isDefault`, `canWrite`…) et
+  `GET /api/messages/channels/{id}?limit=N` (derniers messages du plus ancien
+  au plus récent, salon avec `pinnedMessage`). L'historique est rechargé à
+  chaque changement de salon et après chaque reconnexion, puis fusionné avec
+  le direct par `id`. Avatars et images `/uploads/…` sont publics.
+
+### C411 : API HTTP
 
 Deux API coexistent, avec **deux modes d'authentification différents** :
 
