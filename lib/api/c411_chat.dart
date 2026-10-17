@@ -294,6 +294,23 @@ class C411ChatApi {
     return (res.data as Map).cast<String, dynamic>();
   }
 
+  /// Notifications du site, des plus récentes aux plus anciennes
+  /// (`/api/notifications?offset=…&perPage=…`).
+  Future<({List<Map<String, dynamic>> items, bool hasMore, int unread})>
+      notifications({int offset = 0, int perPage = 30}) async {
+    final body = await _get(
+        '/api/notifications', {'offset': offset, 'perPage': perPage});
+    final meta = body['meta'] as Map? ?? const {};
+    return (
+      items: [
+        for (final n in (body['data'] as List? ?? const []).whereType<Map>())
+          n.cast<String, dynamic>(),
+      ],
+      hasMore: meta['hasMore'] == true,
+      unread: (meta['unreadCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   /// Salons accessibles, tous espaces confondus (public…), hors archivés.
   Future<List<ChatChannel>> channels() async {
     final data = (await _get('/api/messages/channels'))['data'];

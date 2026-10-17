@@ -4,11 +4,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/c411_chat.dart';
 import '../api/c411_socket.dart';
 import '../core/format.dart';
 import '../state/notifications.dart';
+import '../state/torrents.dart';
+import 'torrent_detail_page.dart';
 import 'rich_text.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -68,11 +71,11 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                   icon: const Icon(Icons.refresh_rounded),
                   onPressed: notifier.reconnect,
                 ),
-              if (_view == _View.notifications)
+              if (_view == _View.notifications && state.configured)
                 IconButton(
-                  tooltip: 'Tout effacer',
-                  icon: const Icon(Icons.delete_sweep_outlined),
-                  onPressed: state.items.isEmpty ? null : notifier.clear,
+                  tooltip: 'Rafraîchir',
+                  icon: const Icon(Icons.refresh_rounded),
+                  onPressed: notifier.refreshNotifications,
                 ),
             ],
           ),
@@ -120,7 +123,10 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             Divider(height: 1, color: c.border),
             Expanded(
               child: _view == _View.notifications
-                  ? _NotificationsView(state: state)
+                  ? _NotificationsView(
+                      state: state,
+                      onOpenChannel: () => setState(() => _view = _View.chat),
+                    )
                   : _ChatView(state: state),
             ),
           ],
@@ -132,21 +138,25 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
 /// Liste des notifications, groupées par jour, paginée (les plus récentes en
 /// premier ; « Afficher plus » pour remonter l'historique local).
-class _NotificationsView extends StatefulWidget {
-  const _NotificationsView({required this.state});
+class _NotificationsView extends ConsumerStatefulWidget {
+  const _NotificationsView({required this.state, required this.onOpenChannel});
   final NotificationsState state;
 
+  /// Ouvre la vue Salon (lien `/messages?channel=…`).
+  final VoidCallback onOpenChannel;
+
   @override
-  State<_NotificationsView> createState() => _NotificationsViewState();
+  ConsumerState<_NotificationsView> createState() => _NotificationsViewState();
 }
 
-class _NotificationsViewState extends State<_NotificationsView> {
+class _NotificationsViewState extends ConsumerState<_NotificationsView> {
   static const _page = 50;
   int _shown = _page;
 
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
+    final notifier = ref.read(notificationsProvider.notifier);
     final c = context.colors;
     final shown = state.items.take(_shown).toList();
     final remaining = state.items.length - shown.length;
@@ -154,54 +164,75 @@ class _NotificationsViewState extends State<_NotificationsView> {
       if (state.account != null) _AccountCard(state.account!),
       if (state.counters != null) _CountersRow(state.counters!),
     ];
-    return ListView(
-      children: [
-        if (header.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final w in header) ...[w, const SizedBox(height: 10)],
-              ],
-            ),
-          ),
-        if (state.items.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 40),
-            child: EmptyState(
-              Icons.notifications_none_rounded,
-              state.status == SocketStatus.connected
-                  ? 'Aucune notification pour le moment.\n'
-                        'Elles apparaîtront ici en direct.'
-                  : 'En attente de connexion…',
-            ),
-          )
-        else ...[
-          for (final (i, n) in shown.indexed) ...[
-            if (i == 0 ||
-                !_sameDay(
-                  shown[i - 1].receivedAt.toLocal(),
-                  n.receivedAt.toLocal(),
-                ))
-              _DaySeparator(n.receivedAt)
-            else
-              Divider(height: 1, indent: 36, color: c.border),
-            _NotificationTile(notification: n, unread: i < state.unread),
-          ],
-          if (remaining > 0)
+    return RefreshIndicator(
+      onRefresh: notifier.refreshNotifications,
+      child: ListView(
+        children: [
+          if (state.notifError != null) ErrorBanner(state.notifError!),
+          if (header.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.all(12),
-              child: Center(
-                child: OutlinedButton.icon(
-                  onPressed: () => setState(() => _shown += _page),
-                  icon: const Icon(Icons.history_rounded, size: 18),
-                  label: Text('Afficher plus anciennes ($remaining)'),
-                ),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final w in header) ...[w, const SizedBox(height: 10)],
+                ],
               ),
             ),
+          if (state.items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: EmptyState(
+                Icons.notifications_none_rounded,
+                state.status == SocketStatus.connected
+                    ? 'Aucune notification pour le moment.'
+                    : 'En attente de connexion…',
+              ),
+            )
+          else ...[
+            for (final (i, n) in shown.indexed) ...[
+              if (i == 0 ||
+                  !_sameDay(
+                    shown[i - 1].receivedAt.toLocal(),
+                    n.receivedAt.toLocal(),
+                  ))
+                _DaySeparator(n.receivedAt)
+              else
+                Divider(height: 1, indent: 36, color: c.border),
+              _NotificationTile(
+                notification: n,
+                onOpenChannel: widget.onOpenChannel,
+              ),
+            ],
+            // D'abord celles déjà chargées, puis la page suivante du site.
+            if (remaining > 0 || state.hasMore)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Center(
+                  child: state.loadingMore
+                      ? const SizedBox.square(
+                          dimension: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() => _shown += _page);
+                            if (remaining < _page && state.hasMore) {
+                              notifier.loadMoreNotifications();
+                            }
+                          },
+                          icon: const Icon(Icons.history_rounded, size: 18),
+                          label: Text(
+                            remaining > 0
+                                ? 'Afficher plus anciennes ($remaining)'
+                                : 'Afficher plus anciennes',
+                          ),
+                        ),
+                ),
+              ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -278,52 +309,111 @@ class _CountersRow extends StatelessWidget {
   }
 }
 
-class _NotificationTile extends StatefulWidget {
-  const _NotificationTile({required this.notification, required this.unread});
+/// Icône selon le type de notification du site.
+IconData _iconFor(String type) => switch (type) {
+  'vtr_initialized' => Icons.savings_outlined,
+  'token_attribution' => Icons.toll_outlined,
+  'ic_level_up' => Icons.trending_up_rounded,
+  'channel_reply' || 'channel_mention' => Icons.forum_outlined,
+  final t when t.contains('message') => Icons.mail_outline_rounded,
+  final t when t.contains('torrent') => Icons.movie_outlined,
+  final t when t.contains('comment') => Icons.chat_bubble_outline_rounded,
+  _ => Icons.notifications_none_rounded,
+};
+
+class _NotificationTile extends ConsumerWidget {
+  const _NotificationTile({
+    required this.notification,
+    required this.onOpenChannel,
+  });
   final AppNotification notification;
-  final bool unread;
+  final VoidCallback onOpenChannel;
+
+  /// Ouvre la cible de la notification : torrent présent dans Transmission,
+  /// salon dans l'application, sinon la page du site dans le navigateur.
+  Future<void> _open(BuildContext context, WidgetRef ref) async {
+    final link = notification.link;
+    if (link == null || link.isEmpty) return;
+    final uri = Uri.parse(link);
+    final segments = uri.pathSegments;
+    if (segments.length == 2 && segments.first == 'torrents') {
+      final hash = segments[1].toLowerCase();
+      final torrent = ref
+          .read(torrentsProvider)
+          .byId
+          .values
+          .where((t) => t.hash == hash)
+          .firstOrNull;
+      if (torrent != null) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) =>
+                TorrentDetailPage(id: torrent.id, name: torrent.name),
+          ),
+        );
+        return;
+      }
+    }
+    final channel = int.tryParse(uri.queryParameters['channel'] ?? '');
+    if (segments.firstOrNull == 'messages' && channel != null) {
+      ref.read(notificationsProvider.notifier).joinChannel(channel);
+      onOpenChannel();
+      return;
+    }
+    await launchUrl(
+      uri.hasScheme ? uri : Uri.parse('https://c411.org$link'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
 
   @override
-  State<_NotificationTile> createState() => _NotificationTileState();
-}
-
-class _NotificationTileState extends State<_NotificationTile> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final n = widget.notification;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final n = notification;
     final c = context.colors;
+    final unread = !n.isRead;
     return InkWell(
-      onTap: () => setState(() => _expanded = !_expanded),
+      onTap: n.link == null ? null : () => _open(context, ref),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 6, right: 12),
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: widget.unread ? c.accent : Colors.transparent,
-                  shape: BoxShape.circle,
-                ),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: unread ? c.accent.withValues(alpha: 0.15) : c.surfaceAlt,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _iconFor(n.type),
+                size: 18,
+                color: unread ? c.accent : c.muted,
               ),
             ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
+                      if (unread)
+                        Container(
+                          width: 7,
+                          height: 7,
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: BoxDecoration(
+                            color: c.accent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                       Expanded(
                         child: Text(
                           n.title,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: widget.unread
+                            fontWeight: unread
                                 ? FontWeight.w700
                                 : FontWeight.w500,
                           ),
@@ -336,38 +426,31 @@ class _NotificationTileState extends State<_NotificationTile> {
                       ),
                     ],
                   ),
-                  if (n.body != null) ...[
-                    const SizedBox(height: 4),
+                  if (n.body != null && n.body!.isNotEmpty) ...[
+                    const SizedBox(height: 3),
                     Text(
                       n.body!,
-                      maxLines: _expanded ? null : 3,
-                      overflow: _expanded ? null : TextOverflow.ellipsis,
-                      style: TextStyle(color: c.muted, fontSize: 13),
-                    ),
-                  ],
-                  if (_expanded) ...[
-                    const SizedBox(height: 8),
-                    Tag(n.event),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: c.surfaceAlt,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: SelectableText(
-                        n.rawText,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11.5,
-                        ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.muted,
+                        fontSize: 13,
+                        height: 1.35,
                       ),
                     ),
                   ],
                 ],
               ),
             ),
+            if (n.link != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 6, top: 8),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: c.muted,
+                ),
+              ),
           ],
         ),
       ),
@@ -450,16 +533,21 @@ class _ChatViewState extends State<_ChatView> {
                           // Même mise en forme que les messages (liens
                           // cliquables) ; hauteur ajustée au contenu.
                           child: Text.rich(
-                            TextSpan(children: [
-                              ...chatSpans(pinned.content, colors: c),
-                              TextSpan(
-                                text: '\n— ${pinned.username}',
-                                style: TextStyle(color: c.muted),
-                              ),
-                            ]),
+                            TextSpan(
+                              children: [
+                                ...chatSpans(pinned.content, colors: c),
+                                TextSpan(
+                                  text: '\n— ${pinned.username}',
+                                  style: TextStyle(color: c.muted),
+                                ),
+                              ],
+                            ),
                             maxLines: 4,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12.5, height: 1.35),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              height: 1.35,
+                            ),
                           ),
                         ),
                       ],

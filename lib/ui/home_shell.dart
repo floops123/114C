@@ -61,13 +61,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
 
     // Nouvelle notification hors de l'onglet : bandeau avec raccourci.
-    ref.listen(notificationsProvider, (previous, next) {
-      final before = previous?.items.length ?? 0;
-      if (next.items.length <= before || _index == _notificationsTab) return;
+    ref.listen(notificationsProvider.select((s) => s.arrivals), (_, _) {
+      final text = ref.read(notificationsProvider).arrival;
+      if (text == null || _index == _notificationsTab) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
-          content: Text(next.items.first.title),
+          content: Text(text),
           action: SnackBarAction(
               label: 'Voir', onPressed: () => select(_notificationsTab)),
         ));

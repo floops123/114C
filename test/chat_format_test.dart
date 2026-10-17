@@ -1,3 +1,4 @@
+import 'package:c411_remote/api/c411_chat.dart';
 import 'package:c411_remote/api/c411_socket.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:c411_remote/state/notifications.dart';
@@ -19,10 +20,60 @@ class _Connected extends NotificationsNotifier {
       configured: true, status: SocketStatus.connected);
 }
 
-SocketEvent _unread(int pm) => SocketEvent('unread:update', [
-      {'privateMessages': pm, 'channelMessages': 0, 'pendingRequests': 0,
-       'staffMessages': 0, 'total': pm},
-    ], DateTime.now());
+Map<String, dynamic> _site(int id, String type, String title, String message,
+        String link, {bool read = false}) =>
+    {
+      'id': id,
+      'type': type,
+      'title': title,
+      'message': message,
+      'link': link,
+      'data': {'k': id},
+      'isRead': read,
+      'createdAt': '2026-10-1${id % 10}T04:36:08.000Z',
+    };
+
+/// Faux site : 3 notifications en page 1 (dont 1 non lue), 1 en page 2 ;
+/// [newest] ajoute une nouvelle non lue en tête.
+class _FakeSite extends C411ChatApi {
+  _FakeSite() : super('');
+  bool newest = false;
+  final offsets = <int>[];
+
+  @override
+  Future<({List<Map<String, dynamic>> items, bool hasMore, int unread})>
+      notifications({int offset = 0, int perPage = 30}) async {
+    offsets.add(offset);
+    if (offset > 0) {
+      return (
+        items: [_site(1, 'ic_level_up', 'Niveau 17 atteint', '+2 Zen', '/community/my-rank', read: true)],
+        hasMore: false,
+        unread: 0,
+      );
+    }
+    return (
+      items: [
+        if (newest) _site(6, 'ic_level_up', 'Niveau 19 atteint', '+2 Zen', '/community/my-rank'),
+        _site(5, 'vtr_initialized', '18 torrents comptés', '18 torrents que vous seedez sont désormais comptés.', '/user/profile?tab=seeds'),
+        _site(4, 'token_attribution', 'Versement Zen Journalier', '+6 Zen versés sur votre compte.', '/user/zens', read: true),
+        _site(3, 'channel_reply', 'Nouvelle réponse', '4 nouvelles réponses dans #Swarm Keeper', '/messages?channel=135&space=public', read: true),
+      ],
+      hasMore: true,
+      unread: newest ? 2 : 1,
+    );
+  }
+}
+
+/// Connecté sans WebSocket : seul le chargement des notifications compte.
+class _Online extends NotificationsNotifier {
+  @override
+  NotificationsState build() {
+    final (items, _) = ref.read(notificationStoreProvider).load();
+    return NotificationsState(
+        configured: true, status: SocketStatus.connected, items: items);
+  }
+}
+
 
 void main() {
   group('mise en forme des messages', () {
@@ -59,40 +110,65 @@ void main() {
     });
   });
 
-  test('historique conservé entre deux lancements', () {
+  test('notifications du site : badge, nouvelles, cache hors ligne, pages', () async {
     final store = MemoryNotificationStore();
-    ProviderContainer launch() {
+    final api = _FakeSite();
+    ProviderContainer launch({required bool online}) {
       final c = ProviderContainer(overrides: [
         settingsProvider.overrideWith(_NoSettings.new),
         notificationStoreProvider.overrideWithValue(store),
+        if (online) notificationsProvider.overrideWith(_Online.new),
+        chatApiProvider.overrideWithValue(online ? api : null),
       ]);
       addTearDown(c.dispose);
       return c;
     }
 
-    final first = launch();
+    final first = launch(online: true);
     final n = first.read(notificationsProvider.notifier);
-    n.handle(_unread(0));
-    n.handle(_unread(2));
-    expect(first.read(notificationsProvider).unread, 1);
-    first.dispose();
+    await n.refreshNotifications();
+    var s = first.read(notificationsProvider);
+    expect(s.items.map((x) => x.id), [5, 4, 3]);
+    expect(s.items.first.title, '18 torrents comptés');
+    expect(s.unread, 1, reason: 'une seule non lue sur le site');
+    expect(s.hasMore, isTrue);
+    expect(s.arrivals, 0, reason: 'pas de bandeau au premier chargement');
 
-    final second = launch();
-    final s = second.read(notificationsProvider);
-    expect(s.items.single.title, 'Nouveau message privé');
-    expect(s.unread, 1, reason: 'le compteur de non-lues est conservé');
-    second.read(notificationsProvider.notifier).markAllRead();
-    expect(store.load().$2, 0);
+    // Une nouvelle notification arrive sur le site.
+    api.newest = true;
+    await n.refreshNotifications();
+    s = first.read(notificationsProvider);
+    expect(s.items.first.id, 6);
+    expect((s.arrivals, s.arrival), (1, 'Niveau 19 atteint'));
+    expect(s.unread, 2);
+
+    // Page suivante : offset = nombre déjà chargé.
+    await n.loadMoreNotifications();
+    s = first.read(notificationsProvider);
+    expect(api.offsets, [0, 0, 4]);
+    expect(s.items.last.id, 1);
+    expect(s.hasMore, isFalse);
+
+    // Vues dans l'application : le badge repart de zéro, même au lancement
+    // suivant hors ligne (cache).
+    n.markAllRead();
+    first.dispose();
+    final second = launch(online: false);
+    s = second.read(notificationsProvider);
+    expect(s.items.map((x) => x.id), [6, 5, 4, 3, 1]);
+    expect(s.unread, 0);
+    expect(s.items.first.isRead, isFalse, reason: 'état « lu » du site conservé');
   });
 
-  test('sérialisation d’une notification', () {
-    final n = AppNotification(
-        event: 'x', title: 'T', body: 'B', receivedAt: DateTime.utc(2026, 1, 2),
-        raw: {'a': 1});
+  test('cache : sérialisation d’une notification', () {
+    final n = AppNotification.fromSite(_site(4, 'token_attribution',
+        'Versement Zen Journalier', '+6 Zen versés', '/user/zens', read: true));
     final back = AppNotification.fromJson(n.toJson());
-    expect((back.event, back.title, back.body, back.receivedAt),
-        ('x', 'T', 'B', DateTime.utc(2026, 1, 2)));
-    expect(back.raw, {'a': 1});
+    expect((back.id, back.type, back.title, back.body, back.link, back.isRead),
+        (4, 'token_attribution', 'Versement Zen Journalier', '+6 Zen versés',
+            '/user/zens', true));
+    expect(back.receivedAt, n.receivedAt);
+    expect(back.raw, {'k': 4});
   });
 
   testWidgets('anciennes notifications : visibles hors ligne, paginées',
@@ -104,10 +180,12 @@ void main() {
       ..save([
         for (var i = 0; i < 60; i++)
           AppNotification(
-              event: 'unread:update',
+              id: 1000 - i,
+              type: 'vtr_initialized',
               title: 'Notification $i',
+              isRead: true,
               receivedAt: DateTime(2026, 10, 17, 12).subtract(Duration(hours: i))),
-      ], 0);
+      ], 1000);
     final container = ProviderContainer(overrides: [
       settingsProvider.overrideWith(_NoSettings.new),
       notificationStoreProvider.overrideWithValue(store),
@@ -129,6 +207,39 @@ void main() {
     await tester.tap(find.text('Afficher plus anciennes (10)'));
     await tester.pump();
     expect(find.text('Notification 59'), findsOneWidget);
+  });
+
+  testWidgets('clic sur une notification de salon : ouvre ce salon',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final store = MemoryNotificationStore()
+      ..save([
+        AppNotification.fromSite(_site(3, 'channel_reply', 'Nouvelle réponse',
+            '4 nouvelles réponses à vos messages dans #Swarm Keeper',
+            '/messages?channel=135&space=public', read: true)),
+      ], 3);
+    final container = ProviderContainer(overrides: [
+      notificationsProvider.overrideWith(_Online.new),
+      notificationStoreProvider.overrideWithValue(store),
+      chatApiProvider.overrideWithValue(null),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: ThemeData(extensions: const [AppColors.dark]),
+        home: const NotificationsPage(),
+      ),
+    ));
+    expect(find.text('Nouvelle réponse'), findsOneWidget);
+    await tester.tap(find.text('Nouvelle réponse'));
+    await tester.pump();
+    expect(container.read(notificationsProvider).channelId, 135);
+    expect(find.text('Message à ce salon'), findsOneWidget,
+        reason: 'la vue Salon est affichée');
   });
 
   testWidgets('salon : messages consécutifs regroupés', (tester) async {

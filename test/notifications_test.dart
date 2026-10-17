@@ -76,22 +76,21 @@ void main() {
     expect(s.unread, 0);
   });
 
-  test('une hausse de compteur devient une notification', () {
+  test('une hausse de compteur donne un bandeau, pas une notification', () {
     final container = _container();
     final notifier = container.read(notificationsProvider.notifier);
     String unread(int pm, int req) => '42["unread:update",{"privateMessages":$pm,'
         '"channelMessages":0,"pendingRequests":$req,"staffMessages":0,'
         '"total":${pm + req}}]';
-    notifier.handle(_event(unread(0, 0)));
+    notifier.handle(_event(unread(1, 0))); // premier relevé : rien
+    expect(container.read(notificationsProvider).arrivals, 0);
     notifier.handle(_event(unread(2, 0)));
     notifier.handle(_event(unread(2, 1)));
     notifier.handle(_event(unread(1, 1))); // une lecture : rien de nouveau
     final s = container.read(notificationsProvider);
-    expect(s.items.map((n) => (n.title, n.body)), [
-      ('Nouvelle demande en attente', '1 non lu'),
-      ('Nouveau message privé', '2 non lus'),
-    ]);
-    expect(s.unread, 2);
+    expect(s.arrivals, 2);
+    expect(s.arrival, 'Nouvelle demande en attente (1 non lu)');
+    expect(s.items, isEmpty);
   });
 
   testWidgets('écran : compte, compteurs, salon', (tester) async {
@@ -126,8 +125,6 @@ void main() {
     expect(find.text('Connecté'), findsOneWidget);
     expect(find.text('MON COMPTE · EN DIRECT'), findsOneWidget);
     expect(find.text('Messages privés : 3'), findsOneWidget);
-    expect(find.text('Nouveau message privé'), findsOneWidget);
-    expect(find.text('Notifications (1)'), findsOneWidget);
 
     await tester.tap(find.text('Salon · 33 en ligne'));
     await tester.pump();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -15,91 +16,86 @@ import '../core/settings.dart';
 //   channel:message  message d'un salon de discussion
 //   channel:typing   un membre écrit (ou a arrêté)
 //   channel:viewers  nombre de personnes dans un salon
+//   channel:reaction réactions d'un message
 //   stats:update     volumes du compte (envoyé, reçu, crédit), en direct
 // Le client choisit son salon en émettant channel:join / channel:leave : le
 // serveur ne diffuse les messages d'un salon qu'à ceux qui l'ont rejoint.
-// Seules les hausses de compteurs (et les événements inconnus) deviennent des
-// notifications ; le reste alimente le salon et l'encadré « Mon compte ».
+//
+// Les notifications viennent de l'API du site (/api/notifications), relue
+// périodiquement et à chaque événement inconnu du WebSocket. Les hausses de
+// compteurs (message privé…) donnent seulement un bandeau.
 
-/// Notification affichée dans l'application.
+/// Notification du site (`/api/notifications`).
 class AppNotification {
   AppNotification({
-    required this.event,
+    required this.type,
     required this.title,
     required this.receivedAt,
+    this.id,
     this.body,
+    this.link,
+    this.isRead = false,
     this.raw,
   });
 
-  final String event;
-  final String title;
-  final String? body;
-  final DateTime receivedAt;
-  final Object? raw;
+  factory AppNotification.fromSite(Map json) => AppNotification(
+        id: (json['id'] as num?)?.toInt(),
+        type: json['type'] as String? ?? '',
+        title: unescapeHtml(json['title'] as String? ?? ''),
+        body: json['message'] == null
+            ? null
+            : unescapeHtml(json['message'] as String),
+        link: json['link'] as String?,
+        isRead: json['isRead'] == true,
+        receivedAt:
+            DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        raw: json['data'],
+      );
 
-  Map<String, Object?> toJson() => {
-        'event': event,
-        'title': title,
-        'body': body,
-        'at': receivedAt.toIso8601String(),
-        'raw': raw,
-      };
-
+  /// Format du cache local.
   factory AppNotification.fromJson(Map json) => AppNotification(
-        event: json['event'] as String? ?? '',
+        id: (json['id'] as num?)?.toInt(),
+        type: json['type'] as String? ?? json['event'] as String? ?? '',
         title: json['title'] as String? ?? '',
         body: json['body'] as String?,
+        link: json['link'] as String?,
+        isRead: json['isRead'] == true,
         receivedAt:
             DateTime.tryParse(json['at'] as String? ?? '') ?? DateTime.now(),
         raw: json['raw'],
       );
 
-  /// Contenu brut lisible (affiché en détail).
-  String get rawText {
-    try {
-      return const JsonEncoder.withIndent('  ').convert(raw);
-    } on JsonUnsupportedObjectError {
-      return '$raw';
-    }
-  }
+  final int? id;
 
-  static const _titleKeys = ['title', 'subject', 'message', 'text', 'content'];
-  static const _bodyKeys = ['body', 'description', 'message', 'text', 'content'];
+  /// `vtr_initialized`, `ic_level_up`, `channel_reply`, `token_attribution`…
+  final String type;
+  final String title;
+  final String? body;
 
-  /// Événement inconnu : on cherche les champs usuels (titre, message…) et on
-  /// retombe sur le nom de l'événement.
-  factory AppNotification.fromEvent(SocketEvent e) {
-    final data = e.data;
-    String? pick(Map m, List<String> keys, {String? except}) {
-      for (final k in keys) {
-        final v = m[k];
-        if (v is String && v.trim().isNotEmpty && v != except) return v.trim();
-      }
-      return null;
-    }
+  /// Chemin sur le site (`/torrents/<hash>`, `/messages?channel=…`…).
+  final String? link;
+  final bool isRead;
+  final DateTime receivedAt;
 
-    String title = e.name;
-    String? body;
-    if (data is Map) {
-      title = pick(data, _titleKeys) ?? e.name;
-      body = pick(data, _bodyKeys, except: title);
-    } else if (data is String && data.isNotEmpty) {
-      body = data;
-    }
-    return AppNotification(
-      event: e.name,
-      title: title,
-      body: body,
-      receivedAt: e.receivedAt,
-      raw: e.args.length == 1 ? e.args.first : e.args,
-    );
-  }
+  /// Données propres au type (`data`).
+  final Object? raw;
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'type': type,
+        'title': title,
+        'body': body,
+        'link': link,
+        'isRead': isRead,
+        'at': receivedAt.toIso8601String(),
+        'raw': raw,
+      };
 }
 
-/// Historique local des notifications (conservé entre deux lancements).
+/// Cache local des notifications et de la dernière vue (pour le badge).
 abstract class NotificationStore {
-  (List<AppNotification>, int unread) load();
-  void save(List<AppNotification> items, int unread);
+  (List<AppNotification>, int seenUpTo) load();
+  void save(List<AppNotification> items, int seenUpTo);
 }
 
 class PrefsNotificationStore implements NotificationStore {
@@ -118,7 +114,7 @@ class PrefsNotificationStore implements NotificationStore {
           for (final n in (json['items'] as List? ?? const []).whereType<Map>())
             AppNotification.fromJson(n),
         ],
-        (json['unread'] as num?)?.toInt() ?? 0,
+        (json['seenUpTo'] as num?)?.toInt() ?? 0,
       );
     } on Object {
       return (const [], 0); // Données illisibles : on repart de zéro.
@@ -126,25 +122,25 @@ class PrefsNotificationStore implements NotificationStore {
   }
 
   @override
-  void save(List<AppNotification> items, int unread) => _prefs.setString(
+  void save(List<AppNotification> items, int seenUpTo) => _prefs.setString(
       key,
       jsonEncode({
-        'unread': unread,
+        'seenUpTo': seenUpTo,
         'items': [for (final n in items) n.toJson()],
       }));
 }
 
 class MemoryNotificationStore implements NotificationStore {
   List<AppNotification> _items = const [];
-  int _unread = 0;
+  int _seenUpTo = 0;
 
   @override
-  (List<AppNotification>, int) load() => (_items, _unread);
+  (List<AppNotification>, int) load() => (_items, _seenUpTo);
 
   @override
-  void save(List<AppNotification> items, int unread) {
+  void save(List<AppNotification> items, int seenUpTo) {
     _items = items;
-    _unread = unread;
+    _seenUpTo = seenUpTo;
   }
 }
 
@@ -152,7 +148,7 @@ final notificationStoreProvider = Provider<NotificationStore>((ref) {
   try {
     return PrefsNotificationStore(ref.watch(sharedPrefsProvider));
   } on Object {
-    // Préférences non initialisées (tests) : historique en mémoire.
+    // Préférences non initialisées (tests) : cache en mémoire.
     return MemoryNotificationStore();
   }
 });
@@ -198,6 +194,11 @@ class NotificationsState {
     this.configured = false,
     this.items = const [],
     this.unread = 0,
+    this.hasMore = false,
+    this.loadingMore = false,
+    this.notifError,
+    this.arrival,
+    this.arrivals = 0,
     this.error,
     this.counters,
     this.account,
@@ -219,7 +220,16 @@ class NotificationsState {
 
   /// Plus récentes en premier.
   final List<AppNotification> items;
+
+  /// Non lues sur le site et pas encore vues dans l'application (badge).
   final int unread;
+  final bool hasMore;
+  final bool loadingMore;
+  final String? notifError;
+
+  /// Dernier bandeau à afficher ; [arrivals] change à chaque nouveau.
+  final String? arrival;
+  final int arrivals;
   final String? error;
   final UnreadCounters? counters;
   final AccountStats? account;
@@ -253,6 +263,11 @@ class NotificationsState {
     SocketStatus? status,
     List<AppNotification>? items,
     int? unread,
+    bool? hasMore,
+    bool? loadingMore,
+    String? Function()? notifError,
+    String? arrival,
+    int? arrivals,
     String? Function()? error,
     UnreadCounters? counters,
     AccountStats? account,
@@ -273,6 +288,11 @@ class NotificationsState {
         configured: configured,
         items: items ?? this.items,
         unread: unread ?? this.unread,
+        hasMore: hasMore ?? this.hasMore,
+        loadingMore: loadingMore ?? this.loadingMore,
+        notifError: notifError != null ? notifError() : this.notifError,
+        arrival: arrival ?? this.arrival,
+        arrivals: arrivals ?? this.arrivals,
         error: error != null ? error() : this.error,
         counters: counters ?? this.counters,
         account: account ?? this.account,
@@ -293,6 +313,13 @@ class NotificationsState {
 /// Se connecte au WebSocket dès qu'un cookie de session est enregistré.
 class NotificationsNotifier extends Notifier<NotificationsState> {
   static const maxItems = 500;
+  static const pageSize = 30;
+  static const pollInterval = Duration(minutes: 2);
+
+  /// Notifications d'id ≤ à cette valeur déjà vues dans l'application.
+  int _seenUpTo = 0;
+  bool _loadedOnce = false;
+  DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
   static const maxChat = 600;
   static const historySize = 50;
   static const typingTimeout = Duration(seconds: 8);
@@ -311,11 +338,11 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
   NotificationsState build() {
     final cookie = ref.watch(
         settingsProvider.select((s) => s.value?.sessionCookie ?? ''));
-    // Les notifications reçues précédemment restent consultables, même sans
-    // connexion.
-    final (stored, storedUnread) = ref.read(notificationStoreProvider).load();
+    // Les dernières notifications chargées restent consultables hors ligne.
+    final (stored, seenUpTo) = ref.read(notificationStoreProvider).load();
+    _seenUpTo = seenUpTo;
     if (cookie.isEmpty) {
-      return NotificationsState(items: stored, unread: storedUnread);
+      return NotificationsState(items: stored, unread: _unseen(stored));
     }
 
     final socket = C411Socket(
@@ -343,16 +370,96 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
     ref.onDispose(socket.close);
     Future.microtask(socket.connect);
     Future.microtask(loadChannels);
+    Future.microtask(refreshNotifications);
+    final poll = Timer.periodic(pollInterval, (_) => refreshNotifications());
+    ref.onDispose(poll.cancel);
     return NotificationsState(
       configured: true,
       status: SocketStatus.connecting,
       items: stored,
-      unread: storedUnread,
+      unread: _unseen(stored),
     );
   }
 
+  int _unseen(List<AppNotification> items) =>
+      items.where((n) => !n.isRead && (n.id ?? 0) > _seenUpTo).length;
+
   void _persist() =>
-      ref.read(notificationStoreProvider).save(state.items, state.unread);
+      ref.read(notificationStoreProvider).save(state.items, _seenUpTo);
+
+  /// Bandeau ponctuel (nouvelle notification, message privé…).
+  void _arrive(String text) =>
+      state = state.copyWith(arrival: text, arrivals: state.arrivals + 1);
+
+  static List<AppNotification> _merge(
+      List<AppNotification> a, List<AppNotification> b) {
+    final byId = <Object, AppNotification>{
+      for (final n in a) n.id ?? n: n,
+      for (final n in b) n.id ?? n: n,
+    };
+    return byId.values.toList()
+      ..sort((x, y) => y.receivedAt.compareTo(x.receivedAt));
+  }
+
+  /// Relit la première page du site ; signale les nouvelles non lues.
+  Future<void> refreshNotifications() async {
+    final api = ref.read(chatApiProvider);
+    if (api == null) return;
+    _lastRefresh = DateTime.now();
+    try {
+      final page = await api.notifications(perPage: pageSize);
+      if (!ref.mounted) return;
+      final fetched = [for (final j in page.items) AppNotification.fromSite(j)];
+      final known = {for (final n in state.items) n.id};
+      final fresh = [
+        for (final n in fetched)
+          if (!n.isRead && !known.contains(n.id)) n,
+      ];
+      final merged = _merge(state.items, fetched).take(maxItems).toList();
+      state = state.copyWith(
+        items: merged,
+        unread: _unseen(merged),
+        hasMore: merged.length <= fetched.length ? page.hasMore : state.hasMore,
+        notifError: () => null,
+      );
+      if (_loadedOnce && fresh.isNotEmpty) {
+        _arrive(fresh.length == 1
+            ? fresh.first.title
+            : '${fresh.length} nouvelles notifications');
+      }
+      _loadedOnce = true;
+      _persist();
+    } on ChatException catch (e) {
+      if (ref.mounted) state = state.copyWith(notifError: () => e.message);
+    }
+  }
+
+  /// Page suivante (plus anciennes).
+  Future<void> loadMoreNotifications() async {
+    final api = ref.read(chatApiProvider);
+    if (api == null || state.loadingMore) return;
+    state = state.copyWith(loadingMore: true);
+    try {
+      final page = await api.notifications(
+          offset: state.items.length, perPage: pageSize);
+      if (!ref.mounted) return;
+      final merged = _merge(state.items,
+              [for (final j in page.items) AppNotification.fromSite(j)])
+          .take(maxItems)
+          .toList();
+      state = state.copyWith(
+        items: merged,
+        unread: _unseen(merged),
+        hasMore: page.hasMore && merged.length < maxItems,
+        loadingMore: false,
+      );
+      _persist();
+    } on ChatException catch (e) {
+      if (ref.mounted) {
+        state = state.copyWith(loadingMore: false, notifError: () => e.message);
+      }
+    }
+  }
 
   /// Aiguillage des événements (public pour les tests).
   void handle(SocketEvent e) {
@@ -412,8 +519,12 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
         if (id != null && !state.channels.contains(id)) {
           state = state.copyWith(channels: {...state.channels, id});
         }
+      // Événement inconnu (probablement une nouvelle notification) : on relit
+      // la liste, au plus une fois toutes les 10 s.
       default:
-        _notify(AppNotification.fromEvent(e));
+        if (DateTime.now().difference(_lastRefresh).inSeconds >= 10) {
+          refreshNotifications();
+        }
     }
   }
 
@@ -442,43 +553,26 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
         chat: [...state.chat]..[i] = state.chat[i].copyWith(reactions: reactions));
   }
 
-  /// Une notification par compteur qui augmente ; au premier relevé, une
-  /// seule par compteur non nul.
+  /// Bandeau quand un compteur augmente (après le premier relevé).
   void _onUnread(UnreadCounters next, SocketEvent e) {
     final previous = state.counters;
     state = state.copyWith(counters: next);
+    if (previous == null) return;
     for (final MapEntry(key: k, value: (_, title))
         in UnreadCounters.kinds.entries) {
       final now = next.counts[k] ?? 0;
-      final before = previous?.counts[k] ?? 0;
-      if (now > before) {
-        _notify(AppNotification(
-          event: e.name,
-          title: title,
-          body: '$now non lu${now > 1 ? 's' : ''}',
-          receivedAt: e.receivedAt,
-          raw: e.data,
-        ));
+      if (now > (previous.counts[k] ?? 0)) {
+        _arrive('$title ($now non lu${now > 1 ? 's' : ''})');
       }
     }
   }
 
-  void _notify(AppNotification n) {
-    state = state.copyWith(
-      items: [n, ...state.items].take(maxItems).toList(),
-      unread: state.unread + 1,
-    );
-    _persist();
-  }
-
+  /// Les notifications affichées sont vues : le badge repart de zéro.
   void markAllRead() {
-    if (state.unread == 0) return;
+    final maxId = state.items.fold(0, (m, n) => math.max(m, n.id ?? 0));
+    if (maxId <= _seenUpTo && state.unread == 0) return;
+    _seenUpTo = math.max(_seenUpTo, maxId);
     state = state.copyWith(unread: 0);
-    _persist();
-  }
-
-  void clear() {
-    state = state.copyWith(items: const [], unread: 0);
     _persist();
   }
 

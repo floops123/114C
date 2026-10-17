@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:c411_remote/api/c411_socket.dart';
-import 'package:c411_remote/state/notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Faux serveur Socket.IO reproduisant les échanges observés sur c411.org.
@@ -63,9 +62,7 @@ void main() {
     expect(headers.single, {'origin': 'https://c411.org', 'cookie': 'a=1; b=2'});
     expect(received, ['40', '3', '42["channel:join",{"channelId":1}]']);
     expect(events.map((e) => e.name), ['notification', 'ignore-ns']);
-    final n = AppNotification.fromEvent(events.first);
-    expect(n.title, 'Nouveau message');
-    expect(n.body, 'Bob vous a écrit');
+    expect((events.first.data as Map)['title'], 'Nouveau message');
 
     await socket.close();
     await server.close(force: true);
@@ -96,12 +93,4 @@ void main() {
     expect(normalizeCookie('pas un cookie'), '');
   });
 
-  test('titre de notification : champs usuels, sinon nom de l’événement', () {
-    final at = DateTime(2026);
-    expect(AppNotification.fromEvent(SocketEvent('ping-x', [42], at)).title,
-        'ping-x');
-    final n = AppNotification.fromEvent(
-        SocketEvent('pm', [{'subject': 'Sujet', 'content': 'Corps'}], at));
-    expect((n.title, n.body), ('Sujet', 'Corps'));
-  });
 }

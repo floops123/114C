@@ -63,11 +63,17 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
   automatique (2 s → 2 min).
 - Onglet Notifications (pastille du nombre de non-lues, bandeau à
   l'arrivée) :
-  - Notifications : une alerte quand un compteur de non-lus du site augmente
-    (message privé, salon, demande, staff), compteurs actuels, encadré
-    « Mon compte » mis à jour en direct (envoyé, reçu, crédit, ratio) ;
-    historique local des 500 dernières (conservé entre deux lancements,
-    consultable hors ligne), groupé par jour, « Afficher plus anciennes » ;
+  - Notifications : celles du site (`/api/notifications`), icône par type,
+    non lues signalées, groupées par jour, « Afficher plus anciennes »
+    (pages suivantes du site), tirer pour rafraîchir. Relues toutes les
+    2 min et à chaque événement WebSocket inconnu ; bandeau à l'arrivée d'une
+    nouvelle. Clic : torrent ouvert dans l'app s'il est dans Transmission,
+    salon ouvert pour un lien `/messages?channel=…`, sinon page du site.
+    Les 500 dernières sont gardées en cache (consultables hors ligne). Le
+    badge compte les non lues pas encore vues dans l'app ; l'état « lu » du
+    site n'est pas modifié. Compteurs de non-lus (messages privés, salons,
+    demandes, staff) avec bandeau quand l'un augmente, et encadré « Mon
+    compte » en direct (envoyé, reçu, crédit, ratio) ;
   - Salon : choix parmi les salons du site (Général par défaut), description
     et message épinglé, 50 derniers messages chargés puis suite en direct
     (pseudo, avatar, badge, réponse citée, réactions mises à jour en direct
@@ -253,6 +259,10 @@ sélecteur de l'onglet Sorties s'adaptent automatiquement.
   salon après chaque reconnexion.
 - Le contenu des messages est encodé en HTML (`c&#x27;est`) : décodé avant
   affichage.
+- Notifications : `GET /api/notifications?offset=N&perPage=M` →
+  `data[]` (`id`, `type`, `title`, `message`, `link`, `data`, `isRead`,
+  `createdAt`) et `meta` (`hasMore`, `unreadCount`). Types observés :
+  `vtr_initialized`, `token_attribution`, `ic_level_up`, `channel_reply`.
 - API de discussion (même cookie de session ; 401 sinon) :
   `GET /api/messages/channels` (salons par espace : nom, description,
   couleur, `isDefault`, `canWrite`…) et
