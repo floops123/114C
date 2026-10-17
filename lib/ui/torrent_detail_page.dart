@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/transmission.dart';
 import '../core/format.dart';
 import '../state/torrents.dart';
+import '../state/speed_history.dart';
+import 'charts.dart';
 import 'downloads_page.dart';
 import 'theme.dart';
 import 'torrent_actions.dart';
@@ -198,11 +200,11 @@ class _InfoTab extends StatelessWidget {
         Wrap(spacing: 6, runSpacing: 6, children: [
           StatPill(
               icon: Icons.south_rounded,
-              color: c.accent,
+              color: c.download,
               label: formatSpeed(t.rateDownload)),
           StatPill(
               icon: Icons.north_rounded,
-              color: c.success,
+              color: c.upload,
               label: formatSpeed(t.rateUpload)),
           StatPill(icon: Icons.people_outline, label: '${t.peersConnected}'),
           StatPill(icon: Icons.balance_rounded, label: formatRatio(t.ratio)),
@@ -212,6 +214,8 @@ class _InfoTab extends StatelessWidget {
           Text(t.errorString, style: TextStyle(color: c.danger)),
         ],
       ]),
+      const SizedBox(height: 12),
+      _TorrentSpeedSection(t.id),
       if (json['pieces'] is String && i('pieceCount') > 0) ...[
         const SizedBox(height: 12),
         Section(title: 'Pièces', children: [
@@ -341,6 +345,32 @@ class _PiecesPainter extends CustomPainter {
   }
 }
 
+/// Vitesses du torrent sur les 15 dernières minutes (historique de l'app).
+class _TorrentSpeedSection extends ConsumerWidget {
+  const _TorrentSpeedSection(this.id);
+  final int id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final samples = ref.watch(
+        speedHistoryProvider.select((h) => (h.version, h.perTorrent[id])));
+    final series = samples.$2;
+    return Section(title: 'Vitesse · 15 dernières minutes', children: [
+      if (series == null)
+        Text(
+          'Aucune activité depuis l’ouverture de l’application.',
+          style: TextStyle(color: context.colors.muted, fontSize: 13),
+        )
+      else
+        SpeedChart(
+          samples: series,
+          window: SpeedHistoryNotifier.torrentWindow,
+          height: 160,
+        ),
+    ]);
+  }
+}
+
 class _FilesTab extends ConsumerWidget {
   const _FilesTab(this.id, this.json);
   final int id;
@@ -448,13 +478,26 @@ class _FilesTab extends ConsumerWidget {
               ),
               title: Text(path.substring(slash + 1),
                   maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text(
-                [
-                  if (slash > 0) path.substring(0, slash),
-                  '${formatBytes(done)} / ${formatBytes(length)} · '
-                      '${formatPercent(length == 0 ? 1 : done / length)}',
-                ].join('\n'),
-                style: TextStyle(color: c.muted, fontSize: 12),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (slash > 0)
+                    Text(path.substring(0, slash),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: c.muted, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Meter(
+                    value: length == 0 ? 1 : done / length,
+                    color: wanted(i) ? c.download : c.muted,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${formatBytes(done)} / ${formatBytes(length)} · '
+                    '${formatPercent(length == 0 ? 1 : done / length)}',
+                    style: TextStyle(color: c.muted, fontSize: 12),
+                  ),
+                ],
               ),
               trailing: PopupMenuButton<String>(
                 tooltip: 'Priorité, renommer',

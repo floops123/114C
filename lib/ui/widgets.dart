@@ -285,3 +285,95 @@ class ChipRow<T> extends StatelessWidget {
     );
   }
 }
+
+enum _SortDirection { ascending, descending }
+
+/// Bouton de tri : affiche le critère et le sens courants. Choisir à nouveau
+/// le critère actif inverse le sens ; un nouveau critère prend son sens
+/// naturel ([ascendingByDefault]).
+class SortMenu<T extends Object> extends StatelessWidget {
+  const SortMenu({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.ascending,
+    required this.label,
+    required this.ascendingByDefault,
+    required this.onChanged,
+    this.note,
+  });
+
+  final List<T> options;
+  final T selected;
+  final bool ascending;
+  final String Function(T) label;
+  final bool Function(T) ascendingByDefault;
+  final void Function(T sort, bool ascending) onChanged;
+
+  /// Précision affichée en tête du menu (ex. tri local).
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return PopupMenuButton<Object>(
+      tooltip: 'Trier',
+      onSelected: (v) {
+        if (v is _SortDirection) {
+          onChanged(selected, v == _SortDirection.ascending);
+        } else if (v == selected) {
+          onChanged(selected, !ascending);
+        } else {
+          onChanged(v as T, ascendingByDefault(v));
+        }
+      },
+      itemBuilder: (_) => [
+        if (note != null)
+          PopupMenuItem(
+            enabled: false,
+            child: Text(note!, style: TextStyle(color: c.muted, fontSize: 12)),
+          ),
+        for (final o in options)
+          CheckedPopupMenuItem(
+              value: o, checked: o == selected, child: Text(label(o))),
+        const PopupMenuDivider(),
+        CheckedPopupMenuItem(
+          value: _SortDirection.ascending,
+          checked: ascending,
+          child: const Text('Croissant'),
+        ),
+        CheckedPopupMenuItem(
+          value: _SortDirection.descending,
+          checked: !ascending,
+          child: const Text('Décroissant'),
+        ),
+      ],
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: c.surfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.sort_rounded, size: 16, color: c.muted),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Text(label(selected),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text)),
+          ),
+          const SizedBox(width: 2),
+          Icon(
+              ascending
+                  ? Icons.arrow_upward_rounded
+                  : Icons.arrow_downward_rounded,
+              size: 14,
+              color: c.accent),
+        ]),
+      ),
+    );
+  }
+}

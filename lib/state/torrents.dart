@@ -101,3 +101,15 @@ final torrentDetailProvider = StreamProvider.autoDispose
     await Future<void>.delayed(const Duration(seconds: 3));
   }
 });
+
+/// Statistiques de session (cumulées et en cours), rafraîchies toutes les 10 s
+/// tant qu'un écran les affiche.
+final sessionStatsProvider =
+    StreamProvider.autoDispose<Map<String, dynamic>>((ref) async* {
+  final client = ref.watch(transmissionProvider);
+  if (client == null) return;
+  while (true) {
+    yield await client.sessionStats();
+    await Future<void>.delayed(const Duration(seconds: 10));
+  }
+});

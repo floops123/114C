@@ -73,21 +73,17 @@ class _ReleasesPageState extends ConsumerState<ReleasesPage> {
                 onPressed: () =>
                     ref.read(uiPrefsProvider.notifier).setReleasesGrid(!grid),
               ),
-              if (api?.supportsSort ?? false)
-                PopupMenuButton<String?>(
-                  tooltip: 'Trier',
-                  icon: const Icon(Icons.swap_vert_rounded),
-                  initialValue: state.filter.sortBy,
-                  onSelected: (v) => notifier.setFilter(
-                    state.filter.copyWith(sortBy: () => v),
-                  ),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: null, child: Text('Plus récents')),
-                    PopupMenuItem(
-                      value: 'seeders',
-                      child: Text('Plus de seeders'),
-                    ),
-                  ],
+              if (api != null)
+                SortMenu<ReleaseSort>(
+                  options: api.sorts,
+                  selected: state.filter.sort,
+                  ascending: state.filter.ascending,
+                  label: (s) => s.label,
+                  ascendingByDefault: (s) => s.ascendingByDefault,
+                  note: api.serverSorts.isEmpty
+                      ? 'Tri des résultats déjà chargés'
+                      : null,
+                  onChanged: notifier.setSort,
                 ),
               IconButton(
                 tooltip: 'Rafraîchir',
@@ -219,13 +215,22 @@ class _ReleaseList extends ConsumerWidget {
       return const EmptyState(Icons.search_off_rounded, 'Aucun résultat');
     }
 
-    final count = state.items.length + (state.hasMore ? 1 : 0);
+    // Tri local quand le tracker ne sait pas trier (Torznab).
+    final api = ref.watch(currentTrackerApiProvider);
+    final f = state.filter;
+    final items = api == null || api.serverSorts.contains(f.sort)
+        ? state.items
+        : (List.of(state.items)
+          ..sort((a, b) =>
+              f.ascending ? f.sort.compare(a, b) : f.sort.compare(b, a)));
+
+    final count = items.length + (state.hasMore ? 1 : 0);
     Widget item(BuildContext context, int i) {
       // Chargement de la page suivante un peu avant d'atteindre le bas.
-      if (i >= state.items.length - 12 && state.error == null) {
+      if (i >= items.length - 12 && state.error == null) {
         Future.microtask(notifier.loadMore);
       }
-      if (i >= state.items.length) {
+      if (i >= items.length) {
         return const Center(
           child: SizedBox.square(
             dimension: 24,
@@ -233,7 +238,7 @@ class _ReleaseList extends ConsumerWidget {
           ),
         );
       }
-      final r = state.items[i];
+      final r = items[i];
       return grid ? ReleaseCard(release: r) : ReleaseRow(release: r);
     }
 

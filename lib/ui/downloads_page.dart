@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/transmission.dart';
+import '../core/preferences.dart';
 import '../core/format.dart';
 import '../state/torrents.dart';
+import 'stats_page.dart';
 import 'theme.dart';
 import 'torrent_actions.dart';
 import 'torrent_detail_page.dart';
@@ -45,30 +47,41 @@ enum _Filter {
       };
 }
 
+/// Critères de tri des transferts ; [compare] trie par ordre croissant.
 enum _Sort {
   added('Date d’ajout'),
-  name('Nom'),
-  queue('File d’attente'),
+  name('Nom', ascendingByDefault: true),
+  status('État', ascendingByDefault: true),
+  queue('File d’attente', ascendingByDefault: true),
   progress('Progression'),
-  download('Vitesse ↓'),
-  upload('Vitesse ↑'),
+  eta('Temps restant', ascendingByDefault: true),
+  download('Vitesse de réception'),
+  upload('Vitesse d’envoi'),
+  peers('Pairs connectés'),
   ratio('Ratio'),
-  uploaded('Envoyé'),
+  uploaded('Volume envoyé'),
   size('Taille');
 
-  const _Sort(this.label);
+  const _Sort(this.label, {this.ascendingByDefault = false});
   final String label;
+  final bool ascendingByDefault;
+
+  // eta vaut -1 ou -2 quand il est inconnu : on le place après les autres.
+  static int _eta(Torrent t) => t.eta < 0 ? 1 << 40 : t.eta;
 
   int compare(Torrent a, Torrent b) => switch (this) {
-        added => b.addedDate.compareTo(a.addedDate),
+        added => a.addedDate.compareTo(b.addedDate),
         name => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        status => a.status.compareTo(b.status),
         queue => a.queuePosition.compareTo(b.queuePosition),
         progress => a.percentDone.compareTo(b.percentDone),
-        download => b.rateDownload.compareTo(a.rateDownload),
-        upload => b.rateUpload.compareTo(a.rateUpload),
-        ratio => b.ratio.compareTo(a.ratio),
-        uploaded => b.uploadedEver.compareTo(a.uploadedEver),
-        size => b.totalSize.compareTo(a.totalSize),
+        eta => _eta(a).compareTo(_eta(b)),
+        download => a.rateDownload.compareTo(b.rateDownload),
+        upload => a.rateUpload.compareTo(b.rateUpload),
+        peers => a.peersConnected.compareTo(b.peersConnected),
+        ratio => a.ratio.compareTo(b.ratio),
+        uploaded => a.uploadedEver.compareTo(b.uploadedEver),
+        size => a.totalSize.compareTo(b.totalSize),
       };
 }
 
@@ -81,7 +94,6 @@ class DownloadsPage extends ConsumerStatefulWidget {
 
 class _DownloadsPageState extends ConsumerState<DownloadsPage> {
   _Filter _filter = _Filter.all;
-  _Sort _sort = _Sort.added;
   String? _label;
   String _query = '';
   final _selected = <int>{};
@@ -160,6 +172,16 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
     if (_label != null && !labels.contains(_label)) _label = null;
     _selected.removeWhere((id) => !state.byId.containsKey(id));
 
+    final prefs = ref.watch(uiPrefsProvider);
+    final sort = _Sort.values.asNameMap()[prefs.transferSort] ?? _Sort.added;
+    final ascending =
+        prefs.transferSort == null ? false : prefs.transferAscending;
+    int compare(Torrent a, Torrent b) {
+      final r = ascending ? sort.compare(a, b) : sort.compare(b, a);
+      // À égalité (ex. vitesse nulle), ordre stable par nom.
+      return r != 0 ? r : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    }
+
     final query = _query.toLowerCase();
     final torrents = state.byId.values
         .where((t) =>
@@ -167,7 +189,7 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
             (_label == null || t.labels.contains(_label)) &&
             (query.isEmpty || t.name.toLowerCase().contains(query)))
         .toList()
-      ..sort(_sort.compare);
+      ..sort(compare);
     final selection = [
       for (final id in _selected) ?state.byId[id],
     ];
@@ -187,11 +209,11 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                     child: Wrap(spacing: 6, runSpacing: 6, children: [
                       StatPill(
                           icon: Icons.south_rounded,
-                          color: c.accent,
+                          color: c.download,
                           label: formatSpeed(state.downloadRate)),
                       StatPill(
                           icon: Icons.north_rounded,
-                          color: c.success,
+                          color: c.upload,
                           label: formatSpeed(state.uploadRate)),
                       StatPill(
                           icon: Icons.layers_outlined,
@@ -200,15 +222,23 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                   )
                 : null,
             actions: [
-              PopupMenuButton<_Sort>(
-                tooltip: 'Trier',
-                icon: const Icon(Icons.swap_vert_rounded),
-                initialValue: _sort,
-                onSelected: (s) => setState(() => _sort = s),
-                itemBuilder: (_) => [
-                  for (final s in _Sort.values)
-                    PopupMenuItem(value: s, child: Text(s.label)),
-                ],
+              SortMenu<_Sort>(
+                options: _Sort.values,
+                selected: sort,
+                ascending: ascending,
+                label: (s) => s.label,
+                ascendingByDefault: (s) => s.ascendingByDefault,
+                onChanged: (s, asc) => ref
+                    .read(uiPrefsProvider.notifier)
+                    .setTransferSort(s.name, asc),
+              ),
+              IconButton(
+                tooltip: 'Statistiques',
+                icon: const Icon(Icons.insights_rounded),
+                onPressed: configured
+                    ? () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const StatsPage()))
+                    : null,
               ),
               IconButton(
                 tooltip: 'Ajouter un lien',
@@ -475,14 +505,22 @@ class _TorrentRow extends ConsumerWidget {
                           color: t.hasError ? c.danger : c.muted),
                     ),
                   ),
-                  if (t.rateDownload > 0)
-                    Text('  ↓ ${formatSpeed(t.rateDownload)}',
+                  // Le texte reste en couleur de texte : seule la flèche
+                  // porte la couleur de la série.
+                  if (t.rateDownload > 0) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.south_rounded, size: 12, color: c.download),
+                    Text(formatSpeed(t.rateDownload),
                         style: TextStyle(
-                            fontSize: 11.5, color: c.accent, fontFeatures: mono)),
-                  if (t.rateUpload > 0)
-                    Text('  ↑ ${formatSpeed(t.rateUpload)}',
+                            fontSize: 11.5, color: c.text, fontFeatures: mono)),
+                  ],
+                  if (t.rateUpload > 0) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.north_rounded, size: 12, color: c.upload),
+                    Text(formatSpeed(t.rateUpload),
                         style: TextStyle(
-                            fontSize: 11.5, color: c.success, fontFeatures: mono)),
+                            fontSize: 11.5, color: c.text, fontFeatures: mono)),
+                  ],
                 ]),
               ],
             ),

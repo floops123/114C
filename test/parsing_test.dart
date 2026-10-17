@@ -1,4 +1,5 @@
 import 'package:c411_remote/api/torznab.dart';
+import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/core/release_name.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,5 +40,25 @@ void main() {
     expect(parseRfc822('Sat, 17 Oct 2026 01:55:38 GMT'),
         DateTime.utc(2026, 10, 17, 1, 55, 38));
     expect(parseRfc822('n importe quoi'), isNull);
+  });
+
+  test('tri local des sorties (trackers Torznab)', () {
+    Release r(String name, int seeders, int size, int day) => Release(
+        tracker: Tracker.tr4ker,
+        id: name,
+        name: name,
+        seeders: seeders,
+        size: size,
+        createdAt: DateTime(2026, 10, day));
+    final items = [r('b', 5, 300, 2), r('A', 9, 100, 1), r('c', 1, 200, 3)];
+    List<String> sorted(ReleaseSort s, bool asc) => [
+          for (final x in List.of(items)
+            ..sort((a, b) => asc ? s.compare(a, b) : s.compare(b, a)))
+            x.name,
+        ];
+    expect(sorted(ReleaseSort.seeders, false), ['A', 'b', 'c']);
+    expect(sorted(ReleaseSort.size, true), ['A', 'c', 'b']);
+    expect(sorted(ReleaseSort.name, true), ['A', 'b', 'c']);
+    expect(sorted(ReleaseSort.date, false), ['c', 'b', 'A']);
   });
 }

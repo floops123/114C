@@ -11,28 +11,30 @@ class ReleaseFilter {
     this.categoryId,
     this.subcategoryId,
     this.query = '',
-    this.sortBy,
+    this.sort = ReleaseSort.date,
+    this.ascending = false,
   });
 
   final int? categoryId;
   final int? subcategoryId;
   final String query;
-
-  /// null = plus récents, `seeders` = plus partagés.
-  final String? sortBy;
+  final ReleaseSort sort;
+  final bool ascending;
 
   ReleaseFilter copyWith({
     int? Function()? categoryId,
     int? Function()? subcategoryId,
     String? query,
-    String? Function()? sortBy,
+    ReleaseSort? sort,
+    bool? ascending,
   }) =>
       ReleaseFilter(
         categoryId: categoryId != null ? categoryId() : this.categoryId,
         subcategoryId:
             subcategoryId != null ? subcategoryId() : this.subcategoryId,
         query: query ?? this.query,
-        sortBy: sortBy != null ? sortBy() : this.sortBy,
+        sort: sort ?? this.sort,
+        ascending: ascending ?? this.ascending,
       );
 }
 
@@ -98,9 +100,37 @@ class ReleasesNotifier extends Notifier<ReleasesState> {
   @override
   ReleasesState build() {
     // Changer de tracker repart d'un filtre vide : les catégories diffèrent.
-    ref.watch(currentTrackerApiProvider);
+    final api = ref.watch(currentTrackerApiProvider);
+    // Tri mémorisé, s'il est proposé par ce tracker.
+    final prefs = ref.read(uiPrefsProvider);
+    final sort = ReleaseSort.values.asNameMap()[prefs.releaseSort];
     Future.microtask(loadMore);
-    return const ReleasesState();
+    return ReleasesState(
+      filter: sort != null && (api?.sorts.contains(sort) ?? false)
+          ? ReleaseFilter(sort: sort, ascending: prefs.releaseAscending)
+          : const ReleaseFilter(),
+    );
+  }
+
+  void setSort(ReleaseSort sort, bool ascending) {
+    ref.read(uiPrefsProvider.notifier).setReleaseSort(sort.name, ascending);
+    final api = ref.read(currentTrackerApiProvider);
+    final filter = state.filter.copyWith(sort: sort, ascending: ascending);
+    // Tri local : inutile de recharger, l'affichage trie les résultats chargés.
+    if (api != null && !api.serverSorts.contains(sort) &&
+        !api.serverSorts.contains(state.filter.sort)) {
+      state = ReleasesState(
+        filter: filter,
+        items: state.items,
+        page: state.page,
+        totalPages: state.totalPages,
+        total: state.total,
+        loading: state.loading,
+        error: state.error,
+      );
+    } else {
+      setFilter(filter);
+    }
   }
 
   void setFilter(ReleaseFilter filter) {
@@ -135,7 +165,8 @@ class ReleasesNotifier extends Notifier<ReleasesState> {
         categoryId: f.categoryId,
         subcategoryId: f.subcategoryId,
         query: f.query,
-        sortBy: f.sortBy,
+        sort: f.sort,
+        ascending: f.ascending,
       );
       if (!ref.mounted || generation != _generation) return;
       // Un nouvel upload entre deux pages décale la pagination : on dédoublonne.

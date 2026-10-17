@@ -132,11 +132,45 @@ class Category {
   final List<Subcategory> subcategories;
 }
 
+/// Critères de tri des sorties. [compare] trie par ordre croissant ; il sert
+/// quand le tracker ne sait pas trier lui-même (Torznab).
+enum ReleaseSort {
+  date('Date de publication', 'createdAt'),
+  seeders('Seeders', 'seeders'),
+  leechers('Leechers', 'leechers'),
+  completions('Téléchargements', 'completions'),
+  size('Taille', 'size'),
+  name('Nom', 'name', ascendingByDefault: true),
+  comments('Commentaires', 'comments');
+
+  const ReleaseSort(this.label, this.apiField,
+      {this.ascendingByDefault = false});
+  final String label;
+
+  /// Valeur du paramètre `sortBy` de l'API C411.
+  final String apiField;
+  final bool ascendingByDefault;
+
+  int compare(Release a, Release b) => switch (this) {
+        date => a.createdAt.compareTo(b.createdAt),
+        seeders => a.seeders.compareTo(b.seeders),
+        leechers => a.leechers.compareTo(b.leechers),
+        completions => a.completions.compareTo(b.completions),
+        size => a.size.compareTo(b.size),
+        name => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        comments => 0,
+      };
+}
+
 abstract class TrackerApi {
   Tracker get tracker;
 
-  /// Tri par seeders disponible côté serveur.
-  bool get supportsSort;
+  /// Tris proposés pour ce tracker.
+  List<ReleaseSort> get sorts;
+
+  /// Tris faits par le serveur ; les autres sont appliqués localement aux
+  /// résultats déjà chargés.
+  Set<ReleaseSort> get serverSorts;
 
   Future<ReleasePage> releases({
     int page = 1,
@@ -144,7 +178,8 @@ abstract class TrackerApi {
     int? categoryId,
     int? subcategoryId,
     String query = '',
-    String? sortBy,
+    ReleaseSort sort = ReleaseSort.date,
+    bool ascending = false,
   });
 
   Future<List<Category>> categories();

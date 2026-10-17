@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/settings.dart';
+import '../state/speed_history.dart';
 import 'downloads_page.dart';
 import 'releases_page.dart';
 import 'settings_page.dart';
@@ -33,6 +34,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       _routed = true;
       if (!settings.hasTracker && !settings.hasTransmission) _index = 2;
     }
+
+    // L'historique des vitesses s'enregistre dès l'ouverture de l'application,
+    // sans reconstruire cet écran à chaque mesure.
+    ref.listen(speedHistoryProvider, (_, _) {});
 
     final c = context.colors;
     final body = IndexedStack(index: _index, children: _pages);

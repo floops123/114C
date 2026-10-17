@@ -19,7 +19,10 @@ class C411Api implements TrackerApi {
   Tracker get tracker => Tracker.c411;
 
   @override
-  bool get supportsSort => true;
+  List<ReleaseSort> get sorts => ReleaseSort.values;
+
+  @override
+  Set<ReleaseSort> get serverSorts => ReleaseSort.values.toSet();
 
   @override
   Future<ReleasePage> releases({
@@ -28,7 +31,8 @@ class C411Api implements TrackerApi {
     int? categoryId,
     int? subcategoryId,
     String query = '',
-    String? sortBy,
+    ReleaseSort sort = ReleaseSort.date,
+    bool ascending = false,
   }) async {
     final res = await trackerGet<Map<String, dynamic>>(
         _dio, tracker, '/api/torrents',
@@ -38,7 +42,8 @@ class C411Api implements TrackerApi {
           'cat': ?categoryId,
           'subcat': ?subcategoryId,
           if (query.isNotEmpty) 'name': query,
-          'sortBy': ?sortBy,
+          'sortBy': sort.apiField,
+          'sortOrder': ascending ? 'asc' : 'desc',
         });
     final body = res.data!;
     final meta = body['meta'] as Map<String, dynamic>? ?? const {};

@@ -43,6 +43,7 @@ class Torrent {
   int get peersGettingFromUs => _i('peersGettingFromUs');
   int get queuePosition => _i('queuePosition');
   int get uploadedEver => _i('uploadedEver');
+  int get downloadedEver => _i('downloadedEver');
   int get bandwidthPriority => _i('bandwidthPriority');
   int get webseedsSendingToUs => _i('webseedsSendingToUs');
   double get metadataPercentComplete =>
@@ -115,7 +116,7 @@ class TransmissionClient {
     'rateDownload', 'rateUpload', 'eta', 'totalSize', 'sizeWhenDone',
     'leftUntilDone', 'uploadRatio', 'error', 'errorString', 'addedDate',
     'peersConnected', 'peersSendingToUs', 'peersGettingFromUs',
-    'queuePosition', 'uploadedEver', 'labels', 'isStalled', 'isFinished',
+    'queuePosition', 'uploadedEver', 'downloadedEver', 'labels', 'isStalled', 'isFinished',
     'metadataPercentComplete', 'downloadDir', 'bandwidthPriority',
     'webseedsSendingToUs',
   ];

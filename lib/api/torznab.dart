@@ -22,8 +22,14 @@ class TorznabApi implements TrackerApi {
   final String apiKey;
   final Dio _dio;
 
+  /// Torznab renvoie les sorties par date (ou pertinence) sans tri possible :
+  /// les tris sont faits localement. Pas de nombre de commentaires.
   @override
-  bool get supportsSort => false;
+  List<ReleaseSort> get sorts =>
+      ReleaseSort.values.where((s) => s != ReleaseSort.comments).toList();
+
+  @override
+  Set<ReleaseSort> get serverSorts => const {};
 
   Future<XmlDocument> _call(Map<String, dynamic> query) async {
     // Clé envoyée aussi en paramètre : c'est ce qu'attendent les outils *arr,
@@ -73,7 +79,8 @@ class TorznabApi implements TrackerApi {
     int? categoryId,
     int? subcategoryId,
     String query = '',
-    String? sortBy,
+    ReleaseSort sort = ReleaseSort.date,
+    bool ascending = false,
   }) async {
     final doc = await _call({
       't': 'search',

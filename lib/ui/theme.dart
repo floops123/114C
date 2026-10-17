@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Palette de l'application. Toutes les couleurs de l'UI viennent d'ici :
 /// pour changer le style, c'est le seul endroit à modifier.
@@ -17,6 +16,8 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.warning,
     required this.danger,
     required this.info,
+    required this.download,
+    required this.upload,
   });
 
   final Color bg;
@@ -31,6 +32,12 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color danger;
   final Color info;
 
+  /// Séries de données réception / envoi (graphiques, flèches de vitesse).
+  /// Paire catégorielle validée (daltonisme, contraste) sur les deux fonds ;
+  /// distincte des couleurs d'état (success…), qui gardent leur sens.
+  final Color download;
+  final Color upload;
+
   static const dark = AppColors(
     bg: Color(0xFF0B0E14),
     surface: Color(0xFF131823),
@@ -43,6 +50,8 @@ class AppColors extends ThemeExtension<AppColors> {
     warning: Color(0xFFF59E0B),
     danger: Color(0xFFEF4444),
     info: Color(0xFFA78BFA),
+    download: Color(0xFF3987E5),
+    upload: Color(0xFFD95926),
   );
 
   static const light = AppColors(
@@ -57,6 +66,8 @@ class AppColors extends ThemeExtension<AppColors> {
     warning: Color(0xFFD97706),
     danger: Color(0xFFDC2626),
     info: Color(0xFF7C3AED),
+    download: Color(0xFF2A78D6),
+    upload: Color(0xFFEB6834),
   );
 
   @override
@@ -78,6 +89,8 @@ class AppColors extends ThemeExtension<AppColors> {
       warning: l(warning, other.warning),
       danger: l(danger, other.danger),
       info: l(info, other.info),
+      download: l(download, other.download),
+      upload: l(upload, other.upload),
     );
   }
 }
@@ -120,27 +133,44 @@ ThemeData buildTheme(Brightness brightness) {
     shadow: Colors.black,
   );
 
-  // On ne prend que la famille : l'API TextTheme de google_fonts 9 repose sur
-  // le paquet material_ui, incompatible avec le TextTheme de Flutter.
-  final font = GoogleFonts.inter().fontFamily;
-  final text = ThemeData(brightness: brightness)
-      .textTheme
+  // Police intégrée à l'application (voir pubspec.yaml).
+  const font = 'Inter';
+  final text = ThemeData(brightness: brightness).textTheme
       .apply(fontFamily: font, bodyColor: c.text, displayColor: c.text)
       .copyWith(
-        titleLarge: GoogleFonts.inter(
-            fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.4, color: c.text),
-        titleMedium: GoogleFonts.inter(
-            fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: -0.2, color: c.text),
-        titleSmall: GoogleFonts.inter(
-            fontSize: 14, fontWeight: FontWeight.w600, color: c.text),
-        bodySmall: GoogleFonts.inter(fontSize: 12, color: c.muted),
-        labelSmall: GoogleFonts.inter(
-            fontSize: 11, fontWeight: FontWeight.w600, color: c.muted),
+        titleLarge: TextStyle(
+          fontFamily: font,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.4,
+          color: c.text,
+        ),
+        titleMedium: TextStyle(
+          fontFamily: font,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+          color: c.text,
+        ),
+        titleSmall: TextStyle(
+          fontFamily: font,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: c.text,
+        ),
+        bodySmall: TextStyle(fontFamily: font, fontSize: 12, color: c.muted),
+        labelSmall: TextStyle(
+          fontFamily: font,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: c.muted,
+        ),
       );
 
   WidgetStateProperty<Color?> selected(Color on, Color off) =>
       WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? on : off);
+        (s) => s.contains(WidgetState.selected) ? on : off,
+      );
 
   return ThemeData(
     useMaterial3: true,
@@ -171,19 +201,27 @@ ThemeData buildTheme(Brightness brightness) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: c.border)),
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: c.border),
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: c.surfaceAlt,
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide.none),
-      enabledBorder:
-          OutlineInputBorder(borderRadius: radius, borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide.none,
+      ),
       focusedBorder: OutlineInputBorder(
-          borderRadius: radius, borderSide: BorderSide(color: c.accent, width: 1.2)),
+        borderRadius: radius,
+        borderSide: BorderSide(color: c.accent, width: 1.2),
+      ),
       hintStyle: TextStyle(color: c.muted),
       labelStyle: TextStyle(color: c.muted),
       helperStyle: TextStyle(color: c.muted, fontSize: 11),
@@ -228,11 +266,15 @@ ThemeData buildTheme(Brightness brightness) {
       side: BorderSide.none,
       shape: const StadiumBorder(),
       showCheckmark: false,
-      labelStyle: WidgetStateTextStyle.resolveWith((s) => TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: s.contains(WidgetState.selected) ? Colors.white : c.text,
-          )),
+      // Les puces résolvent la *couleur* du libellé selon l'état (pas le
+      // TextStyle entier) : la couleur doit donc être une WidgetStateColor.
+      labelStyle: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+        color: WidgetStateColor.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? Colors.white : c.text,
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
     ),
     navigationBarTheme: NavigationBarThemeData(
@@ -241,13 +283,18 @@ ThemeData buildTheme(Brightness brightness) {
       height: 62,
       indicatorColor: Colors.transparent,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(
-          color: s.contains(WidgetState.selected) ? c.accent : c.muted)),
-      labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: s.contains(WidgetState.selected) ? c.accent : c.muted,
-          )),
+      iconTheme: WidgetStateProperty.resolveWith(
+        (s) => IconThemeData(
+          color: s.contains(WidgetState.selected) ? c.accent : c.muted,
+        ),
+      ),
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (s) => TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: s.contains(WidgetState.selected) ? c.accent : c.muted,
+        ),
+      ),
     ),
     navigationRailTheme: NavigationRailThemeData(
       backgroundColor: c.surface,
@@ -256,7 +303,10 @@ ThemeData buildTheme(Brightness brightness) {
       selectedIconTheme: IconThemeData(color: c.accent),
       unselectedIconTheme: IconThemeData(color: c.muted),
       selectedLabelTextStyle: TextStyle(
-          color: c.accent, fontSize: 12, fontWeight: FontWeight.w600),
+        color: c.accent,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+      ),
       unselectedLabelTextStyle: TextStyle(color: c.muted, fontSize: 12),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
@@ -269,15 +319,18 @@ ThemeData buildTheme(Brightness brightness) {
       elevation: 8,
       shadowColor: Colors.black26,
       shape: RoundedRectangleBorder(
-          borderRadius: radius, side: BorderSide(color: c.border)),
+        borderRadius: radius,
+        side: BorderSide(color: c.border),
+      ),
       textStyle: TextStyle(color: c.text, fontSize: 14),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: c.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: c.border)),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: c.border),
+      ),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
@@ -287,7 +340,9 @@ ThemeData buildTheme(Brightness brightness) {
       elevation: 0,
       width: 480,
       shape: RoundedRectangleBorder(
-          borderRadius: radius, side: BorderSide(color: c.border)),
+        borderRadius: radius,
+        side: BorderSide(color: c.border),
+      ),
     ),
     tabBarTheme: TabBarThemeData(
       labelColor: c.text,
@@ -316,7 +371,8 @@ ThemeData buildTheme(Brightness brightness) {
         foregroundColor: selected(Colors.white, c.text),
         side: WidgetStateProperty.all(BorderSide.none),
         shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(borderRadius: radius)),
+          RoundedRectangleBorder(borderRadius: radius),
+        ),
         overlayColor: WidgetStateProperty.all(Colors.transparent),
       ),
     ),
@@ -326,7 +382,9 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
-          color: c.text, borderRadius: BorderRadius.circular(6)),
+        color: c.text,
+        borderRadius: BorderRadius.circular(6),
+      ),
       textStyle: TextStyle(color: c.bg, fontSize: 12),
     ),
     scrollbarTheme: ScrollbarThemeData(
@@ -337,7 +395,8 @@ ThemeData buildTheme(Brightness brightness) {
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: c.surface,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
     ),
   );
 }

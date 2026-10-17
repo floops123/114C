@@ -13,7 +13,11 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
 - Un onglet par tracker configuré (le dernier choisi est mémorisé).
 - Liste paginée au défilement des dernières sorties (affiche, badges résolution /
   source / langue / freeleech / exclu, taille, seeders, ancienneté).
-- Recherche par nom, filtres catégorie et sous-catégorie, tri récents / seeders.
+- Recherche par nom, filtres catégorie et sous-catégorie.
+- Tri par date, seeders, leechers, téléchargements, taille, nom ou
+  commentaires, croissant ou décroissant, mémorisé. Fait par le serveur pour
+  C411 (`sortBy` + `sortOrder`) ; pour les trackers Torznab, qui ne trient
+  pas, appliqué aux résultats déjà chargés.
 - Fiche détaillée : synopsis, casting, infos techniques.
 - Bouton « Télécharger » : récupère le `.torrent` et l'ajoute à Transmission.
   Les sorties déjà présentes dans Transmission sont marquées d'une ✓.
@@ -21,7 +25,9 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
 **Transferts (Transmission)**
 - Liste rafraîchie toutes les 2 s (`torrent-get` au format « table »,
   `recently-active`), vitesses globales, filtres (actifs, en cours, partage,
-  terminés, en file, arrêtés, bloqués, erreurs), filtre par étiquette, 9 tris.
+  terminés, en file, arrêtés, bloqués, erreurs), filtre par étiquette.
+- 12 tris (ajout, nom, état, file, progression, temps restant, vitesses,
+  pairs, ratio, volume envoyé, taille), croissant ou décroissant, mémorisés.
 - Sélection multiple (appui long) et actions groupées ; tout démarrer / arrêter.
 - Actions : démarrer, démarrer maintenant (hors file), arrêter, vérifier,
   réannoncer, déplacer dans la file, déplacer les fichiers
@@ -37,6 +43,19 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
   - Trackers : annonces et scrapes, paliers, édition de la liste (`trackerList`) ;
   - Options : priorité, limites de vitesse, groupe de bande passante, ratio et
     inactivité propres au torrent, nombre de pairs.
+
+**Statistiques** (icône 📈 de l'écran Transferts)
+- Chiffres clés : vitesses actuelles, volumes envoyés / reçus (session et
+  total), ratio global.
+- Courbe des vitesses de réception et d'envoi sur 5, 15 ou 30 min, avec
+  réticule et info-bulle, moyenne et pic.
+- Classement des torrents par volume envoyé ou reçu, ratio ou vitesse.
+- Dans le détail d'un torrent : sa courbe de vitesse sur 15 min, et une jauge
+  de progression par fichier.
+- Transmission ne conserve aucun historique : les vitesses sont enregistrées
+  par l'application pendant qu'elle est ouverte (un point toutes les 2 s, à
+  partir du rafraîchissement existant, sans requête supplémentaire). Il
+  n'existe pas de statistique d'envoi par fichier dans Transmission.
 
 **Réglages**
 - Adresse RPC, identifiants Transmission et clé API C411, stockés dans le
@@ -103,7 +122,8 @@ lib/
 │   └── transmission.dart      Client RPC Transmission + modèle Torrent
 ├── state/                     Logique (Riverpod)
 │   ├── releases.dart          Pagination/filtres des sorties, envoi vers Transmission
-│   └── torrents.dart          Polling Transmission, détail d'un torrent
+│   ├── speed_history.dart     Historique des vitesses (enregistré par l'app)
+│   └── torrents.dart          Polling Transmission, détail, statistiques
 └── ui/                        Écrans
     ├── home_shell.dart        Navigation (barre en bas / rail latéral ≥ 720 px)
     ├── releases_page.dart, release_detail_page.dart
@@ -112,13 +132,16 @@ lib/
     ├── send_button.dart       Bouton « Télécharger » (état d'envoi, options)
     ├── torrent_actions.dart   Menu et dialogues d'actions sur les torrents
     ├── bandwidth_groups_page.dart  Groupes de bande passante
+    ├── charts.dart            Graphiques (courbe des vitesses, barres, jauge)
+    ├── stats_page.dart        Statistiques
     ├── theme.dart             Palette (AppColors) et thème clair / sombre
     └── widgets.dart           Composants partagés (Tag, Poster, Section…)
 ```
 
 Stack : Flutter, `flutter_riverpod` (état), `dio` (HTTP),
 `flutter_secure_storage` (secrets), `cached_network_image` (affiches),
-`shared_preferences` (préférences d'interface), `google_fonts` (Inter).
+`shared_preferences` (préférences d'interface). Police Inter intégrée
+(`assets/fonts/`, licence OFL).
 
 ### Style
 
@@ -128,9 +151,16 @@ ombre, pas d'effet d'onde, police Inter, une seule couleur d'accent. Toutes les
 couleurs sont définies dans `AppColors` (`lib/ui/theme.dart`) et accessibles via
 `context.colors`.
 
-Note : avec `google_fonts` 9, n'utiliser que `GoogleFonts.inter().fontFamily` ;
-ses helpers `TextTheme` reposent sur le paquet `material_ui`, incompatible avec
-le `TextTheme` de Flutter.
+Graphiques : réception et envoi utilisent une paire de couleurs dédiée
+(`download` / `upload`, bleu / orange), validée pour le daltonisme et le
+contraste sur les fonds clair et sombre, distincte des couleurs d'état. Les
+textes restent dans les couleurs de texte ; seuls les traits et les repères
+portent la couleur de la série.
+
+La police Inter (graisses 400 à 800) est intégrée à l'application plutôt que
+chargée par `google_fonts` : pas de téléchargement au démarrage, rendu
+identique hors ligne. (`google_fonts` 9 échouait à charger la police selon le
+mode de lancement — « Unable to load asset: AssetManifest.bin ».)
 
 ### Choix pour rester léger
 
@@ -177,8 +207,9 @@ Deux API coexistent, avec **deux modes d'authentification différents** :
 | Téléchargement du `.torrent` | `GET /api?t=get&id=<infoHash>&apikey=<clé>` | paramètre `apikey` (le Bearer y est refusé) |
 
 Paramètres de `/api/torrents` constatés : `page`, `perPage`, `cat` (catégorie),
-`subcat` (sous-catégorie), `name` (recherche), `sortBy=seeders` (sinon tri par
-date). La réponse contient `data[]` et `meta` (`page`, `totalPages`, `total`,
+`subcat` (sous-catégorie), `name` (recherche), `sortBy` (`createdAt`,
+`seeders`, `leechers`, `completions`, `size`, `name`, `comments`) et
+`sortOrder` (`asc` / `desc`, défaut `desc`). La réponse contient `data[]` et `meta` (`page`, `totalPages`, `total`,
 compteurs par catégorie). `limit` est ignoré.
 
 Limite : 120 requêtes / minute par clé (Torznab inclus).
