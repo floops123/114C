@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/astra.dart';
 import '../api/c411_socket.dart';
+import '../api/jellyfin.dart';
 import '../api/tmdb.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
@@ -34,11 +35,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _cookie = TextEditingController();
   String? _cookieStatus;
   final _tmdb = TextEditingController();
+  final _jellyfinUrl = TextEditingController();
+  final _jellyfinKey = TextEditingController();
+  String? _jellyfinStatus;
   String? _tmdbStatus;
 
   @override
   void dispose() {
-    for (final c in [_url, _user, _password, _cookie, _tmdb, ..._apiKeys.values]) {
+    for (final c in [
+      _url, _user, _password, _cookie, _tmdb, _jellyfinUrl, _jellyfinKey,
+      ..._apiKeys.values,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -54,7 +61,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     },
     sessionCookie: normalizeCookie(_cookie.text),
     tmdbKey: _tmdb.text.trim(),
+    jellyfinUrl: _jellyfinUrl.text.trim(),
+    jellyfinKey: _jellyfinKey.text.trim(),
   );
+
+  Future<void> _testJellyfin() async {
+    final url = _jellyfinUrl.text.trim(), key = _jellyfinKey.text.trim();
+    if (url.isEmpty || key.isEmpty) {
+      _setStatus(() => _jellyfinStatus = '✗ Adresse ou clé manquante');
+      return;
+    }
+    _setStatus(() => _jellyfinStatus = 'Connexion…');
+    try {
+      final server = await JellyfinClient(url: url, apiKey: key).check();
+      _setStatus(() => _jellyfinStatus = '✓ $server');
+    } on JellyfinException catch (e) {
+      _setStatus(() => _jellyfinStatus = '✗ ${e.message}');
+    }
+  }
 
   Future<void> _testTmdb() async {
     final key = _tmdb.text.trim();
@@ -222,6 +246,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
       _cookie.text = saved.sessionCookie;
       _tmdb.text = saved.tmdbKey;
+      _jellyfinUrl.text = saved.jellyfinUrl;
+      _jellyfinKey.text = saved.jellyfinKey;
     }
     final c = context.colors;
     final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
@@ -459,6 +485,43 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                   ),
                                   const SizedBox(width: 12),
                                   status(_tmdbStatus),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Section(
+                            title: 'Jellyfin (lecture des films présents)',
+                            children: [
+                              TextField(
+                                controller: _jellyfinUrl,
+                                keyboardType: TextInputType.url,
+                                decoration: const InputDecoration(
+                                  labelText: 'Adresse du serveur',
+                                  hintText: 'http://192.168.1.10:8096',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _jellyfinKey,
+                                obscureText: !_showSecrets,
+                                decoration: const InputDecoration(
+                                  labelText: 'Clé d’API',
+                                  helperMaxLines: 2,
+                                  helperText:
+                                      'Jellyfin → Tableau de bord → Clés API. '
+                                      'Laisser vide pour désactiver.',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _testJellyfin,
+                                    child: const Text('Tester'),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  status(_jellyfinStatus),
                                 ],
                               ),
                             ],

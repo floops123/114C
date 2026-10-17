@@ -42,6 +42,9 @@ dependencies:
   xml: ^7.1.0
   url_launcher: ^6.3.3
   file_selector: ^1.1.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
 
 dev_dependencies:
   flutter_test:
@@ -117,3 +120,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Copie locale de media_kit_video (licence MIT) corrigée pour Linux avec
+# Impeller : voir third_party/media_kit_video/C411-PATCH.md.
+dependency_overrides:
+  media_kit_video:
+    path: third_party/media_kit_video

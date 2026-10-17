@@ -5,9 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/tmdb.dart';
 import '../api/tracker.dart';
+import '../api/transmission.dart';
 import '../core/preferences.dart';
 import '../core/release_name.dart';
 import '../core/release_profile.dart';
+import '../core/titles.dart';
+import 'torrents.dart';
 
 // Liste de souhaits : films et séries choisis sur TMDB, mémorisés sur
 // l'appareil, avec les dates de sortie françaises des films (salles, VOD,
@@ -167,39 +170,17 @@ final tmdbGenresProvider = FutureProvider.autoDispose
 final tmdbDetailsProvider = FutureProvider.autoDispose
     .family<TmdbDetails, TmdbTitle>((ref, t) => _tmdb(ref).details(t));
 
-const _accents = {
-  'à': 'a', 'â': 'a', 'ä': 'a', 'á': 'a', 'ã': 'a', 'å': 'a', 'ç': 'c',
-  'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e', 'í': 'i', 'ì': 'i', 'î': 'i',
-  'ï': 'i', 'ñ': 'n', 'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o', 'õ': 'o',
-  'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u', 'ý': 'y', 'ÿ': 'y', 'œ': 'oe',
-  'æ': 'ae', 'À': 'A', 'Â': 'A', 'Ä': 'A', 'Á': 'A', 'Ç': 'C', 'É': 'E',
-  'È': 'E', 'Ê': 'E', 'Ë': 'E', 'Î': 'I', 'Ï': 'I', 'Ô': 'O', 'Ö': 'O',
-  'Ù': 'U', 'Û': 'U', 'Ü': 'U', 'Œ': 'OE', 'Æ': 'AE',
-};
-
-String _fold(String s) =>
-    s.split('').map((ch) => _accents[ch] ?? ch).join();
-
-/// Mots d'un titre, sans accents ni ponctuation : « Dune : Deuxième partie »
-/// → Dune, Deuxieme, partie ; « Journal d'une femme » → Journal, d, une…
-List<String> _words(String title) => _fold(title)
-    .split(RegExp(r'[^A-Za-z0-9]+'))
-    .where((w) => w.isNotEmpty)
-    .toList();
-
 /// Recherches à essayer pour un titre, dans l'ordre : au format des noms de
 /// release (« Dune.Deuxieme.partie » : C411 cherche un morceau du nom), avec
 /// des espaces (noms écrits ainsi sur AstraTorrent), puis le titre tel quel.
 List<String> releaseQueries(String title) {
-  final words = _words(title);
+  final words = titleWords(title);
   return {
     if (words.isNotEmpty) words.join('.'),
     if (words.isNotEmpty) words.join(' '),
     title.trim(),
   }.where((q) => q.isNotEmpty).toList();
 }
-
-String _key(String s) => _words(s).join(' ').toLowerCase();
 
 /// Sortie rattachée par le tracker à une fiche (C411) : même type, même
 /// titre (français ou original) et même année à un an près. Chez C411, films
@@ -210,10 +191,10 @@ bool matchesMedia(Release r, TmdbTitle t) {
   final kind = r.mediaKind;
   if (kind == null) return r.tracker != Tracker.c411;
   if (kind != t.type.name) return false;
-  final wanted = {_key(t.title), if (t.originalTitle != null) _key(t.originalTitle!)};
+  final wanted = {titleKey(t.title), if (t.originalTitle != null) titleKey(t.originalTitle!)};
   final titles = {
-    if (r.title != null) _key(r.title!),
-    if (r.originalTitle != null) _key(r.originalTitle!),
+    if (r.title != null) titleKey(r.title!),
+    if (r.originalTitle != null) titleKey(r.originalTitle!),
   };
   if (!titles.any(wanted.contains)) return false;
   final year = t.year;
@@ -436,3 +417,45 @@ final wishSortProvider =
     atmos: atmos,
   );
 }
+
+/// Torrents de Transmission correspondant à un titre : même infohash qu'une
+/// sortie déjà trouvée sur un tracker ([known]), ou nom de torrent donnant le
+/// même titre (français ou original) et, pour un film, la même année à un an
+/// près.
+List<Torrent> torrentsForTitle(Iterable<Torrent> torrents, TmdbTitle t,
+    {Set<String> known = const {}}) {
+  final wanted = {titleKey(t.title), if (t.originalTitle != null) titleKey(t.originalTitle!)}
+    ..remove('');
+  return [
+    for (final torrent in torrents)
+      if (known.contains(torrent.hash) || _nameMatches(torrent.name, t, wanted))
+        torrent,
+  ];
+}
+
+bool _nameMatches(String name, TmdbTitle t, Set<String> wanted) {
+  final parsed = ReleaseName.parse(name);
+  if (!wanted.contains(titleKey(parsed.title))) return false;
+  final year = t.year;
+  return t.type != TmdbType.movie ||
+      year == null ||
+      parsed.year == null ||
+      (parsed.year! - year).abs() <= 1;
+}
+
+/// Torrents de Transmission pour un titre, mis à jour avec la liste. Les
+/// recherches sur les trackers déjà faites pour ce titre servent aussi
+/// (infohash), sans en lancer de nouvelles.
+final localTorrentsProvider =
+    Provider.autoDispose.family<List<Torrent>, TmdbTitle>((ref, t) {
+  final torrents = ref.watch(torrentsProvider.select((s) => s.byId));
+  final known = <String>{};
+  for (final tracker in ref.watch(trackersProvider).keys) {
+    final search = wishSearchProvider((tracker, t));
+    if (!ref.exists(search)) continue;
+    for (final r in ref.watch(search).value ?? const <Release>[]) {
+      if (r.infoHash != null) known.add(r.infoHash!);
+    }
+  }
+  return torrentsForTitle(torrents.values, t, known: known);
+});

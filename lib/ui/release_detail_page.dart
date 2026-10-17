@@ -1,19 +1,23 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
 import '../core/format.dart';
+import 'on_disk.dart';
 import 'send_button.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-class ReleaseDetailPage extends StatelessWidget {
+class ReleaseDetailPage extends ConsumerWidget {
   const ReleaseDetailPage({super.key, required this.release});
   final Release release;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final r = release;
+    final jellyfin = jellyfinFor(ref, r);
+    final downloaded = downloadedFor(ref, r);
     final c = context.colors;
     final theme = Theme.of(context);
     final wide = MediaQuery.sizeOf(context).width >= 600;
@@ -83,7 +87,34 @@ class ReleaseDetailPage extends StatelessWidget {
             if (r.isExclusive) Tag('EXCLU', color: c.info),
           ]),
           const SizedBox(height: 14),
-          SendButton(release: r, large: true),
+          if (jellyfin != null || downloaded) ...[
+            Row(children: [
+              Icon(Icons.inventory_2_outlined, size: 16, color: c.success),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                    jellyfin != null
+                        ? 'Sur le disque : dans ta bibliothèque Jellyfin'
+                            '${downloaded ? ' et téléchargé dans Transmission' : ''}'
+                        : 'Sur le disque : téléchargé dans Transmission',
+                    style: TextStyle(
+                        color: c.success,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+            const SizedBox(height: 10),
+          ],
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            if (jellyfin != null)
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: c.success),
+                onPressed: () => playOnJellyfin(context, jellyfin),
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: Text(jellyfin.isSeries ? 'Épisodes' : 'Lire'),
+              ),
+            SendButton(release: r, large: true),
+          ]),
         ]),
       ),
     ]);

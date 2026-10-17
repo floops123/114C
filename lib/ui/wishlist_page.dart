@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../api/jellyfin.dart';
 import '../api/tmdb.dart';
+import '../api/transmission.dart';
 import '../api/tracker.dart';
 import '../core/format.dart';
 import '../core/release_profile.dart';
 import '../state/wishlist.dart';
+import 'on_disk.dart';
 import 'releases_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -593,6 +596,13 @@ class TitleDetailPage extends ConsumerWidget {
                   const SizedBox(height: 14),
                 ],
                 Wrap(spacing: 8, runSpacing: 8, children: [
+                  if (ref.watch(jellyfinItemProvider(t)).value case final item?)
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(backgroundColor: c.success),
+                      onPressed: () => playOnJellyfin(context, item),
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(item.isSeries ? 'Épisodes' : 'Lire'),
+                    ),
                   FilledButton.icon(
                     onPressed: () =>
                         ref.read(wishlistProvider.notifier).toggle(t),
@@ -619,6 +629,7 @@ class TitleDetailPage extends ConsumerWidget {
                   ErrorBanner('${details.error}',
                       onRetry: () => ref.invalidate(tmdbDetailsProvider(t))),
                 ],
+                _OwnedBlock(title: t),
                 if (t.type == TmdbType.movie)
                   _FrenchDatesBlock(title: t, dates: d?.french,
                       loading: details.isLoading),
@@ -679,6 +690,149 @@ class TitleDetailPage extends ConsumerWidget {
           ),
         ],
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ]),
+    );
+  }
+}
+
+/// Ce qu'on a déjà : le titre dans Jellyfin, et ses torrents dans
+/// Transmission (téléchargés ou en cours). Rien n'est affiché s'il n'y a rien.
+class _OwnedBlock extends ConsumerWidget {
+  const _OwnedBlock({required this.title});
+  final TmdbTitle title;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final jellyfin = ref.watch(jellyfinItemProvider(title));
+    final item = jellyfin.value;
+    final torrents = ref.watch(localTorrentsProvider(title));
+    if (item == null && torrents.isEmpty && !jellyfin.hasError) {
+      return const SizedBox.shrink();
+    }
+    final small = TextStyle(fontSize: 12, color: c.muted);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: c.success.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.success.withValues(alpha: 0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Icon(Icons.inventory_2_outlined, size: 15, color: c.success),
+          const SizedBox(width: 6),
+          Text('Déjà chez toi',
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w700, color: c.success)),
+        ]),
+        if (item != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(children: [
+              Icon(Icons.video_library_rounded, size: 20, color: c.success),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Dans la bibliothèque Jellyfin',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(
+                      [
+                        item.name,
+                        if (item.year != null) '${item.year}',
+                        if (item.played)
+                          'déjà vu'
+                        else if (item.progress case final p?)
+                          'vu à ${(p * 100).round()} %',
+                      ].join(' · '),
+                      style: small),
+                ]),
+              ),
+              TextButton.icon(
+                onPressed: () => playOnJellyfin(context, item),
+                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                label: Text(item.isSeries ? 'Épisodes' : 'Lire'),
+              ),
+            ]),
+          ),
+        if (jellyfin.hasError)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('Jellyfin : ${jellyfin.error}',
+                style: TextStyle(fontSize: 12, color: c.danger)),
+          ),
+        for (final torrent in torrents) _LocalTorrent(torrent: torrent),
+      ]),
+    );
+  }
+}
+
+/// Pastilles d'un souhait déjà présent : Jellyfin, Transmission.
+class _OwnedTags extends ConsumerWidget {
+  const _OwnedTags({required this.title});
+  final TmdbTitle title;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final inJellyfin = ref.watch(jellyfinItemProvider(title)).value != null;
+    final torrents = ref.watch(localTorrentsProvider(title));
+    final done = torrents.any((t) => t.percentDone >= 1);
+    final progress = torrents.isEmpty
+        ? null
+        : torrents.map((t) => t.percentDone).reduce(math.max);
+    return Wrap(spacing: 6, children: [
+      if (inJellyfin) Tag('Dans Jellyfin', color: c.success),
+      if (done)
+        Tag('Téléchargé', color: c.success)
+      else if (progress != null)
+        Tag('En cours ${formatPercent(progress)}', color: c.info),
+    ]);
+  }
+}
+
+class _LocalTorrent extends StatelessWidget {
+  const _LocalTorrent({required this.torrent});
+  final Torrent torrent;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final done = torrent.percentDone >= 1;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(children: [
+        Icon(done ? Icons.download_done_rounded : Icons.downloading_rounded,
+            size: 20, color: done ? c.success : c.info),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(torrent.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 3),
+            if (done)
+              Text('Téléchargé dans Transmission · ${formatBytes(torrent.totalSize)}',
+                  style: TextStyle(fontSize: 12, color: c.muted))
+            else
+              Row(children: [
+                Expanded(
+                  child: LinearProgressIndicator(
+                    value: torrent.percentDone,
+                    minHeight: 4,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(formatPercent(torrent.percentDone),
+                    style: TextStyle(fontSize: 12, color: c.muted)),
+              ]),
+          ]),
+        ),
       ]),
     );
   }
@@ -1007,6 +1161,7 @@ class _TitleTile extends ConsumerWidget {
                         style: TextStyle(
                             fontSize: 12,
                             color: t.upcoming ? c.text : c.muted)),
+                    if (wished) _OwnedTags(title: t),
                   ],
                 ),
                 if (!wished && t.overview != null) ...[

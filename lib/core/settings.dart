@@ -11,6 +11,8 @@ class AppSettings {
     this.apiKeys = const {},
     this.sessionCookie = '',
     this.tmdbKey = '',
+    this.jellyfinUrl = '',
+    this.jellyfinKey = '',
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -24,6 +26,8 @@ class AppSettings {
         },
         sessionCookie: json['sessionCookie'] as String? ?? '',
         tmdbKey: json['tmdbKey'] as String? ?? '',
+        jellyfinUrl: json['jellyfinUrl'] as String? ?? '',
+        jellyfinKey: json['jellyfinKey'] as String? ?? '',
       );
 
   final String rpcUrl;
@@ -40,6 +44,10 @@ class AppSettings {
   /// Clé d'API ou jeton de lecture TMDB (liste de souhaits).
   final String tmdbKey;
 
+  /// Serveur Jellyfin (lecture des films déjà présents) et sa clé d'API.
+  final String jellyfinUrl;
+  final String jellyfinKey;
+
   bool get hasTransmission => rpcUrl.isNotEmpty;
   bool get hasTracker => apiKeys.values.any((k) => k.isNotEmpty);
 
@@ -50,6 +58,8 @@ class AppSettings {
         'apiKeys': apiKeys,
         'sessionCookie': sessionCookie,
         'tmdbKey': tmdbKey,
+        'jellyfinUrl': jellyfinUrl,
+        'jellyfinKey': jellyfinKey,
       };
 }
 

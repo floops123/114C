@@ -22,6 +22,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'crossSeed', // PrefsCrossSeedCache
         'crossSeedDirections', // CrossSeedDirectionsNotifier
         'wishlist', // PrefsWishlistStore
+        'playback', // PrefsPlaybackStore
         'revive', // PrefsReviveStore
       }),
     );

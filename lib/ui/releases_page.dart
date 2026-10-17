@@ -10,6 +10,7 @@ import '../core/release_profile.dart';
 import '../core/preferences.dart';
 import '../state/releases.dart';
 import 'release_detail_page.dart';
+import 'on_disk.dart';
 import 'send_button.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -283,14 +284,16 @@ void _openDetail(BuildContext context, Release r) =>
 String _displayTitle(Release r) => r.title ?? r.name;
 
 /// Carte « affiche » pour la vue grille.
-class ReleaseCard extends StatelessWidget {
+class ReleaseCard extends ConsumerWidget {
   const ReleaseCard({super.key, required this.release});
   final Release release;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final r = release;
     final c = context.colors;
+    final jellyfin = jellyfinFor(ref, r);
+    final onDisk = jellyfin != null || downloadedFor(ref, r);
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => _openDetail(context, r),
@@ -305,11 +308,13 @@ class ReleaseCard extends StatelessWidget {
                 Positioned(
                   left: 6,
                   top: 6,
-                  right: 6,
+                  right: jellyfin != null ? 42 : 6,
                   child: Wrap(
                     spacing: 4,
                     runSpacing: 4,
                     children: [
+                      if (onDisk && jellyfin == null)
+                        Tag('SUR LE DISQUE', solid: true, color: c.success),
                       if (r.resolution != null) Tag(r.resolution!, solid: true),
                       if (r.isFreeleech)
                         Tag('FL', solid: true, color: c.success),
@@ -318,6 +323,8 @@ class ReleaseCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (jellyfin != null)
+                  Positioned(right: 6, top: 6, child: PlayBadge(item: jellyfin)),
                 Positioned(right: 6, bottom: 6, child: SendButton(release: r)),
               ],
             ),
@@ -362,7 +369,7 @@ String? hdrLabel(Release r) {
 }
 
 /// Ligne compacte pour la vue liste.
-class ReleaseRow extends StatelessWidget {
+class ReleaseRow extends ConsumerWidget {
   const ReleaseRow({super.key, required this.release});
   final Release release;
 
@@ -378,9 +385,11 @@ class ReleaseRow extends StatelessWidget {
   static const _line = 1.25;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final r = release;
     final c = context.colors;
+    final jellyfin = jellyfinFor(ref, r);
+    final onDisk = jellyfin != null || downloadedFor(ref, r);
     return InkWell(
       onTap: () => _openDetail(context, r),
       child: Padding(
@@ -427,6 +436,9 @@ class ReleaseRow extends StatelessWidget {
                     child: Row(
                       spacing: 4,
                       children: [
+                        if (onDisk)
+                          Tag(jellyfin != null ? 'DANS JELLYFIN' : 'SUR LE DISQUE',
+                              color: c.success),
                         Tag(r.subcategory, color: c.accent),
                         if (profileOf(r) case final p?)
                           Tag(p.short, color: profileColor(c, p)),
@@ -458,6 +470,10 @@ class ReleaseRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
+            if (jellyfin != null) ...[
+              PlayBadge(item: jellyfin),
+              const SizedBox(width: 6),
+            ],
             SendButton(release: r),
           ],
         ),
