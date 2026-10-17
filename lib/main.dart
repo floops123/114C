@@ -1,26 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/preferences.dart';
 import 'ui/home_shell.dart';
+import 'ui/theme.dart';
 
-void main() => runApp(const ProviderScope(child: App()));
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await loadSharedPrefs();
+  runApp(ProviderScope(
+    overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
+    child: const App(),
+  ));
+}
 
-class App extends StatelessWidget {
+class App extends ConsumerWidget {
   const App({super.key});
 
-  static const _seed = Color(0xFF3B82F6);
+  static final _light = buildTheme(Brightness.light);
+  static final _dark = buildTheme(Brightness.dark);
 
   @override
-  Widget build(BuildContext context) {
-    ThemeData theme(Brightness b) => ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: _seed, brightness: b),
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-        );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
     return MaterialApp(
       title: 'C411 Remote',
       debugShowCheckedModeBanner: false,
-      theme: theme(Brightness.light),
-      darkTheme: theme(Brightness.dark),
+      theme: _light,
+      darkTheme: _dark,
+      themeMode: themeMode,
       home: const HomeShell(),
     );
   }

@@ -5,6 +5,7 @@ import '../core/settings.dart';
 import 'downloads_page.dart';
 import 'releases_page.dart';
 import 'settings_page.dart';
+import 'theme.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
@@ -15,9 +16,9 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   static const _destinations = [
-    (Icons.new_releases_outlined, Icons.new_releases, 'Sorties'),
-    (Icons.download_outlined, Icons.download, 'Téléchargements'),
-    (Icons.settings_outlined, Icons.settings, 'Réglages'),
+    (Icons.local_movies_outlined, Icons.local_movies, 'Sorties'),
+    (Icons.downloading_outlined, Icons.downloading, 'Transferts'),
+    (Icons.tune_outlined, Icons.tune, 'Réglages'),
   ];
   static const _pages = [ReleasesPage(), DownloadsPage(), SettingsPage()];
 
@@ -33,6 +34,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       if (!settings.hasTracker && !settings.hasTransmission) _index = 2;
     }
 
+    final c = context.colors;
     final body = IndexedStack(index: _index, children: _pages);
     void select(int i) => setState(() => _index = i);
 
@@ -44,33 +46,56 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               selectedIndex: _index,
               onDestinationSelected: select,
               labelType: NavigationRailLabelType.all,
+              minWidth: 84,
+              leading: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: c.accent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text('411',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13)),
+                ),
+              ),
               destinations: [
                 for (final (icon, selected, label) in _destinations)
                   NavigationRailDestination(
                     icon: Icon(icon),
                     selectedIcon: Icon(selected),
                     label: Text(label),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                   ),
               ],
             ),
-            const VerticalDivider(width: 1),
+            VerticalDivider(width: 1, color: c.border),
             Expanded(child: body),
           ]),
         );
       }
       return Scaffold(
-        body: body,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: select,
-          destinations: [
-            for (final (icon, selected, label) in _destinations)
-              NavigationDestination(
-                icon: Icon(icon),
-                selectedIcon: Icon(selected),
-                label: label,
-              ),
-          ],
+        body: SafeArea(bottom: false, child: body),
+        bottomNavigationBar: DecoratedBox(
+          decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: c.border))),
+          child: NavigationBar(
+            selectedIndex: _index,
+            onDestinationSelected: select,
+            destinations: [
+              for (final (icon, selected, label) in _destinations)
+                NavigationDestination(
+                  icon: Icon(icon),
+                  selectedIcon: Icon(selected),
+                  label: label,
+                ),
+            ],
+          ),
         ),
       );
     });

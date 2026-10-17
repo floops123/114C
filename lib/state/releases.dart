@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../api/c411.dart';
+import '../api/tracker.dart';
 import '../api/transmission.dart';
+import '../core/preferences.dart';
 import 'torrents.dart';
 
 class ReleaseFilter {
@@ -57,12 +58,47 @@ class ReleasesState {
   bool get hasMore => page < totalPages;
 }
 
+/// Tracker affiché dans l'onglet Sorties (mémorisé entre les lancements).
+class SelectedTrackerNotifier extends Notifier<Tracker?> {
+  static const prefKey = 'tracker';
+
+  @override
+  Tracker? build() {
+    final trackers = ref.watch(trackersProvider);
+    if (trackers.isEmpty) return null;
+    final saved = Tracker.values
+        .asNameMap()[ref.read(sharedPrefsProvider).getString(prefKey)];
+    return trackers.containsKey(saved) ? saved : trackers.keys.first;
+  }
+
+  void select(Tracker tracker) {
+    ref.read(sharedPrefsProvider).setString(prefKey, tracker.name);
+    state = tracker;
+  }
+}
+
+final selectedTrackerProvider =
+    NotifierProvider<SelectedTrackerNotifier, Tracker?>(
+        SelectedTrackerNotifier.new);
+
+final currentTrackerApiProvider = Provider<TrackerApi?>((ref) {
+  final tracker = ref.watch(selectedTrackerProvider);
+  return tracker == null ? null : ref.watch(trackersProvider)[tracker];
+});
+
+final categoriesProvider = FutureProvider<List<Category>>((ref) async {
+  final api = ref.watch(currentTrackerApiProvider);
+  if (api == null) return const [];
+  return api.categories();
+});
+
 class ReleasesNotifier extends Notifier<ReleasesState> {
   int _generation = 0;
 
   @override
   ReleasesState build() {
-    ref.watch(c411Provider);
+    // Changer de tracker repart d'un filtre vide : les catégories diffèrent.
+    ref.watch(currentTrackerApiProvider);
     Future.microtask(loadMore);
     return const ReleasesState();
   }
@@ -80,7 +116,7 @@ class ReleasesNotifier extends Notifier<ReleasesState> {
   }
 
   Future<void> loadMore() async {
-    final api = ref.read(c411Provider);
+    final api = ref.read(currentTrackerApiProvider);
     if (api == null || state.loading || !state.hasMore) return;
     final generation = _generation;
     final s = state;
@@ -111,7 +147,7 @@ class ReleasesNotifier extends Notifier<ReleasesState> {
         totalPages: result.totalPages,
         total: result.total,
       );
-    } on C411Exception catch (e) {
+    } on TrackerException catch (e) {
       if (!ref.mounted || generation != _generation) return;
       state = ReleasesState(
         filter: s.filter,
@@ -128,29 +164,35 @@ class ReleasesNotifier extends Notifier<ReleasesState> {
 final releasesProvider =
     NotifierProvider<ReleasesNotifier, ReleasesState>(ReleasesNotifier.new);
 
-/// Télécharge le .torrent sur C411 et l'envoie à Transmission.
+/// Récupère le .torrent sur le tracker de la sortie et l'envoie à Transmission.
 Future<void> sendToTransmission(
-    BuildContext context, WidgetRef ref, Release release) async {
+  BuildContext context,
+  WidgetRef ref,
+  Release release, {
+  AddOptions options = const AddOptions(),
+}) async {
   final messenger = ScaffoldMessenger.of(context);
   void say(String text) => messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(text)));
 
-  final api = ref.read(c411Provider);
+  final api = ref.read(trackersProvider)[release.tracker];
   final transmission = ref.read(transmissionProvider);
   if (api == null || transmission == null) {
-    say('Configure C411 et Transmission dans les réglages');
+    say('Configure ${release.tracker.label} et Transmission dans les réglages');
     return;
   }
-  say('Envoi de ${release.name}…');
   try {
-    final bytes = await api.downloadTorrent(release.infoHash);
-    final added = await transmission.addTorrent(metainfo: bytes);
+    final link = release.downloadUrl;
+    final added = link != null && link.startsWith('magnet:')
+        ? await transmission.addTorrent(filename: link, options: options)
+        : await transmission.addTorrent(
+            metainfo: await api.downloadTorrent(release), options: options);
     say(added
         ? 'Ajouté à Transmission : ${release.name}'
         : 'Déjà présent dans Transmission');
     await ref.read(torrentsProvider.notifier).refresh(full: true);
-  } on C411Exception catch (e) {
+  } on TrackerException catch (e) {
     say(e.message);
   } on TransmissionException catch (e) {
     say(e.message);

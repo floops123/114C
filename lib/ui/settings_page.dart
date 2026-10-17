@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../api/c411.dart';
+import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/settings.dart';
+import '../core/preferences.dart';
 import 'server_settings_page.dart';
+import 'theme.dart';
+import 'widgets.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -17,16 +20,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _url = TextEditingController();
   final _user = TextEditingController();
   final _password = TextEditingController();
-  final _apiKey = TextEditingController();
+  final _apiKeys = {for (final t in Tracker.values) t: TextEditingController()};
   bool _initialized = false;
   bool _showSecrets = false;
   bool _testing = false;
   String? _rpcStatus;
-  String? _trackerStatus;
+  final _trackerStatus = <Tracker, String>{};
 
   @override
   void dispose() {
-    for (final c in [_url, _user, _password, _apiKey]) {
+    for (final c in [_url, _user, _password, ..._apiKeys.values]) {
       c.dispose();
     }
     super.dispose();
@@ -36,7 +39,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         rpcUrl: _url.text.trim(),
         rpcUser: _user.text.trim(),
         rpcPassword: _password.text,
-        apiKey: _apiKey.text.trim(),
+        apiKeys: {
+          for (final MapEntry(:key, :value) in _apiKeys.entries)
+            if (value.text.trim().isNotEmpty) key.name: value.text.trim(),
+        },
       );
 
   void _setStatus(void Function() update) {
@@ -62,19 +68,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  Future<bool> _testTracker() async {
-    final s = _form;
-    if (!s.hasTracker) {
-      _setStatus(() => _trackerStatus = '✗ Clé API manquante');
+  Future<bool> _testTracker(Tracker tracker) async {
+    final key = _apiKeys[tracker]!.text.trim();
+    if (key.isEmpty) {
+      _setStatus(() => _trackerStatus[tracker] = '✗ Clé API manquante');
       return false;
     }
-    _setStatus(() => _trackerStatus = 'Connexion…');
+    _setStatus(() => _trackerStatus[tracker] = 'Connexion…');
     try {
-      final page = await C411Api(s.apiKey).releases(perPage: 1);
-      _setStatus(() => _trackerStatus = '✓ ${page.total} torrents disponibles');
+      final page = await tracker.client(key).releases(perPage: 1);
+      _setStatus(() => _trackerStatus[tracker] = page.total > 0
+          ? '✓ ${page.total} torrents disponibles'
+          : '✓ Connexion réussie');
       return true;
-    } on C411Exception catch (e) {
-      _setStatus(() => _trackerStatus = '✗ ${e.message}');
+    } on TrackerException catch (e) {
+      _setStatus(() => _trackerStatus[tracker] = '✗ ${e.message}');
       return false;
     }
   }
@@ -85,7 +93,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     setState(() => _testing = true);
     final results = await Future.wait([
       if (s.hasTransmission) _testTransmission(),
-      if (s.hasTracker) _testTracker(),
+      for (final t in Tracker.values)
+        if (s.apiKeys.containsKey(t.name)) _testTracker(t),
     ]);
     _setStatus(() => _testing = false);
     return results.every((ok) => ok);
@@ -103,7 +112,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           title: const Text('Échec de la connexion'),
           content: Text([
             if (_rpcStatus?.startsWith('✗') ?? false) 'Transmission : $_rpcStatus',
-            if (_trackerStatus?.startsWith('✗') ?? false) 'C411 : $_trackerStatus',
+            for (final MapEntry(:key, :value) in _trackerStatus.entries)
+              if (value.startsWith('✗')) '${key.label} : $value',
             '',
             'Enregistrer quand même ?',
           ].join('\n')),
@@ -135,121 +145,176 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _url.text = saved.rpcUrl;
       _user.text = saved.rpcUser;
       _password.text = saved.rpcPassword;
-      _apiKey.text = saved.apiKey;
+      for (final MapEntry(:key, :value) in _apiKeys.entries) {
+        value.text = saved.apiKeys[key.name] ?? '';
+      }
     }
-    final theme = Theme.of(context);
+    final c = context.colors;
+    final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
+
+    Widget status(String? text) {
+      if (text == null) return const SizedBox.shrink();
+      final color = text.startsWith('✓')
+          ? c.success
+          : text.startsWith('✗')
+              ? c.danger
+              : c.muted;
+      return Expanded(
+        child: Text(text,
+            style: TextStyle(
+                color: color, fontSize: 13, fontWeight: FontWeight.w500)),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Réglages')),
       body: settings.isLoading && saved == null
           ? const Center(child: CircularProgressIndicator())
-          : Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
-                child: ListView(padding: const EdgeInsets.all(16), children: [
-                  if (settings.hasError)
-                    Text('Lecture du trousseau impossible : ${settings.error}',
-                        style: TextStyle(color: theme.colorScheme.error)),
-                  Text('Serveur Transmission', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _url,
-                    keyboardType: TextInputType.url,
-                    decoration: const InputDecoration(
-                      labelText: 'Adresse RPC',
-                      hintText: 'https://serveur:9091/transmission/rpc',
-                      helperText:
-                          'Sans chemin, /transmission/rpc est ajouté automatiquement',
-                      border: OutlineInputBorder(),
+          : ListView(children: [
+              const PageHeader(title: 'Réglages'),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (settings.hasError)
+                          ErrorBanner(
+                              'Lecture du trousseau impossible : ${settings.error}'),
+                        Section(title: 'Apparence', children: [
+                          SegmentedButton<ThemeMode>(
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment(
+                                  value: ThemeMode.system,
+                                  icon: Icon(Icons.brightness_auto_outlined, size: 18),
+                                  label: Text('Système')),
+                              ButtonSegment(
+                                  value: ThemeMode.light,
+                                  icon: Icon(Icons.light_mode_outlined, size: 18),
+                                  label: Text('Clair')),
+                              ButtonSegment(
+                                  value: ThemeMode.dark,
+                                  icon: Icon(Icons.dark_mode_outlined, size: 18),
+                                  label: Text('Sombre')),
+                            ],
+                            selected: {themeMode},
+                            onSelectionChanged: (s) => ref
+                                .read(uiPrefsProvider.notifier)
+                                .setThemeMode(s.first),
+                          ),
+                        ]),
+                        const SizedBox(height: 12),
+                        Section(title: 'Serveur Transmission', children: [
+                          TextField(
+                            controller: _url,
+                            keyboardType: TextInputType.url,
+                            decoration: const InputDecoration(
+                              labelText: 'Adresse RPC',
+                              hintText: 'https://serveur:9091/transmission/rpc',
+                              helperText:
+                                  'Sans chemin, /transmission/rpc est ajouté automatiquement',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _user,
+                                decoration:
+                                    const InputDecoration(labelText: 'Utilisateur'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextField(
+                                controller: _password,
+                                obscureText: !_showSecrets,
+                                decoration: const InputDecoration(
+                                    labelText: 'Mot de passe'),
+                              ),
+                            ),
+                          ]),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            OutlinedButton(
+                                onPressed: _testTransmission,
+                                child: const Text('Tester')),
+                            const SizedBox(width: 12),
+                            status(_rpcStatus),
+                          ]),
+                          const SizedBox(height: 4),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.dns_outlined),
+                            title: const Text('Configuration du serveur'),
+                            subtitle: const Text(
+                                'Dossier, vitesses, files d’attente, ratio…'),
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                            enabled: ref.watch(transmissionProvider) != null,
+                            onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const ServerSettingsPage())),
+                          ),
+                        ]),
+                        const SizedBox(height: 12),
+                        for (final t in Tracker.values) ...[
+                          Section(title: 'Tracker ${t.label}', children: [
+                            TextField(
+                              controller: _apiKeys[t],
+                              obscureText: !_showSecrets,
+                              decoration: const InputDecoration(
+                                  labelText: 'Clé API',
+                                  helperText: 'Laisser vide pour désactiver'),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(children: [
+                              OutlinedButton(
+                                  onPressed: () => _testTracker(t),
+                                  child: const Text('Tester')),
+                              const SizedBox(width: 12),
+                              status(_trackerStatus[t]),
+                            ]),
+                          ]),
+                          const SizedBox(height: 12),
+                        ],
+                        const SizedBox(height: 4),
+                        SwitchListTile(
+                          title: const Text('Afficher les secrets'),
+                          value: _showSecrets,
+                          onChanged: (v) => setState(() => _showSecrets = v),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 12,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: _testing ? null : _testAll,
+                              icon: _testing
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                  : const Icon(Icons.network_check_rounded,
+                                      size: 18),
+                              label: const Text('Tester les connexions'),
+                            ),
+                            FilledButton.icon(
+                              onPressed: _testing ? null : _save,
+                              icon: const Icon(Icons.check_rounded, size: 18),
+                              label: const Text('Tester et enregistrer'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _user,
-                        decoration: const InputDecoration(
-                            labelText: 'Utilisateur',
-                            border: OutlineInputBorder()),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _password,
-                        obscureText: !_showSecrets,
-                        decoration: const InputDecoration(
-                            labelText: 'Mot de passe',
-                            border: OutlineInputBorder()),
-                      ),
-                    ),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    OutlinedButton(
-                        onPressed: _testTransmission,
-                        child: const Text('Tester')),
-                    const SizedBox(width: 12),
-                    if (_rpcStatus != null) Expanded(child: Text(_rpcStatus!)),
-                  ]),
-                  const SizedBox(height: 24),
-                  Text('Tracker C411', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _apiKey,
-                    obscureText: !_showSecrets,
-                    decoration: const InputDecoration(
-                      labelText: 'Clé API',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    OutlinedButton(
-                        onPressed: _testTracker, child: const Text('Tester')),
-                    const SizedBox(width: 12),
-                    if (_trackerStatus != null)
-                      Expanded(child: Text(_trackerStatus!)),
-                  ]),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Afficher les secrets'),
-                    value: _showSecrets,
-                    onChanged: (v) => setState(() => _showSecrets = v),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 12, runSpacing: 8, children: [
-                    OutlinedButton.icon(
-                      onPressed: _testing ? null : _testAll,
-                      icon: _testing
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.network_check),
-                      label: const Text('Tester les connexions'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: _testing ? null : _save,
-                      icon: const Icon(Icons.save),
-                      label: const Text('Tester et enregistrer'),
-                    ),
-                  ]),
-                  const Divider(height: 32),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.tune),
-                    title: const Text('Configuration du serveur Transmission'),
-                    subtitle: const Text(
-                        'Dossier, limites de vitesse, file d’attente, ratio…'),
-                    trailing: const Icon(Icons.chevron_right),
-                    enabled: ref.watch(transmissionProvider) != null,
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => const ServerSettingsPage())),
-                  ),
-                ]),
+                ),
               ),
-            ),
+            ]),
     );
   }
 }

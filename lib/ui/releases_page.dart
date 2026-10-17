@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../api/c411.dart';
+import '../api/tracker.dart';
 import '../core/format.dart';
+import '../core/preferences.dart';
 import '../state/releases.dart';
-import '../state/torrents.dart';
 import 'release_detail_page.dart';
+import 'send_button.dart';
+import 'theme.dart';
 import 'widgets.dart';
 
 class ReleasesPage extends ConsumerStatefulWidget {
@@ -31,119 +33,181 @@ class _ReleasesPageState extends ConsumerState<ReleasesPage> {
   void _onSearch(String text) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () {
-      final notifier = ref.read(releasesProvider.notifier);
       final filter = ref.read(releasesProvider).filter;
       if (filter.query != text.trim()) {
-        notifier.setFilter(filter.copyWith(query: text.trim()));
+        ref
+            .read(releasesProvider.notifier)
+            .setFilter(filter.copyWith(query: text.trim()));
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final configured = ref.watch(c411Provider) != null;
+    final api = ref.watch(currentTrackerApiProvider);
+    final configured = api != null;
+    final trackers = ref.watch(trackersProvider).keys.toList();
+    final selected = ref.watch(selectedTrackerProvider);
     final state = ref.watch(releasesProvider);
     final notifier = ref.read(releasesProvider.notifier);
+    final grid = ref.watch(uiPrefsProvider.select((p) => p.releasesGrid));
+    final c = context.colors;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sorties'),
-        actions: [
-          PopupMenuButton<String?>(
-            tooltip: 'Trier',
-            icon: const Icon(Icons.sort),
-            initialValue: state.filter.sortBy,
-            onSelected: (v) =>
-                notifier.setFilter(state.filter.copyWith(sortBy: () => v)),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: null, child: Text('Plus récents')),
-              PopupMenuItem(value: 'seeders', child: Text('Plus de seeders')),
+      body: Column(
+        children: [
+          PageHeader(
+            title: 'Sorties',
+            subtitle: state.total > 0
+                ? Text(
+                    '${state.total} torrents',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  )
+                : null,
+            actions: [
+              IconButton(
+                tooltip: grid ? 'Affichage liste' : 'Affichage grille',
+                icon: Icon(
+                  grid ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                ),
+                onPressed: () =>
+                    ref.read(uiPrefsProvider.notifier).setReleasesGrid(!grid),
+              ),
+              if (api?.supportsSort ?? false)
+                PopupMenuButton<String?>(
+                  tooltip: 'Trier',
+                  icon: const Icon(Icons.swap_vert_rounded),
+                  initialValue: state.filter.sortBy,
+                  onSelected: (v) => notifier.setFilter(
+                    state.filter.copyWith(sortBy: () => v),
+                  ),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: null, child: Text('Plus récents')),
+                    PopupMenuItem(
+                      value: 'seeders',
+                      child: Text('Plus de seeders'),
+                    ),
+                  ],
+                ),
+              IconButton(
+                tooltip: 'Rafraîchir',
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: configured ? notifier.reload : null,
+              ),
             ],
           ),
-          IconButton(
-            tooltip: 'Rafraîchir',
-            icon: const Icon(Icons.refresh),
-            onPressed: configured ? notifier.reload : null,
-          ),
-        ],
-      ),
-      body: !configured
-          ? const EmptyState(Icons.key_outlined,
-              'Ajoute ta clé API C411 dans les réglages pour voir les sorties.')
-          : Column(children: [
+          if (!configured)
+            const Expanded(
+              child: EmptyState(
+                Icons.key_outlined,
+                'Ajoute la clé API d’un tracker dans les réglages\npour voir les dernières sorties.',
+              ),
+            )
+          else ...[
+            if (trackers.length > 1)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                child: TextField(
-                  controller: _search,
-                  onChanged: _onSearch,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: 'Rechercher',
-                    isDense: true,
-                    border: OutlineInputBorder(),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<Tracker>(
+                    showSelectedIcon: false,
+                    segments: [
+                      for (final t in trackers)
+                        ButtonSegment(value: t, label: Text(t.label)),
+                    ],
+                    selected: {?selected},
+                    onSelectionChanged: (s) {
+                      _search.clear();
+                      ref
+                          .read(selectedTrackerProvider.notifier)
+                          .select(s.first);
+                    },
                   ),
                 ),
               ),
-              _CategoryBar(filter: state.filter),
-              if (state.error != null)
-                ErrorBanner(state.error!, onRetry: notifier.loadMore),
-              Expanded(child: _ReleaseList(state: state)),
-            ]),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _search,
+                onChanged: (v) {
+                  setState(() {}); // affiche / masque le bouton d'effacement
+                  _onSearch(v);
+                },
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  hintText: 'Rechercher un titre',
+                  suffixIcon: _search.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: () {
+                            _search.clear();
+                            _onSearch('');
+                            setState(() {});
+                          },
+                        ),
+                ),
+              ),
+            ),
+            _CategoryChips(filter: state.filter),
+            if (state.error != null)
+              ErrorBanner(state.error!, onRetry: notifier.loadMore),
+            Divider(height: 1, color: c.border),
+            Expanded(
+              child: _ReleaseList(state: state, grid: grid),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
 
-class _CategoryBar extends ConsumerWidget {
-  const _CategoryBar({required this.filter});
+class _CategoryChips extends ConsumerWidget {
+  const _CategoryChips({required this.filter});
   final ReleaseFilter filter;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider).value ?? const [];
     final notifier = ref.read(releasesProvider.notifier);
-    final current =
-        categories.where((c) => c.id == filter.categoryId).firstOrNull;
+    final current = categories
+        .where((c) => c.id == filter.categoryId)
+        .firstOrNull;
+    final names = {for (final c in categories) c.id: c.name};
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(children: [
-        Expanded(
-          child: DropdownButton<int?>(
-            isExpanded: true,
-            value: current?.id,
-            items: [
-              const DropdownMenuItem(value: null, child: Text('Toutes catégories')),
-              for (final c in categories)
-                DropdownMenuItem(value: c.id, child: Text(c.name)),
-            ],
-            onChanged: (id) => notifier.setFilter(filter.copyWith(
-                categoryId: () => id, subcategoryId: () => null)),
+    return Column(
+      children: [
+        ChipRow<int?>(
+          items: [null, ...categories.map((c) => c.id)],
+          selected: filter.categoryId,
+          label: (id) => id == null ? 'Tout' : names[id]!,
+          onSelected: (id) => notifier.setFilter(
+            filter.copyWith(categoryId: () => id, subcategoryId: () => null),
           ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: DropdownButton<int?>(
-            isExpanded: true,
-            value: filter.subcategoryId,
-            items: [
-              const DropdownMenuItem(value: null, child: Text('Tout')),
-              for (final s in current?.subcategories ?? const <Subcategory>[])
-                DropdownMenuItem(value: s.id, child: Text(s.name)),
-            ],
-            onChanged: current == null
-                ? null
-                : (id) => notifier
-                    .setFilter(filter.copyWith(subcategoryId: () => id)),
+        if (current != null && current.subcategories.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          ChipRow<int?>(
+            items: [null, ...current.subcategories.map((s) => s.id)],
+            selected: filter.subcategoryId,
+            label: (id) => id == null
+                ? 'Toutes'
+                : current.subcategories.firstWhere((s) => s.id == id).name,
+            onSelected: (id) =>
+                notifier.setFilter(filter.copyWith(subcategoryId: () => id)),
           ),
-        ),
-      ]),
+        ],
+        const SizedBox(height: 8),
+      ],
     );
   }
 }
 
 class _ReleaseList extends ConsumerWidget {
-  const _ReleaseList({required this.state});
+  const _ReleaseList({required this.state, required this.grid});
   final ReleasesState state;
+  final bool grid;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -152,99 +216,190 @@ class _ReleaseList extends ConsumerWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.items.isEmpty && state.error == null) {
-      return const EmptyState(Icons.search_off, 'Aucun résultat');
+      return const EmptyState(Icons.search_off_rounded, 'Aucun résultat');
     }
+
+    final count = state.items.length + (state.hasMore ? 1 : 0);
+    Widget item(BuildContext context, int i) {
+      // Chargement de la page suivante un peu avant d'atteindre le bas.
+      if (i >= state.items.length - 12 && state.error == null) {
+        Future.microtask(notifier.loadMore);
+      }
+      if (i >= state.items.length) {
+        return const Center(
+          child: SizedBox.square(
+            dimension: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      }
+      final r = state.items[i];
+      return grid ? ReleaseCard(release: r) : ReleaseRow(release: r);
+    }
+
     return RefreshIndicator(
       onRefresh: notifier.reload,
-      child: ListView.builder(
-        itemExtent: 112,
-        itemCount: state.items.length + (state.hasMore ? 1 : 0),
-        itemBuilder: (context, i) {
-          // Chargement de la page suivante un peu avant d'atteindre le bas.
-          if (i >= state.items.length - 10 && state.error == null) {
-            Future.microtask(notifier.loadMore);
-          }
-          if (i >= state.items.length) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return ReleaseTile(release: state.items[i]);
-        },
+      child: grid
+          ? GridView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 180,
+                mainAxisSpacing: 18,
+                crossAxisSpacing: 14,
+                childAspectRatio: 0.55,
+              ),
+              itemCount: count,
+              itemBuilder: item,
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemExtent: 108,
+              itemCount: count,
+              itemBuilder: item,
+            ),
+    );
+  }
+}
+
+void _openDetail(BuildContext context, Release r) =>
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => ReleaseDetailPage(release: r)));
+
+String _displayTitle(Release r) => r.title ?? r.name;
+
+/// Carte « affiche » pour la vue grille.
+class ReleaseCard extends StatelessWidget {
+  const ReleaseCard({super.key, required this.release});
+  final Release release;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = release;
+    final c = context.colors;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _openDetail(context, r),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Poster(r.posterUrl, radius: 10),
+                Positioned(
+                  left: 6,
+                  top: 6,
+                  right: 6,
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      if (r.resolution != null) Tag(r.resolution!, solid: true),
+                      if (r.isFreeleech)
+                        Tag('FL', solid: true, color: c.success),
+                      if (r.isExclusive)
+                        Tag('EXCLU', solid: true, color: c.warning),
+                    ],
+                  ),
+                ),
+                Positioned(right: 6, bottom: 6, child: SendButton(release: r)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _displayTitle(r),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            [
+              if (r.year != null) '${r.year}',
+              formatBytes(r.size),
+              '▲ ${r.seeders}',
+            ].join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11.5, color: c.muted),
+          ),
+        ],
       ),
     );
   }
 }
 
-class ReleaseTile extends ConsumerWidget {
-  const ReleaseTile({super.key, required this.release});
+/// Ligne compacte pour la vue liste.
+class ReleaseRow extends StatelessWidget {
+  const ReleaseRow({super.key, required this.release});
   final Release release;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final r = release;
-    final inClient = ref.watch(
-        torrentsProvider.select((s) => s.hashes.contains(r.infoHash)));
-    final theme = Theme.of(context);
-    final muted = theme.textTheme.bodySmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-
+    final c = context.colors;
     return InkWell(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => ReleaseDetailPage(release: r))),
+      onTap: () => _openDetail(context, r),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(children: [
-          Poster(r.posterUrl),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  [r.title ?? r.name, if (r.year != null) '(${r.year})']
-                      .join(' '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                Text(r.name,
-                    maxLines: 1, overflow: TextOverflow.ellipsis, style: muted),
-                const SizedBox(height: 4),
-                Flexible(
-                  child: Wrap(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Poster(r.posterUrl, width: 60, height: 90),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    [
+                      _displayTitle(r),
+                      if (r.year != null) '(${r.year})',
+                    ].join(' '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    r.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: c.muted),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
                     spacing: 4,
                     runSpacing: 4,
                     clipBehavior: Clip.hardEdge,
                     children: [
-                      Badge411(r.subcategory,
-                          color: theme.colorScheme.tertiary),
-                      if (r.resolution != null) Badge411(r.resolution!),
-                      if (r.source != null) Badge411(r.source!),
+                      Tag(r.subcategory, color: c.accent),
+                      if (r.resolution != null) Tag(r.resolution!),
+                      if (r.source != null) Tag(r.source!),
                       if (r.languages.isNotEmpty)
-                        Badge411(r.languages.take(2).join('/')),
-                      if (r.isFreeleech)
-                        const Badge411('FREELEECH', color: Colors.green),
-                      if (r.isExclusive)
-                        const Badge411('EXCLU', color: Colors.orange),
+                        Tag(r.languages.take(2).join('/')),
+                      if (r.isFreeleech) Tag('FREELEECH', color: c.success),
+                      if (r.isExclusive) Tag('EXCLU', color: c.warning),
                     ],
                   ),
-                ),
-                const Spacer(),
-                Text(
-                  '${formatBytes(r.size)}  ·  ▲ ${r.seeders}  ▼ ${r.leechers}'
-                  '  ·  ${formatAgo(r.createdAt)}',
-                  style: muted,
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Text(
+                    '${formatBytes(r.size)}  ·  ▲ ${r.seeders}  ▼ ${r.leechers}'
+                    '  ·  ${formatAgo(r.createdAt)}',
+                    style: TextStyle(fontSize: 12, color: c.muted),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: inClient ? 'Déjà dans Transmission' : 'Télécharger',
-            icon: Icon(inClient ? Icons.check_circle : Icons.download),
-            color: inClient ? Colors.green : null,
-            onPressed:
-                inClient ? null : () => sendToTransmission(context, ref, r),
-          ),
-        ]),
+            const SizedBox(width: 8),
+            SendButton(release: r),
+          ],
+        ),
       ),
     );
   }

@@ -41,6 +41,23 @@ class Torrent {
   int get peersConnected => _i('peersConnected');
   int get peersSendingToUs => _i('peersSendingToUs');
   int get peersGettingFromUs => _i('peersGettingFromUs');
+  int get queuePosition => _i('queuePosition');
+  int get uploadedEver => _i('uploadedEver');
+  int get bandwidthPriority => _i('bandwidthPriority');
+  int get webseedsSendingToUs => _i('webseedsSendingToUs');
+  double get metadataPercentComplete =>
+      json.containsKey('metadataPercentComplete')
+          ? _d('metadataPercentComplete')
+          : 1;
+  bool get isStalled => json['isStalled'] == true;
+  bool get isFinished => json['isFinished'] == true;
+  String get downloadDir => json['downloadDir'] as String? ?? '';
+  List<String> get labels =>
+      (json['labels'] as List? ?? const []).whereType<String>().toList();
+
+  /// Magnet sans métadonnées encore reçues.
+  bool get needsMetadata => metadataPercentComplete < 1;
+  bool get isQueued => status == 1 || status == 3 || status == 5;
 
   bool get hasError => error != 0;
   bool get isStopped => status == 0;
@@ -48,6 +65,7 @@ class Torrent {
   bool get isDownloading => status == 3 || status == 4;
   bool get isSeeding => status == 5 || status == 6;
   bool get isActive => rateDownload > 0 || rateUpload > 0;
+  bool get isComplete => percentDone >= 1;
 
   String get statusLabel => switch (status) {
         0 => percentDone >= 1 ? 'Terminé' : 'Arrêté',
@@ -97,6 +115,9 @@ class TransmissionClient {
     'rateDownload', 'rateUpload', 'eta', 'totalSize', 'sizeWhenDone',
     'leftUntilDone', 'uploadRatio', 'error', 'errorString', 'addedDate',
     'peersConnected', 'peersSendingToUs', 'peersGettingFromUs',
+    'queuePosition', 'uploadedEver', 'labels', 'isStalled', 'isFinished',
+    'metadataPercentComplete', 'downloadDir', 'bandwidthPriority',
+    'webseedsSendingToUs',
   ];
 
   static const detailFields = [
@@ -105,7 +126,17 @@ class TransmissionClient {
     'activityDate', 'pieceCount', 'pieceSize', 'haveValid', 'corruptEver',
     'downloadedEver', 'uploadedEver', 'secondsDownloading', 'secondsSeeding',
     'isPrivate', 'files', 'fileStats', 'peers', 'trackerStats',
+    'percentComplete', 'haveUnchecked', 'desiredAvailable', 'startDate',
+    'editDate', 'etaIdle', 'magnetLink', 'torrentFile', 'primary-mime-type',
+    'file-count', 'pieces', 'peersFrom', 'webseeds', 'trackerList',
+    'manualAnnounceTime', 'maxConnectedPeers', 'peer-limit', 'group',
+    'downloadLimit', 'downloadLimited', 'uploadLimit', 'uploadLimited',
+    'honorsSessionLimits', 'seedRatioLimit', 'seedRatioMode',
+    'seedIdleLimit', 'seedIdleMode', 'sequentialDownload',
   ];
+
+  /// Priorités Transmission (tr_priority_t).
+  static const priorityLow = -1, priorityNormal = 0, priorityHigh = 1;
 
   /// `https://hote:9091` → `https://hote:9091/transmission/rpc`
   static String normalizeUrl(String raw) {
@@ -166,13 +197,27 @@ class TransmissionClient {
   /// [ids] : null (tous), une liste d'ids, ou `'recently-active'`.
   Future<TorrentGetResult> torrentGet(List<String> fields,
       {Object? ids}) async {
+    // Format « table » (Transmission ≥ 3) : les noms de champs ne sont envoyés
+    // qu'une fois, la réponse est bien plus compacte pour une longue liste.
     final args = await call('torrent-get', {
       'fields': fields,
       'ids': ?ids,
+      'format': 'table',
     });
+    final rows = args['torrents'] as List? ?? const [];
+    final List<Map<String, dynamic>> torrents;
+    if (rows.isNotEmpty && rows.first is List) {
+      final keys = (rows.first as List).cast<String>();
+      torrents = [
+        for (final row in rows.skip(1))
+          {for (final (i, v) in (row as List).indexed) keys[i]: v},
+      ];
+    } else {
+      // Serveur ancien : format « objects ».
+      torrents = rows.cast<Map<String, dynamic>>();
+    }
     return (
-      torrents: (args['torrents'] as List? ?? const [])
-          .cast<Map<String, dynamic>>(),
+      torrents: torrents,
       removed: (args['removed'] as List? ?? const [])
           .map((e) => (e as num).toInt())
           .toList(),
@@ -180,16 +225,49 @@ class TransmissionClient {
   }
 
   /// Retourne `true` si le torrent a été ajouté, `false` s'il existait déjà.
-  Future<bool> addTorrent({Uint8List? metainfo, String? filename}) async {
+  Future<bool> addTorrent({
+    Uint8List? metainfo,
+    String? filename,
+    AddOptions options = const AddOptions(),
+  }) async {
     final args = await call('torrent-add', {
       if (metainfo != null) 'metainfo': base64Encode(metainfo),
       'filename': ?filename,
+      ...options.toArgs(),
     });
     return args.containsKey('torrent-added');
   }
 
-  Future<void> action(String method, List<int> ids) =>
-      call(method, {'ids': ids});
+  /// `torrent-start`, `torrent-start-now`, `torrent-stop`, `torrent-verify`,
+  /// `torrent-reannounce`, `queue-move-top|up|down|bottom`.
+  /// [ids] null = tous les torrents.
+  Future<void> action(String method, List<int>? ids) =>
+      call(method, {'ids': ?ids});
+
+  Future<void> torrentSet(List<int> ids, Map<String, dynamic> args) =>
+      call('torrent-set', {'ids': ids, ...args});
+
+  /// [move] : déplace les fichiers ; sinon Transmission les cherche à [location].
+  Future<void> setLocation(List<int> ids, String location, {bool move = true}) =>
+      call('torrent-set-location',
+          {'ids': ids, 'location': location, 'move': move});
+
+  /// Renomme un fichier ou dossier ([path] relatif au torrent).
+  Future<void> renamePath(int id, String path, String name) =>
+      call('torrent-rename-path', {
+        'ids': [id],
+        'path': path,
+        'name': name,
+      });
+
+  Future<void> setFilesPriority(int id, List<int> files, int priority) =>
+      torrentSet([id], {
+        switch (priority) {
+          priorityHigh => 'priority-high',
+          priorityLow => 'priority-low',
+          _ => 'priority-normal',
+        }: files,
+      });
 
   Future<void> remove(List<int> ids, {bool deleteData = false}) =>
       call('torrent-remove', {'ids': ids, 'delete-local-data': deleteData});
@@ -205,10 +283,60 @@ class TransmissionClient {
   Future<void> sessionSet(Map<String, dynamic> args) =>
       call('session-set', args);
 
-  Future<int?> freeSpace(String path) async {
+  Future<Map<String, dynamic>> sessionStats() => call('session-stats');
+
+  /// Vérifie depuis l'extérieur que le port pair est joignable.
+  Future<bool> portTest() async =>
+      (await call('port-test'))['port-is-open'] == true;
+
+  /// Télécharge la blocklist configurée ; renvoie le nombre de règles.
+  Future<int?> blocklistUpdate() async =>
+      ((await call('blocklist-update'))['blocklist-size'] as num?)?.toInt();
+
+  Future<int?> freeSpace(String path) async =>
+      (await diskSpace(path)).free;
+
+  /// Espace libre et capacité totale (`total_size`, Transmission ≥ 4).
+  Future<({int? free, int? total})> diskSpace(String path) async {
     final args = await call('free-space', {'path': path});
-    return (args['size-bytes'] as num?)?.toInt();
+    return (
+      free: (args['size-bytes'] as num?)?.toInt(),
+      total: (args['total_size'] as num?)?.toInt(),
+    );
   }
+
+  /// Groupes de bande passante (Transmission ≥ 4).
+  Future<List<Map<String, dynamic>>> groupGet() async =>
+      ((await call('group-get'))['group'] as List? ?? const [])
+          .cast<Map<String, dynamic>>();
+
+  Future<void> groupSet(Map<String, dynamic> group) => call('group-set', group);
+
+  /// Arrête le daemon : il faudra le relancer sur le serveur.
+  Future<void> sessionClose() => call('session-close');
+}
+
+/// Options de `torrent-add`.
+class AddOptions {
+  const AddOptions({
+    this.downloadDir,
+    this.paused = false,
+    this.labels = const [],
+    this.bandwidthPriority,
+  });
+
+  final String? downloadDir;
+  final bool paused;
+  final List<String> labels;
+  final int? bandwidthPriority;
+
+  Map<String, dynamic> toArgs() => {
+        if (downloadDir != null && downloadDir!.isNotEmpty)
+          'download-dir': downloadDir,
+        if (paused) 'paused': true,
+        if (labels.isNotEmpty) 'labels': labels,
+        'bandwidthPriority': ?bandwidthPriority,
+      };
 }
 
 final transmissionProvider = Provider<TransmissionClient?>((ref) {

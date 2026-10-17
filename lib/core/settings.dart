@@ -8,29 +8,35 @@ class AppSettings {
     this.rpcUrl = '',
     this.rpcUser = '',
     this.rpcPassword = '',
-    this.apiKey = '',
+    this.apiKeys = const {},
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
         rpcUrl: json['rpcUrl'] as String? ?? '',
         rpcUser: json['rpcUser'] as String? ?? '',
         rpcPassword: json['rpcPassword'] as String? ?? '',
-        apiKey: json['apiKey'] as String? ?? '',
+        apiKeys: {
+          // Ancien format : une seule clé, celle de C411.
+          if (json['apiKey'] is String) 'c411': json['apiKey'] as String,
+          ...?(json['apiKeys'] as Map?)?.cast<String, String>(),
+        },
       );
 
   final String rpcUrl;
   final String rpcUser;
   final String rpcPassword;
-  final String apiKey;
+
+  /// Clé API par tracker, indexée par `Tracker.name`.
+  final Map<String, String> apiKeys;
 
   bool get hasTransmission => rpcUrl.isNotEmpty;
-  bool get hasTracker => apiKey.isNotEmpty;
+  bool get hasTracker => apiKeys.values.any((k) => k.isNotEmpty);
 
   Map<String, dynamic> toJson() => {
         'rpcUrl': rpcUrl,
         'rpcUser': rpcUser,
         'rpcPassword': rpcPassword,
-        'apiKey': apiKey,
+        'apiKeys': apiKeys,
       };
 }
 
