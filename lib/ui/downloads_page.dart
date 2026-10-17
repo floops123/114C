@@ -8,6 +8,7 @@ import '../core/preferences.dart';
 import '../core/format.dart';
 import '../state/torrents.dart';
 import 'cross_seed_page.dart';
+import 'revive_page.dart';
 import 'stats_page.dart';
 import 'theme.dart';
 import 'torrent_actions.dart';
@@ -273,6 +274,9 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                   'cross' => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const CrossSeedPage()),
                   ),
+                  'revive' => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const RevivePage()),
+                  ),
                   'start' => _all(
                     'torrent-start',
                     'Tous les torrents démarrés',
@@ -283,6 +287,8 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'select', child: Text('Sélectionner')),
                   PopupMenuItem(value: 'cross', child: Text('Cross-seed…')),
+                  PopupMenuItem(
+                      value: 'revive', child: Text('Sans seeder…')),
                   PopupMenuDivider(),
                   PopupMenuItem(value: 'start', child: Text('Tout démarrer')),
                   PopupMenuItem(value: 'stop', child: Text('Tout arrêter')),

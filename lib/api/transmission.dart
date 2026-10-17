@@ -230,13 +230,28 @@ class TransmissionClient {
     Uint8List? metainfo,
     String? filename,
     AddOptions options = const AddOptions(),
+  }) async =>
+      (await addTorrentWithHash(
+              metainfo: metainfo, filename: filename, options: options))
+          .added;
+
+  /// Comme [addTorrent], avec l'infohash (en minuscules) du torrent ajouté ou
+  /// déjà présent.
+  Future<({bool added, String? hash})> addTorrentWithHash({
+    Uint8List? metainfo,
+    String? filename,
+    AddOptions options = const AddOptions(),
   }) async {
     final args = await call('torrent-add', {
       if (metainfo != null) 'metainfo': base64Encode(metainfo),
       'filename': ?filename,
       ...options.toArgs(),
     });
-    return args.containsKey('torrent-added');
+    final torrent = (args['torrent-added'] ?? args['torrent-duplicate']) as Map?;
+    return (
+      added: args.containsKey('torrent-added'),
+      hash: (torrent?['hashString'] as String?)?.toLowerCase(),
+    );
   }
 
   /// `torrent-start`, `torrent-start-now`, `torrent-stop`, `torrent-verify`,

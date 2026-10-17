@@ -42,6 +42,13 @@ class _CrossSeedPageState extends ConsumerState<CrossSeedPage> {
     final state = ref.watch(crossSeedProvider);
     final notifier = ref.read(crossSeedProvider.notifier);
     final trackers = ref.watch(trackersProvider).keys.toList();
+    final directions = ref.watch(crossSeedDirectionsProvider);
+    final setDirections = ref.read(crossSeedDirectionsProvider.notifier);
+    final from = <Tracker?>[...Tracker.values, null];
+    final to = [for (final t in trackers) if (directions.to(t)) t];
+    // Au moins un sens possible : une origine et une destination différentes.
+    final ready = from.any((f) =>
+        directions.from(f) && to.any((t) => t != f));
     final c = context.colors;
     final matches = state.count(CrossSeedStatus.match);
     final total = state.items.length;
@@ -66,6 +73,7 @@ class _CrossSeedPageState extends ConsumerState<CrossSeedPage> {
           else
             PopupMenuButton<bool>(
               tooltip: 'Analyser',
+              enabled: ready,
               onSelected: (force) => notifier.scan(force: force),
               itemBuilder: (_) => const [
                 PopupMenuItem(value: false, child: Text('Analyser')),
@@ -84,18 +92,32 @@ class _CrossSeedPageState extends ConsumerState<CrossSeedPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Cherche sur ${trackers.map((t) => t.label).join(' et ')} '
-                'les torrents terminés de Transmission venant d’un autre '
-                'tracker : même nom, même taille, mêmes fichiers. Une '
-                'correspondance s’ajoute dans le dossier existant, sans rien '
-                'retélécharger (étiquette « ${CrossSeedNotifier.label} »).',
+                'Cherche sur les trackers de destination les torrents '
+                'terminés de Transmission venant des trackers d’origine : '
+                'même nom, même taille, mêmes fichiers. Une correspondance '
+                's’ajoute dans le dossier existant, sans rien retélécharger '
+                '(étiquette « ${CrossSeedNotifier.label} »).',
                 style: TextStyle(color: c.muted, fontSize: 12.5, height: 1.4),
+              ),
+              _Choices<Tracker?>(
+                title: 'Torrents venant de',
+                items: from,
+                label: (t) => t?.label ?? 'Autres trackers',
+                selected: directions.from,
+                onToggle: state.running ? null : setDirections.toggleFrom,
+              ),
+              _Choices<Tracker>(
+                title: 'À partager sur',
+                items: trackers,
+                label: (t) => t.label,
+                selected: directions.to,
+                onToggle: state.running ? null : setDirections.toggleTo,
               ),
               const SizedBox(height: 10),
               Row(children: [
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: state.running ? null : notifier.scan,
+                    onPressed: state.running || !ready ? null : notifier.scan,
                     icon: state.running
                         ? SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.onAccent))
                         : const Icon(Icons.manage_search_rounded, size: 18),
@@ -165,6 +187,46 @@ class _CrossSeedPageState extends ConsumerState<CrossSeedPage> {
       ]),
     );
   }
+}
+
+/// Ligne de cases à cocher (origines ou destinations).
+class _Choices<T> extends StatelessWidget {
+  const _Choices({
+    required this.title,
+    required this.items,
+    required this.label,
+    required this.selected,
+    required this.onToggle,
+  });
+  final String title;
+  final List<T> items;
+  final String Function(T) label;
+  final bool Function(T) selected;
+  final ValueChanged<T>? onToggle;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 4),
+            child: Text(title,
+                style: TextStyle(
+                    color: context.colors.muted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600)),
+          ),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final item in items)
+              FilterChip(
+                label: Text(label(item)),
+                selected: selected(item),
+                onSelected:
+                    onToggle == null ? null : (_) => onToggle!(item),
+              ),
+          ]),
+        ],
+      );
 }
 
 class _ItemTile extends ConsumerWidget {

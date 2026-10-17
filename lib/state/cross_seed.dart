@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../api/astra.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/bencode.dart';
@@ -183,6 +184,79 @@ final crossSeedCacheProvider = Provider<CrossSeedCache>((ref) {
   }
 });
 
+/// Sens de cross-seed choisis : trackers d'origine et trackers de
+/// destination exclus (un tracker ajouté plus tard est donc inclus d'office).
+/// `null` dans [offFrom] : les torrents d'autres trackers ou publics.
+class CrossSeedDirections {
+  const CrossSeedDirections({this.offFrom = const {}, this.offTo = const {}});
+  final Set<Tracker?> offFrom;
+  final Set<Tracker> offTo;
+
+  bool from(Tracker? source) => !offFrom.contains(source);
+  bool to(Tracker target) => !offTo.contains(target);
+}
+
+class CrossSeedDirectionsNotifier extends Notifier<CrossSeedDirections> {
+  static const key = 'crossSeedDirections';
+  static const _other = 'other';
+
+  SharedPreferencesWithCache? get _prefs {
+    try {
+      return ref.read(sharedPrefsProvider);
+    } on Object {
+      return null; // Préférences non initialisées (tests).
+    }
+  }
+
+  @override
+  CrossSeedDirections build() {
+    try {
+      final raw = _prefs?.getString(key);
+      if (raw == null) return const CrossSeedDirections();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final trackers = Tracker.values.asNameMap();
+      return CrossSeedDirections(
+        offFrom: {
+          for (final n in (json['from'] as List? ?? const []).cast<String>())
+            if (n == _other) null else ?trackers[n],
+        },
+        offTo: {
+          for (final n in (json['to'] as List? ?? const []).cast<String>())
+            ?trackers[n],
+        },
+      );
+    } on Object {
+      return const CrossSeedDirections();
+    }
+  }
+
+  void toggleFrom(Tracker? source) => _save(CrossSeedDirections(
+      offFrom: {...state.offFrom}..toggle(source), offTo: state.offTo));
+
+  void toggleTo(Tracker target) => _save(CrossSeedDirections(
+      offFrom: state.offFrom, offTo: {...state.offTo}..toggle(target)));
+
+  void _save(CrossSeedDirections d) {
+    state = d;
+    _prefs?.setString(
+        key,
+        jsonEncode({
+          'from': [for (final t in d.offFrom) t?.name ?? _other],
+          'to': [for (final t in d.offTo) t.name],
+        }));
+  }
+}
+
+extension<T> on Set<T> {
+  void toggle(T value) {
+    if (!remove(value)) add(value);
+  }
+}
+
+final crossSeedDirectionsProvider =
+    NotifierProvider<CrossSeedDirectionsNotifier, CrossSeedDirections>(
+        CrossSeedDirectionsNotifier.new);
+
 /// Pause entre deux requêtes vers un tracker (quota C411 : 120 / min).
 final crossSeedDelayProvider =
     Provider<Duration>((ref) => const Duration(milliseconds: 1100));
@@ -225,7 +299,8 @@ class CrossSeedNotifier extends Notifier<CrossSeedState> {
     ]);
   }
 
-  /// Analyse les torrents terminés vers tous les autres trackers configurés.
+  /// Analyse les torrents terminés vers les autres trackers configurés, dans
+  /// les sens choisis ([crossSeedDirectionsProvider]).
   /// [force] : ignore les résultats mémorisés.
   Future<void> scan({bool force = false}) async {
     if (state.running) return;
@@ -255,6 +330,7 @@ class CrossSeedNotifier extends Notifier<CrossSeedState> {
     final present = {
       for (final t in torrents) (t['hashString'] as String).toLowerCase(),
     };
+    final directions = ref.read(crossSeedDirectionsProvider);
     final cache = ref.read(crossSeedCacheProvider);
     final memory = cache.load();
     final now = DateTime.now();
@@ -267,8 +343,9 @@ class CrossSeedNotifier extends Notifier<CrossSeedState> {
           '${tr['announce']}',
       ];
       final source = Tracker.fromAnnounces(announces);
+      if (!directions.from(source)) continue;
       for (final target in trackers.keys) {
-        if (target == source) continue;
+        if (target == source || !directions.to(target)) continue;
         final item = CrossSeedItem(
           torrentId: (t['id'] as num).toInt(),
           hash: (t['hashString'] as String).toLowerCase(),
@@ -291,11 +368,44 @@ class CrossSeedNotifier extends Notifier<CrossSeedState> {
     }
     state = CrossSeedState(items: items, running: true, skipped: skipped);
 
+    // AstraTorrent n'a pas de recherche : tous ses torrents sont soumis d'un
+    // coup à son scanner, par lots, avant la vérification une à une.
+    final astraItems = [
+      for (final i in items)
+        if (i.target == Tracker.astra) i,
+    ];
+    var astra = <String, Release>{};
+    String? astraError;
+    if (astraItems.isNotEmpty) {
+      for (final i in astraItems) {
+        _set(i.key, (i) => i.copyWith(status: CrossSeedStatus.searching));
+      }
+      try {
+        astra = await (trackers[Tracker.astra]! as AstraApi).bulkScan([
+          for (final i in astraItems) (name: i.name, size: i.size, hash: i.hash),
+        ]);
+      } on TrackerException catch (e) {
+        astraError = e.message;
+      }
+      if (!ref.mounted) return;
+    }
+
     final delay = ref.read(crossSeedDelayProvider);
     for (final item in items) {
       if (_stop || !ref.mounted) break;
       _set(item.key, (i) => i.copyWith(status: CrossSeedStatus.searching));
-      final result = await _check(item, trackers[item.target]!, client, present);
+      final api = trackers[item.target]!;
+      final CrossSeedItem result;
+      if (item.target != Tracker.astra) {
+        result = await _check(item, api, client, present);
+      } else if (astraError != null) {
+        result = item.copyWith(status: CrossSeedStatus.error, detail: astraError);
+      } else if (astra[item.hash] case final candidate?) {
+        result = await _verify(item, api, client, present, [candidate]);
+      } else {
+        result = item.copyWith(
+            status: CrossSeedStatus.notFound, detail: 'Aucune correspondance');
+      }
       if (!ref.mounted) return;
       _set(item.key, (_) => result);
       if (result.status.cached) {
@@ -303,7 +413,10 @@ class CrossSeedNotifier extends Notifier<CrossSeedState> {
         cache.save(memory);
       }
       state = state.copyWith(done: state.done + 1);
-      await Future<void>.delayed(delay);
+      // Sans candidat, AstraTorrent n'a pas été interrogé pour ce torrent.
+      if (item.target != Tracker.astra || result.candidate != null) {
+        await Future<void>.delayed(delay);
+      }
     }
     if (ref.mounted) state = state.copyWith(running: false);
   }
@@ -322,6 +435,17 @@ class CrossSeedNotifier extends Notifier<CrossSeedState> {
               : '${page.items.length} résultat(s), aucun de même taille',
         );
       }
+      return await _verify(item, api, client, present, sameSize);
+    } on TrackerException catch (e) {
+      return item.copyWith(status: CrossSeedStatus.error, detail: e.message);
+    }
+  }
+
+  /// Compare fichier par fichier les candidats avec le torrent local.
+  Future<CrossSeedItem> _verify(CrossSeedItem item, TrackerApi api,
+      TransmissionClient client, Set<String> present,
+      List<Release> sameSize) async {
+    try {
       final already = sameSize.where((r) => present.contains(r.infoHash));
       if (already.isNotEmpty) {
         return item.copyWith(

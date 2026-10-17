@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/astra.dart';
 import '../api/c411_socket.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
@@ -114,6 +115,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
     _setStatus(() => _trackerStatus[tracker] = 'Connexion…');
     try {
+      // Le flux RSS répond même sans passkey : on la vérifie par le scanner.
+      if (tracker.client(key) case final AstraApi astra) {
+        final user = await astra.username();
+        _setStatus(() => _trackerStatus[tracker] =
+            user == null ? '✗ Passkey refusée' : '✓ Connecté : $user');
+        return user != null;
+      }
       final page = await tracker.client(key).releases(perPage: 1);
       _setStatus(
         () => _trackerStatus[tracker] = page.total > 0
@@ -358,8 +366,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 TextField(
                                   controller: _apiKeys[t],
                                   obscureText: !_showSecrets,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Clé API',
+                                  decoration: InputDecoration(
+                                    labelText: t.keyLabel,
                                     helperText: 'Laisser vide pour désactiver',
                                   ),
                                 ),

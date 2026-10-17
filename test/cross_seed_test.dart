@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:c411_remote/api/astra.dart';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/api/transmission.dart';
 import 'package:c411_remote/core/bencode.dart';
@@ -149,6 +151,26 @@ class _NoTorrents extends TorrentsNotifier {
   Future<void> refresh({bool full = false}) async {}
 }
 
+/// AstraTorrent : scanner par lots, correspondances par infohash local.
+class _Astra extends AstraApi {
+  _Astra(this.matches, this.files) : super('passkey');
+  final Map<String, Release> matches;
+  final Map<String, Uint8List> files;
+  final scans = <List<AstraQuery>>[];
+
+  @override
+  Future<Map<String, Release>> bulkScan(List<AstraQuery> items) async {
+    scans.add(items);
+    return {
+      for (final i in items)
+        i.hash: ?matches[i.hash],
+    };
+  }
+
+  @override
+  Future<Uint8List> downloadTorrent(Release release) async => files[release.id]!;
+}
+
 void main() {
   test('bencode : torrent à plusieurs fichiers et à fichier seul', () {
     final multi = TorrentContent.parse(torrentFile('Dossier', [
@@ -166,6 +188,7 @@ void main() {
   test('origine d’après les annonces, nom recherché, comparaison', () {
     expect(Tracker.fromAnnounces(['https://tracker.c411.org/x/announce']), Tracker.c411);
     expect(Tracker.fromAnnounces(['https://tr4ker.net/announce']), Tracker.tr4ker);
+    expect(Tracker.fromAnnounces(['https://nostradamus.foo/announce/abc']), Tracker.nostradamus);
     expect(Tracker.fromAnnounces(['udp://open.example:80']), isNull);
     expect(crossSeedQuery('Serie.S01E01.1080p-GRP.mkv'), 'Serie.S01E01.1080p-GRP');
     expect(crossSeedQuery('Film.2024.MULTi.1080p.WEB-GRP'), 'Film.2024.MULTi.1080p.WEB-GRP');
@@ -246,5 +269,110 @@ void main() {
     // « Tout réanalyser » ignore la mémoire.
     await second.read(crossSeedProvider.notifier).scan(force: true);
     expect(second.read(crossSeedProvider).items, hasLength(4));
+  });
+
+  test('AstraTorrent : un scan par lots, puis vérification des fichiers', () async {
+    final astra = _Astra({
+      'aaa': _rel(Tracker.astra, 'a1', 'Film.2024.MULTi.1080p.WEB-GRP', 3000),
+      'ccc': _rel(Tracker.astra, 'a3', 'Doc.2023-GRP', 700),
+    }, {
+      'a1': torrentFile('Film.2024.MULTi.1080p.WEB-GRP', [
+        (['film.mkv'], 2900),
+        (['film.nfo'], 100),
+      ]),
+      'a3': torrentFile('Doc.2023-GRP', [(['autre.mkv'], 700)]),
+    });
+    final transmission = _Transmission();
+    final container = ProviderContainer(overrides: [
+      transmissionProvider.overrideWithValue(transmission),
+      trackersProvider.overrideWithValue({Tracker.astra: astra}),
+      crossSeedCacheProvider.overrideWithValue(MemoryCrossSeedCache()),
+      crossSeedDelayProvider.overrideWithValue(Duration.zero),
+      torrentsProvider.overrideWith(_NoTorrents.new),
+    ]);
+    addTearDown(container.dispose);
+
+    await container.read(crossSeedProvider.notifier).scan();
+    expect(astra.scans.single.map((q) => (q.hash, q.size)),
+        [('aaa', 3000), ('bbb', 500), ('ccc', 700)],
+        reason: 'les torrents terminés, en un seul lot');
+    final status = {
+      for (final i in container.read(crossSeedProvider).items) i.hash: i.status,
+    };
+    expect(status, {
+      'aaa': CrossSeedStatus.match,
+      'bbb': CrossSeedStatus.notFound,
+      'ccc': CrossSeedStatus.mismatch,
+    });
+    expect(await container.read(crossSeedProvider.notifier).addAll(), 1);
+    expect(transmission.added.single.downloadDir, '/data/films');
+  });
+
+  test('AstraTorrent : lecture de la réponse bulk_scan', () {
+    final matches = AstraApi.parseScan('''{"results": [
+      {"matched": true, "query": {"name": "Film", "size": 3000, "info_hash": "AAA"},
+       "torrent": {"id": 42, "name": "Film", "size_bytes": 3000,
+                   "size_formatted": "2.9 KB", "download_url": "/download.php?id=42&passkey=x",
+                   "is_sauveur": true}},
+      {"matched": false, "query": {"name": "Autre", "size": 1, "info_hash": "bbb"}}
+    ]}''');
+    expect(matches.keys, ['aaa']);
+    final r = matches['aaa']!;
+    expect((r.id, r.size, r.downloadUrl), ('42', 3000, '/download.php?id=42&passkey=x'));
+    expect(() => AstraApi.parseScan({'status': 'success', 'user': null, 'results': []}),
+        throwsA(isA<TrackerException>()));
+    expect(() => AstraApi.parseScan({'error': 'Passkey invalide'}),
+        throwsA(isA<TrackerException>()
+            .having((e) => e.message, 'message', contains('Passkey invalide'))));
+  });
+
+  test('AstraTorrent : liste des sorties (torrents.php)', () {
+    final items = AstraApi.parseTorrents(
+        File('test/fixtures/astra_torrents.json').readAsStringSync(), 'PASSKEY');
+    expect(items, hasLength(2));
+    final r = items.first;
+    expect(r.tracker, Tracker.astra);
+    expect(r.name, 'Rendition 2007 MULTi VFF 1080p BluRay AC3 x265-Winks');
+    expect(r.title, 'Détention secrète');
+    expect(r.year, 2007);
+    expect(r.resolution, '1080p');
+    expect(r.infoHash, '89d2cf08806d0e9b7079868d400e54f8ff750ee6');
+    expect((r.size, r.seeders, r.completions), (5268155992, 3, 12));
+    expect(r.subcategory, 'Longs-métrages / Cinéma');
+    expect(r.posterUrl, startsWith('https://image.tmdb.org/'));
+    expect(r.downloadUrl, '/api/download.php?id=17530&passkey=PASSKEY');
+    // 15:17:38 à Paris, heure d'été (le RSS du site donne +0200).
+    expect(r.createdAt, DateTime.utc(2026, 10, 17, 13, 17, 38));
+    expect(parseParisTime('2026-01-10 12:00:00'), DateTime.utc(2026, 1, 10, 11));
+    expect(parseParisTime('2026-10-25 03:30:00'), DateTime.utc(2026, 10, 25, 2, 30));
+  });
+
+  test('sens choisis : origines et destinations exclues', () async {
+    final tr4ker = _Tracker(Tracker.tr4ker, {}, {});
+    final c411 = _Tracker(Tracker.c411, {}, {});
+    final container = ProviderContainer(overrides: [
+      transmissionProvider.overrideWithValue(_Transmission()),
+      trackersProvider.overrideWithValue({Tracker.c411: c411, Tracker.tr4ker: tr4ker}),
+      crossSeedCacheProvider.overrideWithValue(MemoryCrossSeedCache()),
+      crossSeedDelayProvider.overrideWithValue(Duration.zero),
+      torrentsProvider.overrideWith(_NoTorrents.new),
+    ]);
+    addTearDown(container.dispose);
+    final directions = container.read(crossSeedDirectionsProvider.notifier)
+      ..toggleFrom(null) // pas les torrents d'autres trackers
+      ..toggleTo(Tracker.c411); // rien vers C411
+    final d = container.read(crossSeedDirectionsProvider);
+    expect((d.from(null), d.from(Tracker.c411), d.to(Tracker.c411)), (false, true, false));
+
+    await container.read(crossSeedProvider.notifier).scan();
+    expect(
+        container.read(crossSeedProvider).items.map((i) => '${i.source?.label}→${i.target.label}'),
+        ['C411→tr4ker']);
+    expect(c411.queries, isEmpty);
+
+    // Recocher rétablit le sens.
+    directions.toggleTo(Tracker.c411);
+    await container.read(crossSeedProvider.notifier).scan();
+    expect(c411.queries, ['Serie.S01E01.1080p-GRP']);
   });
 }

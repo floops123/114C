@@ -20,6 +20,8 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'tracker', // SelectedTrackerNotifier
         'notifications', // PrefsNotificationStore
         'crossSeed', // PrefsCrossSeedCache
+        'crossSeedDirections', // CrossSeedDirectionsNotifier
+        'revive', // PrefsReviveStore
       }),
     );
 

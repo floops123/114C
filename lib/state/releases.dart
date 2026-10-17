@@ -209,6 +209,9 @@ Future<void> sendToTransmission(
 
   final api = ref.read(trackersProvider)[release.tracker];
   final transmission = ref.read(transmissionProvider);
+  // Lu avant les `await` : le bouton peut être démonté pendant l'envoi
+  // (navigation, liste reconstruite), et `ref` n'est alors plus utilisable.
+  final torrents = ref.read(torrentsProvider.notifier);
   if (api == null || transmission == null) {
     say('Configure ${release.tracker.label} et Transmission dans les réglages');
     return;
@@ -222,7 +225,7 @@ Future<void> sendToTransmission(
     say(added
         ? 'Ajouté à Transmission : ${release.name}'
         : 'Déjà présent dans Transmission');
-    await ref.read(torrentsProvider.notifier).refresh(full: true);
+    await torrents.refresh(full: true);
   } on TrackerException catch (e) {
     say(e.message);
   } on TransmissionException catch (e) {

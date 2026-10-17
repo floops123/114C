@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/settings.dart';
+import 'astra.dart';
 import 'c411.dart';
 import 'torznab.dart';
 
@@ -12,12 +13,20 @@ import 'torznab.dart';
 enum Tracker {
   c411('C411', 'https://c411.org', announceHint: 'c411'),
   tr4ker('tr4ker', 'https://tr4ker.net/api/',
-      apiKeyHeader: 'X-Api-Key', announceHint: 'tr4ker');
+      apiKeyHeader: 'X-Api-Key', announceHint: 'tr4ker'),
+  nostradamus('Nostradamus', 'https://nostradamus.foo/api',
+      announceHint: 'nostradamus'),
+
+  astra('AstraTorrent', 'https://astratorrent.la',
+      announceHint: 'astratorrent', keyLabel: 'Passkey');
 
   const Tracker(this.label, this.baseUrl,
-      {this.apiKeyHeader, required this.announceHint});
+      {this.apiKeyHeader, required this.announceHint, this.keyLabel = 'Clé API'});
   final String label;
   final String baseUrl;
+
+  /// Nom de l'identifiant dans les réglages.
+  final String keyLabel;
 
   /// Fragment de nom d'hôte des URL d'annonce : sert à reconnaître le tracker
   /// d'origine d'un torrent de Transmission (cross-seed).
@@ -40,7 +49,8 @@ enum Tracker {
 
   TrackerApi client(String apiKey) => switch (this) {
         c411 => C411Api(apiKey),
-        tr4ker => TorznabApi(this, apiKey),
+        tr4ker || nostradamus => TorznabApi(this, apiKey),
+        astra => AstraApi(apiKey),
       };
 }
 
@@ -222,11 +232,27 @@ Future<Response<T>> trackerGet<T>(
   String path, {
   Map<String, dynamic>? query,
   ResponseType? type,
-}) async {
+}) =>
+    _trackerSend(tracker,
+        () => dio.get<T>(path,
+            queryParameters: query, options: Options(responseType: type)));
+
+/// POST d'un corps JSON, mêmes erreurs que [trackerGet].
+Future<Response<T>> trackerPost<T>(
+  Dio dio,
+  Tracker tracker,
+  String path, {
+  Map<String, dynamic>? query,
+  Object? data,
+}) =>
+    _trackerSend(
+        tracker, () => dio.post<T>(path, queryParameters: query, data: data));
+
+Future<Response<T>> _trackerSend<T>(
+    Tracker tracker, Future<Response<T>> Function() send) async {
   final Response<T> res;
   try {
-    res = await dio.get<T>(path,
-        queryParameters: query, options: Options(responseType: type));
+    res = await send();
   } on DioException catch (e) {
     throw TrackerException(
         '${tracker.label} injoignable : ${e.message ?? e.type.name}');

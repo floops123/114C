@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/settings.dart';
 import '../state/speed_history.dart';
 import '../state/notifications.dart';
+import '../state/revive.dart';
 import 'downloads_page.dart';
 import 'notifications_page.dart';
 import 'releases_page.dart';
@@ -77,6 +78,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // L'historique des vitesses s'enregistre dès l'ouverture de l'application,
     // sans reconstruire cet écran à chaque mesure.
     ref.listen(speedHistoryProvider, (_, _) {});
+    // Passage en cross-seed C411 des téléchargements tr4ker terminés.
+    ref.listen(reviveProvider, (_, _) {});
 
     final c = context.colors;
     final body = IndexedStack(index: _index, children: _pages);
