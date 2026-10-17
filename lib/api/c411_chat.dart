@@ -39,6 +39,41 @@ final _imagePath = RegExp(
     r'(?:https://c411\.org)?(/uploads/chat/\S+?\.(?:webp|png|jpe?g|gif))',
     caseSensitive: false);
 
+/// Réaction à un message : emoji Unicode ou émoticône du site (`:jul:`).
+class ChatReaction {
+  const ChatReaction(this.emoji, this.count,
+      {this.userIds = const [], this.usernames = const [], this.hasReacted = false});
+
+  factory ChatReaction.fromJson(Map json) => ChatReaction(
+        json['emoji'] as String,
+        (json['count'] as num?)?.toInt() ?? 1,
+        userIds: [
+          for (final id in json['userIds'] as List? ?? const [])
+            if (id is num) id.toInt(),
+        ],
+        usernames: (json['usernames'] as List? ?? const []).whereType<String>().toList(),
+        hasReacted: json['hasReacted'] == true,
+      );
+
+  static List<ChatReaction> listFromJson(Object? json) => [
+        for (final r in (json as List? ?? const []).whereType<Map>())
+          if (r['emoji'] is String) ChatReaction.fromJson(r),
+      ];
+
+  final String emoji;
+  final int count;
+  final List<int> userIds;
+  final List<String> usernames;
+
+  /// Fourni par l'historique ; en direct, on compare [userIds] à notre id.
+  final bool hasReacted;
+
+  bool isMine(int? myId) => hasReacted || (myId != null && userIds.contains(myId));
+}
+
+/// État d'un message que l'on a soi-même envoyé.
+enum SendState { sent, pending, failed }
+
 /// Message de salon, reçu en direct (`channel:message`) ou par l'historique
 /// (`/api/messages/channels/{id}`), deux formats légèrement différents.
 class ChatMessage {
@@ -48,6 +83,8 @@ class ChatMessage {
     required this.username,
     required this.content,
     required this.createdAt,
+    this.senderId,
+    this.role,
     this.avatarUrl,
     this.badge,
     this.badgeColor,
@@ -57,6 +94,9 @@ class ChatMessage {
     this.replyTo,
     this.reactions = const [],
     this.images = const [],
+    this.tempId,
+    this.sendState = SendState.sent,
+    this.sendError,
   });
 
   factory ChatMessage.fromJson(Map json, {int? channelId}) {
@@ -83,6 +123,8 @@ class ChatMessage {
       id: (json['id'] as num?)?.toInt() ?? 0,
       channelId: (json['channelId'] as num?)?.toInt() ?? channelId ?? 0,
       username: sender['username'] as String? ?? '?',
+      senderId: (sender['id'] as num?)?.toInt(),
+      role: sender['role'] as String?,
       content: content,
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
@@ -95,18 +137,52 @@ class ChatMessage {
       isEdited: json['isEdited'] == true,
       isDeleted: json['isDeleted'] == true,
       replyTo: replyText,
-      reactions: [
-        for (final r in (json['reactions'] as List? ?? const []).whereType<Map>())
-          if (r['emoji'] is String)
-            (r['emoji'] as String, (r['count'] as num?)?.toInt() ?? 1),
-      ],
+      reactions: ChatReaction.listFromJson(json['reactions']),
       images: images,
+      tempId: json['tempId'] as String?,
     );
   }
+
+  /// Clé unique : l'id du serveur, ou le tempId tant qu'il n'est pas attribué.
+  Object get key => id != 0 ? id : (tempId ?? identityHashCode(this));
+
+  ChatMessage copyWith({
+    int? id,
+    String? username,
+    String? avatarUrl,
+    SendState? sendState,
+    String? sendError,
+    List<ChatReaction>? reactions,
+  }) =>
+      ChatMessage(
+        id: id ?? this.id,
+        channelId: channelId,
+        username: username ?? this.username,
+        senderId: senderId,
+        role: role,
+        content: content,
+        createdAt: createdAt,
+        avatarUrl: avatarUrl ?? this.avatarUrl,
+        badge: badge,
+        badgeColor: badgeColor,
+        isSystem: isSystem,
+        isEdited: isEdited,
+        isDeleted: isDeleted,
+        replyTo: replyTo,
+        reactions: reactions ?? this.reactions,
+        images: images,
+        tempId: tempId,
+        sendState: sendState ?? this.sendState,
+        sendError: sendError,
+      );
 
   final int id;
   final int channelId;
   final String username;
+  final int? senderId;
+
+  /// `user`, `moderator`, `admin`… (absent des messages envoyés d'avance).
+  final String? role;
   final String content;
   final DateTime createdAt;
   final String? avatarUrl;
@@ -116,10 +192,16 @@ class ChatMessage {
   final bool isEdited;
   final bool isDeleted;
   final String? replyTo;
-  final List<(String emoji, int count)> reactions;
+  final List<ChatReaction> reactions;
 
   /// URL absolues des images jointes (retirées du texte).
   final List<String> images;
+
+  /// Identifiant temporaire choisi par l'expéditeur (`temp-<ms>-<aléa>`),
+  /// renvoyé par le serveur pour réconcilier le message affiché d'avance.
+  final String? tempId;
+  final SendState sendState;
+  final String? sendError;
 }
 
 /// Salon de discussion (`/api/messages/channels`).
@@ -132,6 +214,7 @@ class ChatChannel {
     this.isDefault = false,
     this.isArchived = false,
     this.canWrite = false,
+    this.slowModeSeconds = 0,
   });
 
   factory ChatChannel.fromJson(Map json) => ChatChannel(
@@ -144,6 +227,7 @@ class ChatChannel {
         isDefault: json['isDefault'] == true,
         isArchived: json['isArchived'] == true,
         canWrite: json['canWrite'] == true,
+        slowModeSeconds: (json['slowModeSeconds'] as num?)?.toInt() ?? 0,
       );
 
   final int id;
@@ -153,6 +237,9 @@ class ChatChannel {
   final bool isDefault;
   final bool isArchived;
   final bool canWrite;
+
+  /// Délai minimal entre deux messages (0 = libre).
+  final int slowModeSeconds;
 }
 
 /// Message épinglé d'un salon.

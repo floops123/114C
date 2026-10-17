@@ -18,6 +18,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         UiPrefsNotifier._transferSortKey,
         UiPrefsNotifier._transferAscKey,
         'tracker', // SelectedTrackerNotifier
+        'notifications', // PrefsNotificationStore
       }),
     );
 

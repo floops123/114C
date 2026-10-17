@@ -68,7 +68,7 @@ void main() {
     final m = [for (final j in _history) ChatMessage.fromJson(j, channelId: 1)];
     expect(m[0].channelId, 1);
     expect(m[0].replyTo, 'MembreX : C\'est compliqué');
-    expect(m[0].reactions, [('👍', 2)]);
+    expect(m[0].reactions.map((r) => (r.emoji, r.count)), [('👍', 2)]);
     expect(m[1].content, 'Qui peut m\'interpreter ca ?');
     expect(m[1].images, ['https://c411.org/uploads/chat/2026-10/abc.webp']);
     expect(m[1].isEdited, isTrue);
@@ -107,6 +107,40 @@ void main() {
     expect(s.pinned[1]?.username, 'Modo');
   });
 
+  test('réactions en direct, les nôtres reconnues, pseudo appris', () async {
+    final container = ProviderContainer(overrides: [
+      notificationsProvider.overrideWith(_Connected.new),
+      chatApiProvider.overrideWithValue(_FakeChat()),
+    ]);
+    addTearDown(container.dispose);
+    final n = container.read(notificationsProvider.notifier);
+    await n.loadHistory(1);
+    // Trames réelles anonymisées : notre id arrive par stats:update.
+    n.handle(SocketEvent('stats:update', [
+      {'user_id': 7, 'uploaded': 1, 'downloaded': 1, 'upload_credit': 0},
+    ], DateTime.now()));
+    n.handle(SocketEvent('channel:reaction', [
+      {
+        'messageId': 1,
+        'contextId': 1,
+        'reactions': [
+          {'emoji': ':jul:', 'count': 2, 'userIds': [5, 7], 'usernames': ['MembreX', 'MonPseudo']},
+          {'emoji': '👍', 'count': 1, 'userIds': [9], 'usernames': ['MembreZ']},
+        ],
+      },
+    ], DateTime.now()));
+
+    final s = container.read(notificationsProvider);
+    final reactions = s.chat.firstWhere((m) => m.id == 1).reactions;
+    expect(reactions.map((r) => (r.emoji, r.count, r.isMine(s.myUserId))),
+        [(':jul:', 2, true), ('👍', 1, false)]);
+    expect(s.items, isEmpty, reason: 'une réaction n’est pas une notification');
+
+    // Le pseudo appris sert aux messages affichés d'avance.
+    await n.sendMessage('test');
+    expect(container.read(notificationsProvider).chat.last.username, 'MonPseudo');
+  });
+
   testWidgets('salon : vrais noms, description, épinglé, réactions', (tester) async {
     tester.view.physicalSize = const Size(900, 1400);
     tester.view.devicePixelRatio = 1;
@@ -137,5 +171,11 @@ void main() {
     expect(find.textContaining('Le guide'), findsOneWidget);
     expect(find.text('👍 2'), findsOneWidget);
     expect(find.text('Message supprimé'), findsNothing);
+
+    // Saisie possible dans Général, lecture seule dans Annonces.
+    expect(find.text('Message à Général'), findsOneWidget);
+    await tester.tap(find.text('Annonces'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lecture seule dans ce salon'), findsOneWidget);
   });
 }

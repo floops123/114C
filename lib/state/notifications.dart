@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/c411_chat.dart';
 import '../api/c411_socket.dart';
+import '../core/preferences.dart';
 import '../core/settings.dart';
 
 // Événements observés sur le WebSocket de C411 :
@@ -32,6 +36,23 @@ class AppNotification {
   final String? body;
   final DateTime receivedAt;
   final Object? raw;
+
+  Map<String, Object?> toJson() => {
+        'event': event,
+        'title': title,
+        'body': body,
+        'at': receivedAt.toIso8601String(),
+        'raw': raw,
+      };
+
+  factory AppNotification.fromJson(Map json) => AppNotification(
+        event: json['event'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        body: json['body'] as String?,
+        receivedAt:
+            DateTime.tryParse(json['at'] as String? ?? '') ?? DateTime.now(),
+        raw: json['raw'],
+      );
 
   /// Contenu brut lisible (affiché en détail).
   String get rawText {
@@ -74,6 +95,67 @@ class AppNotification {
     );
   }
 }
+
+/// Historique local des notifications (conservé entre deux lancements).
+abstract class NotificationStore {
+  (List<AppNotification>, int unread) load();
+  void save(List<AppNotification> items, int unread);
+}
+
+class PrefsNotificationStore implements NotificationStore {
+  PrefsNotificationStore(this._prefs);
+  final SharedPreferencesWithCache _prefs;
+  static const key = 'notifications';
+
+  @override
+  (List<AppNotification>, int) load() {
+    try {
+      final raw = _prefs.getString(key);
+      if (raw == null) return (const [], 0);
+      final json = jsonDecode(raw) as Map;
+      return (
+        [
+          for (final n in (json['items'] as List? ?? const []).whereType<Map>())
+            AppNotification.fromJson(n),
+        ],
+        (json['unread'] as num?)?.toInt() ?? 0,
+      );
+    } on Object {
+      return (const [], 0); // Données illisibles : on repart de zéro.
+    }
+  }
+
+  @override
+  void save(List<AppNotification> items, int unread) => _prefs.setString(
+      key,
+      jsonEncode({
+        'unread': unread,
+        'items': [for (final n in items) n.toJson()],
+      }));
+}
+
+class MemoryNotificationStore implements NotificationStore {
+  List<AppNotification> _items = const [];
+  int _unread = 0;
+
+  @override
+  (List<AppNotification>, int) load() => (_items, _unread);
+
+  @override
+  void save(List<AppNotification> items, int unread) {
+    _items = items;
+    _unread = unread;
+  }
+}
+
+final notificationStoreProvider = Provider<NotificationStore>((ref) {
+  try {
+    return PrefsNotificationStore(ref.watch(sharedPrefsProvider));
+  } on Object {
+    // Préférences non initialisées (tests) : historique en mémoire.
+    return MemoryNotificationStore();
+  }
+});
 
 /// Compteurs de non-lus (`unread:update`).
 class UnreadCounters {
@@ -128,6 +210,8 @@ class NotificationsState {
     this.pinned = const {},
     this.historyLoading = false,
     this.chatError,
+    this.myUserId,
+    this.myUsername,
   });
 
   final SocketStatus status;
@@ -159,6 +243,12 @@ class NotificationsState {
   final bool historyLoading;
   final String? chatError;
 
+  /// Notre identifiant de membre (`user_id` de `stats:update`).
+  final int? myUserId;
+
+  /// Notre pseudo, appris d'un de nos messages ou d'une de nos réactions.
+  final String? myUsername;
+
   NotificationsState copyWith({
     SocketStatus? status,
     List<AppNotification>? items,
@@ -175,6 +265,8 @@ class NotificationsState {
     Map<int, PinnedMessage>? pinned,
     bool? historyLoading,
     String? Function()? chatError,
+    int? myUserId,
+    String? myUsername,
   }) =>
       NotificationsState(
         status: status ?? this.status,
@@ -193,12 +285,14 @@ class NotificationsState {
         pinned: pinned ?? this.pinned,
         historyLoading: historyLoading ?? this.historyLoading,
         chatError: chatError != null ? chatError() : this.chatError,
+        myUserId: myUserId ?? this.myUserId,
+        myUsername: myUsername ?? this.myUsername,
       );
 }
 
 /// Se connecte au WebSocket dès qu'un cookie de session est enregistré.
 class NotificationsNotifier extends Notifier<NotificationsState> {
-  static const maxItems = 200;
+  static const maxItems = 500;
   static const maxChat = 600;
   static const historySize = 50;
   static const typingTimeout = Duration(seconds: 8);
@@ -208,14 +302,25 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
 
   C411Socket? _socket;
 
+  /// Pseudo et avatar de l'utilisateur, appris quand le serveur diffuse un de
+  /// ses messages (pour l'affichage immédiat des suivants).
+  String? _me;
+  String? _myAvatar;
+
   @override
   NotificationsState build() {
     final cookie = ref.watch(
         settingsProvider.select((s) => s.value?.sessionCookie ?? ''));
-    if (cookie.isEmpty) return const NotificationsState();
+    // Les notifications reçues précédemment restent consultables, même sans
+    // connexion.
+    final (stored, storedUnread) = ref.read(notificationStoreProvider).load();
+    if (cookie.isEmpty) {
+      return NotificationsState(items: stored, unread: storedUnread);
+    }
 
     final socket = C411Socket(
       cookie,
+      url: ref.read(socketUrlProvider),
       onStatus: (s) {
         if (!ref.mounted) return;
         state = state.copyWith(
@@ -238,9 +343,16 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
     ref.onDispose(socket.close);
     Future.microtask(socket.connect);
     Future.microtask(loadChannels);
-    return const NotificationsState(
-        configured: true, status: SocketStatus.connecting);
+    return NotificationsState(
+      configured: true,
+      status: SocketStatus.connecting,
+      items: stored,
+      unread: storedUnread,
+    );
   }
+
+  void _persist() =>
+      ref.read(notificationStoreProvider).save(state.items, state.unread);
 
   /// Aiguillage des événements (public pour les tests).
   void handle(SocketEvent e) {
@@ -251,9 +363,23 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
         if (!state.channels.contains(m.channelId)) {
           state = state.copyWith(channels: {...state.channels, m.channelId});
         }
-        // Le serveur peut envoyer deux fois le même message.
-        if (state.chat.any((x) => x.id == m.id && m.id != 0)) return;
         final typing = {...state.typing}..remove(m.username);
+        if (m.senderId != null && m.senderId == state.myUserId) {
+          _learnMe(m.username, m.avatarUrl);
+        }
+        // Notre propre message (même tempId) ou un doublon (même id) : on
+        // remplace l'existant par la version du serveur.
+        final i = state.chat.indexWhere((x) =>
+            (m.tempId != null && x.tempId == m.tempId) ||
+            (m.id != 0 && x.id == m.id));
+        if (i >= 0) {
+          if (state.chat[i].tempId != null && state.chat[i].tempId == m.tempId) {
+            _learnMe(m.username, m.avatarUrl);
+          }
+          final chat = [...state.chat]..[i] = m;
+          state = state.copyWith(chat: chat, typing: typing);
+          return;
+        }
         state = state.copyWith(chat: _cap([...state.chat, m]), typing: typing);
       case 'channel:typing' when data is Map:
         final name = data['username'] as String?;
@@ -273,8 +399,11 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
       case 'stats:update' when data is Map:
         int n(String k) => (data[k] as num?)?.toInt() ?? 0;
         state = state.copyWith(
-            account: AccountStats(
-                n('uploaded'), n('downloaded'), n('upload_credit')));
+          account: AccountStats(n('uploaded'), n('downloaded'), n('upload_credit')),
+          myUserId: (data['user_id'] as num?)?.toInt(),
+        );
+      case 'channel:reaction' when data is Map:
+        _onReaction(data);
       case 'unread:update' when data is Map:
         _onUnread(UnreadCounters.fromJson(data), e);
       // Autres événements de salon (join/leave…) : pas des notifications.
@@ -286,6 +415,31 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
       default:
         _notify(AppNotification.fromEvent(e));
     }
+  }
+
+  void _learnMe(String username, String? avatar) {
+    _me = username;
+    _myAvatar = avatar ?? _myAvatar;
+    if (state.myUsername != username) {
+      state = state.copyWith(myUsername: username);
+    }
+  }
+
+  /// Liste complète des réactions d'un message (remplace la précédente).
+  void _onReaction(Map data) {
+    final id = (data['messageId'] as num?)?.toInt();
+    final reactions = ChatReaction.listFromJson(data['reactions']);
+    final me = state.myUserId;
+    if (me != null && _me == null) {
+      for (final r in reactions) {
+        final i = r.userIds.indexOf(me);
+        if (i >= 0 && i < r.usernames.length) _learnMe(r.usernames[i], null);
+      }
+    }
+    final i = state.chat.indexWhere((m) => m.id == id);
+    if (id == null || i < 0) return;
+    state = state.copyWith(
+        chat: [...state.chat]..[i] = state.chat[i].copyWith(reactions: reactions));
   }
 
   /// Une notification par compteur qui augmente ; au premier relevé, une
@@ -314,13 +468,19 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
       items: [n, ...state.items].take(maxItems).toList(),
       unread: state.unread + 1,
     );
+    _persist();
   }
 
   void markAllRead() {
-    if (state.unread != 0) state = state.copyWith(unread: 0);
+    if (state.unread == 0) return;
+    state = state.copyWith(unread: 0);
+    _persist();
   }
 
-  void clear() => state = state.copyWith(items: const [], unread: 0);
+  void clear() {
+    state = state.copyWith(items: const [], unread: 0);
+    _persist();
+  }
 
   /// Quitte le salon actuel et rejoint [id].
   void joinChannel(int id) {
@@ -330,6 +490,79 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
     state = state.copyWith(
         channelId: id, channels: {...state.channels, id}, typing: const {});
     loadHistory(id);
+  }
+
+  /// Envoie un message dans le salon actif (`channel:send` avec accusé de
+  /// réception). Le message s'affiche aussitôt, en attente de confirmation.
+  Future<void> sendMessage(String text) async {
+    final content = text.trim();
+    if (content.isEmpty) return;
+    final rnd = math.Random();
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}-'
+        '${List.generate(9, (_) => chars[rnd.nextInt(chars.length)]).join()}';
+    final pending = ChatMessage(
+      id: 0,
+      channelId: state.channelId,
+      username: _me ?? 'Moi',
+      avatarUrl: _myAvatar,
+      content: content,
+      createdAt: DateTime.now(),
+      tempId: tempId,
+      sendState: SendState.pending,
+    );
+    state = state.copyWith(chat: _cap([...state.chat, pending]));
+    await _deliver(pending);
+  }
+
+  /// Renvoie un message dont l'envoi a échoué.
+  Future<void> retry(ChatMessage failed) async {
+    _update(failed.tempId,
+        (m) => m.copyWith(sendState: SendState.pending, sendError: null));
+    await _deliver(failed);
+  }
+
+  Future<void> _deliver(ChatMessage m) async {
+    final socket = _socket;
+    try {
+      if (socket == null) throw const SocketException('Non connecté');
+      final ack = await socket.emitWithAck('channel:send', {
+        'channelId': m.channelId,
+        'content': m.content,
+        'tempId': m.tempId,
+      });
+      if (!ref.mounted) return;
+      if (ack is Map && ack['success'] == true) {
+        _update(
+            m.tempId,
+            (x) => x.copyWith(
+                id: (ack['messageId'] as num?)?.toInt(),
+                sendState: SendState.sent));
+      } else {
+        final reason = ack is Map
+            ? (ack['error'] ?? ack['message'] ?? ack['status'] ?? 'refusé')
+            : 'refusé';
+        _update(m.tempId,
+            (x) => x.copyWith(sendState: SendState.failed, sendError: '$reason'));
+      }
+    } on SocketException catch (e) {
+      if (ref.mounted) {
+        _update(m.tempId,
+            (x) => x.copyWith(sendState: SendState.failed, sendError: e.message));
+      }
+    }
+  }
+
+  /// Met à jour le message d'après son tempId (s'il est encore affiché).
+  void _update(String? tempId, ChatMessage Function(ChatMessage) change) {
+    final i = state.chat.indexWhere((x) => x.tempId != null && x.tempId == tempId);
+    if (i < 0) return;
+    // Déjà remplacé par la diffusion du serveur : rien à faire.
+    if (state.chat[i].sendState == SendState.sent &&
+        state.chat[i].id != 0) {
+      return;
+    }
+    state = state.copyWith(chat: [...state.chat]..[i] = change(state.chat[i]));
   }
 
   static List<ChatMessage> _cap(List<ChatMessage> chat) =>
@@ -358,12 +591,15 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
     try {
       final history = await api.history(channelId, limit: historySize);
       if (!ref.mounted) return;
-      final byId = {
-        for (final m in state.chat) m.id: m,
+      final byKey = {
+        for (final m in state.chat) m.key: m,
         // L'historique fait foi (réactions, modifications).
-        for (final m in history.messages) m.id: m,
+        for (final m in history.messages) m.key: m,
       };
-      final merged = byId.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+      // Messages en cours d'envoi (sans id) à la fin.
+      int order(ChatMessage m) => m.id != 0 ? m.id : 1 << 62;
+      final merged = byKey.values.toList()
+        ..sort((a, b) => order(a).compareTo(order(b)));
       state = state.copyWith(
         chat: _cap(merged),
         pinned: {
@@ -384,6 +620,9 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
   /// Nouvelle tentative après une session refusée ou une coupure.
   void reconnect() => ref.invalidateSelf();
 }
+
+/// Adresse du WebSocket (remplaçable dans les tests).
+final socketUrlProvider = Provider<Uri>((ref) => C411Socket.defaultUrl);
 
 /// API de discussion (null sans cookie de session).
 final chatApiProvider = Provider<C411ChatApi?>((ref) {

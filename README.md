@@ -66,10 +66,21 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
   - Notifications : une alerte quand un compteur de non-lus du site augmente
     (message privé, salon, demande, staff), compteurs actuels, encadré
     « Mon compte » mis à jour en direct (envoyé, reçu, crédit, ratio) ;
+    historique local des 500 dernières (conservé entre deux lancements,
+    consultable hors ligne), groupé par jour, « Afficher plus anciennes » ;
   - Salon : choix parmi les salons du site (Général par défaut), description
     et message épinglé, 50 derniers messages chargés puis suite en direct
-    (pseudo, avatar, badge, réponse citée, réactions, « modifié », images
-    jointes), personnes en ligne, « … écrit ». Lecture seule.
+    (pseudo, avatar, badge, réponse citée, réactions mises à jour en direct
+    — les nôtres mises en évidence, membres au survol —, « modifié », images
+    jointes), personnes en ligne, « … écrit ». Mise en forme : séparateurs de
+    jour, messages consécutifs d'un même auteur regroupés, **gras**,
+    *italique*, ~~barré~~, `code`, liens cliquables, mentions `@pseudo`
+    (messages qui nous mentionnent surlignés), nos messages signalés par un
+    liseré, étiquettes Modo / Admin, texte sélectionnable.
+  - Envoi de messages (Entrée envoie, Maj+Entrée = nouvelle ligne) : affiché
+    aussitôt, confirmé par le serveur, « Réessayer » en cas de refus ; saisie
+    remplacée par « Lecture seule » dans les salons où l'on ne peut pas écrire
+    (Annonces), rappel du mode lent le cas échéant.
 
 **Réglages**
 - Adresse RPC, identifiants Transmission et clé API C411, stockés dans le
@@ -152,6 +163,7 @@ lib/
     ├── charts.dart            Graphiques (courbe des vitesses, barres, jauge)
     ├── stats_page.dart        Statistiques
     ├── notifications_page.dart  Notifications
+    ├── rich_text.dart         Mise en forme des messages (gras, liens, mentions…)
     ├── theme.dart             Palette (AppColors) et thème clair / sombre
     └── widgets.dart           Composants partagés (Tag, Poster, Section…)
 ```
@@ -231,7 +243,9 @@ sélecteur de l'onglet Sorties s'adaptent automatiquement.
   `channelMessages`, `pendingRequests`, `staffMessages`, `total`),
   `channel:message` (message de salon, parfois envoyé deux fois : dédoublonné
   par `id`), `channel:typing`, `channel:viewers`, `stats:update` (`uploaded`,
-  `downloaded`, `upload_credit` du compte). Les événements inconnus sont
+  `downloaded`, `upload_credit` et `user_id` du compte), `channel:reaction`
+  (`messageId`, liste complète des réactions avec `userIds` / `usernames`,
+  émoticônes du site sous forme `:nom:`). Les événements inconnus sont
   affichés tels quels comme notifications.
 - Salons : le client émet `42["channel:join",{"channelId":N}]` (et
   `channel:leave` pour l'ancien) ; le serveur ne diffuse les messages d'un
@@ -246,6 +260,11 @@ sélecteur de l'onglet Sorties s'adaptent automatiquement.
   au plus récent, salon avec `pinnedMessage`). L'historique est rechargé à
   chaque changement de salon et après chaque reconnexion, puis fusionné avec
   le direct par `id`. Avatars et images `/uploads/…` sont publics.
+- Envoi : événement avec accusé de réception
+  `42<n>["channel:send",{"channelId":1,"content":"…","tempId":"temp-<ms>-<9 car.>"}]`
+  → `43<n>[{"success":true,"messageId":…,"tempId":…,"status":"sent"}]`. Le
+  message est aussi diffusé en `channel:message` avec le même `tempId`, ce qui
+  permet de remplacer la version affichée d'avance.
 
 ### C411 : API HTTP
 

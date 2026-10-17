@@ -69,6 +69,8 @@ class C411Socket {
   Duration _pingInterval = const Duration(seconds: 25);
   int _attempt = 0;
   bool _closed = false;
+  int _nextAck = 0;
+  final _acks = <int, Completer<Object?>>{};
   SocketStatus _status = SocketStatus.disconnected;
 
   SocketStatus get status => _status;
@@ -152,6 +154,13 @@ class C411Socket {
           onEvent?.call(SocketEvent(
               '${payload.first}', payload.skip(1).toList(), DateTime.now()));
         }
+      case '3': // ACK : `3<id>[réponse]`
+        final start = p.indexOf('[');
+        final id = int.tryParse(p.substring(1, start < 0 ? p.length : start));
+        final payload = start < 0 ? null : _json(p.substring(start));
+        final completer = id == null ? null : _acks.remove(id);
+        completer?.complete(
+            payload is List && payload.isNotEmpty ? payload.first : null);
       case '1': // DISCONNECT du namespace
         _ws?.close();
     }
@@ -174,6 +183,7 @@ class C411Socket {
   void _onDone() {
     _watchdog?.cancel();
     _ws = null;
+    _failAcks('Connexion perdue');
     if (_status != SocketStatus.unauthorized) {
       _setStatus(SocketStatus.disconnected);
       _scheduleRetry();
@@ -196,7 +206,33 @@ class C411Socket {
     _ws?.add('42${jsonEncode([event, ?data])}');
   }
 
+  /// Émet un événement en demandant un accusé de réception
+  /// (`42<id>["événement", données]` → `43<id>[réponse]`) et renvoie la
+  /// réponse du serveur.
+  Future<Object?> emitWithAck(String event, Object? data,
+      {Duration timeout = const Duration(seconds: 15)}) {
+    if (_status != SocketStatus.connected || _ws == null) {
+      return Future.error(const SocketException('Non connecté'));
+    }
+    final id = _nextAck++;
+    final completer = Completer<Object?>();
+    _acks[id] = completer;
+    _ws!.add('42$id${jsonEncode([event, data])}');
+    return completer.future.timeout(timeout, onTimeout: () {
+      _acks.remove(id);
+      throw const SocketException('Pas de réponse du serveur');
+    });
+  }
+
+  void _failAcks(String reason) {
+    for (final c in _acks.values) {
+      if (!c.isCompleted) c.completeError(SocketException(reason));
+    }
+    _acks.clear();
+  }
+
   Future<void> close() async {
+    _failAcks('Connexion fermée');
     _closed = true;
     _retry?.cancel();
     _watchdog?.cancel();
