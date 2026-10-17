@@ -21,6 +21,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'notifications', // PrefsNotificationStore
         'crossSeed', // PrefsCrossSeedCache
         'crossSeedDirections', // CrossSeedDirectionsNotifier
+        'wishlist', // PrefsWishlistStore
         'revive', // PrefsReviveStore
       }),
     );

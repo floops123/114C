@@ -4,22 +4,27 @@ import 'package:url_launcher/url_launcher.dart';
 import 'theme.dart';
 
 /// Mise en forme légère des messages du salon : **gras**, *italique*,
-/// ~~barré~~, `code`, liens cliquables et mentions @pseudo.
+/// ~~barré~~, `code`, liens cliquables et mentions (@pseudo, ou {{pseudo}}
+/// tel que le site les enregistre).
 final _token = RegExp(
   r'(?<url>https?://[^\s<>"]+[^\s<>".,;:!?)\]])'
   r'|\*\*(?<bold>.+?)\*\*'
   r'|~~(?<strike>.+?)~~'
   r'|`(?<code>[^`\n]+)`'
   r'|(?<![\w*])\*(?<italic>[^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])'
-  r'|(?<![\w@])@(?<mention>[\w.\-]{2,32})',
+  r'|(?<![\w@])@(?<mention>[\w.\-]{2,32})'
+  r'|\{\{(?<tag>[^{}\s]{1,32})\}\}',
 );
+
+String? _mention(RegExpMatch m) =>
+    m.namedGroup('mention') ?? m.namedGroup('tag');
 
 /// Le message mentionne-t-il [me] (insensible à la casse) ?
 bool mentions(String text, String? me) {
   if (me == null || me.isEmpty) return false;
   final lower = me.toLowerCase();
   return _token.allMatches(text).any(
-      (m) => m.namedGroup('mention')?.toLowerCase() == lower);
+      (m) => _mention(m)?.toLowerCase() == lower);
 }
 
 List<InlineSpan> chatSpans(String text,
@@ -31,7 +36,7 @@ List<InlineSpan> chatSpans(String text,
     last = m.end;
 
     final url = m.namedGroup('url');
-    final mention = m.namedGroup('mention');
+    final mention = _mention(m);
     if (url != null) {
       spans.add(WidgetSpan(
         alignment: PlaceholderAlignment.baseline,

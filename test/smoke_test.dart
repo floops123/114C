@@ -10,6 +10,7 @@ import 'package:c411_remote/state/releases.dart';
 import 'package:c411_remote/state/torrents.dart';
 import 'package:c411_remote/ui/home_shell.dart';
 import 'package:c411_remote/ui/theme.dart';
+import 'package:c411_remote/ui/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -136,6 +137,7 @@ void main() {
             container: c,
             child: MaterialApp(
               theme: buildTheme(Brightness.dark),
+              scrollBehavior: const AppScrollBehavior(),
               home: const HomeShell(),
             ),
           ),
@@ -144,7 +146,7 @@ void main() {
         final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
         await mouse.addPointer(location: Offset.zero);
         for (var round = 0; round < 3; round++) {
-          for (var tab = 0; tab < 4; tab++) {
+          for (var tab = 0; tab < 5; tab++) {
             final nav = find.byType(
               width < 720 ? NavigationBar : NavigationRail,
             );

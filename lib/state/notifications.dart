@@ -41,10 +41,10 @@ class AppNotification {
   factory AppNotification.fromSite(Map json) => AppNotification(
         id: (json['id'] as num?)?.toInt(),
         type: json['type'] as String? ?? '',
-        title: unescapeHtml(json['title'] as String? ?? ''),
+        title: plainMentions(unescapeHtml(json['title'] as String? ?? '')),
         body: json['message'] == null
             ? null
-            : unescapeHtml(json['message'] as String),
+            : plainMentions(unescapeHtml(json['message'] as String)),
         link: json['link'] as String?,
         isRead: json['isRead'] == true,
         receivedAt:

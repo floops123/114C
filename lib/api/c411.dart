@@ -45,7 +45,11 @@ class C411Api implements TrackerApi {
           'sortBy': sort.apiField,
           'sortOrder': ascending ? 'asc' : 'desc',
         });
-    final body = res.data!;
+    return parsePage(res.data!, page);
+  }
+
+  /// Réponse de `/api/torrents`.
+  static ReleasePage parsePage(Map<String, dynamic> body, [int page = 1]) {
     final meta = body['meta'] as Map<String, dynamic>? ?? const {};
     return ReleasePage(
       (body['data'] as List).cast<Map<String, dynamic>>().map(_release).toList(),
@@ -78,7 +82,7 @@ class C411Api implements TrackerApi {
     return checkTorrent(tracker, res.data);
   }
 
-  Release _release(Map<String, dynamic> json) {
+  static Release _release(Map<String, dynamic> json) {
     final media = json['media'] as Map<String, dynamic>? ?? const {};
     final tech = json['tech'] as Map<String, dynamic>? ?? const {};
     List<String> strings(Object? v) =>
@@ -86,7 +90,7 @@ class C411Api implements TrackerApi {
     int? integer(Object? v) => (v as num?)?.toInt();
 
     return Release(
-      tracker: tracker,
+      tracker: Tracker.c411,
       id: '${json['id']}',
       infoHash: (json['infoHash'] as String?)?.toLowerCase(),
       name: json['name'] as String? ?? '',
@@ -118,6 +122,7 @@ class C411Api implements TrackerApi {
       audioCodec: tech['audioCodec'] as String?,
       audioChannels: tech['audioChannels'] as String?,
       languages: strings(tech['languages']),
+      mediaKind: media['kind'] as String?,
     );
   }
 }

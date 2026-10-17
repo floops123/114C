@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/astra.dart';
 import '../api/c411_socket.dart';
+import '../api/tmdb.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/settings.dart';
@@ -32,10 +33,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _trackerStatus = <Tracker, String>{};
   final _cookie = TextEditingController();
   String? _cookieStatus;
+  final _tmdb = TextEditingController();
+  String? _tmdbStatus;
 
   @override
   void dispose() {
-    for (final c in [_url, _user, _password, _cookie, ..._apiKeys.values]) {
+    for (final c in [_url, _user, _password, _cookie, _tmdb, ..._apiKeys.values]) {
       c.dispose();
     }
     super.dispose();
@@ -50,7 +53,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         if (value.text.trim().isNotEmpty) key.name: value.text.trim(),
     },
     sessionCookie: normalizeCookie(_cookie.text),
+    tmdbKey: _tmdb.text.trim(),
   );
+
+  Future<void> _testTmdb() async {
+    final key = _tmdb.text.trim();
+    if (key.isEmpty) {
+      _setStatus(() => _tmdbStatus = '✗ Clé manquante');
+      return;
+    }
+    _setStatus(() => _tmdbStatus = 'Connexion…');
+    try {
+      await TmdbApi(key).check();
+      _setStatus(() => _tmdbStatus = '✓ Clé acceptée');
+    } on TmdbException catch (e) {
+      _setStatus(() => _tmdbStatus = '✗ ${e.message}');
+    }
+  }
 
   /// Teste le cookie sur le WebSocket : connexion acceptée ou refusée.
   Future<void> _testCookie() async {
@@ -202,6 +221,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         value.text = saved.apiKeys[key.name] ?? '';
       }
       _cookie.text = saved.sessionCookie;
+      _tmdb.text = saved.tmdbKey;
     }
     final c = context.colors;
     final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
@@ -415,7 +435,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             ),
                             const SizedBox(height: 12),
                           ],
-                          const SizedBox(height: 4),
+                          Section(
+                            title: 'TMDB (liste de souhaits)',
+                            children: [
+                              TextField(
+                                controller: _tmdb,
+                                obscureText: !_showSecrets,
+                                decoration: const InputDecoration(
+                                  labelText: 'Clé d’API ou jeton de lecture',
+                                  helperMaxLines: 3,
+                                  helperText:
+                                      'Compte gratuit sur themoviedb.org → '
+                                      'Paramètres → API. Laisser vide pour '
+                                      'désactiver la recherche.',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _testTmdb,
+                                    child: const Text('Tester'),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  status(_tmdbStatus),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
                           SwitchListTile(
                             title: const Text('Afficher les secrets'),
                             value: _showSecrets,

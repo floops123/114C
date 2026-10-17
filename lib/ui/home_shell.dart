@@ -10,6 +10,7 @@ import 'notifications_page.dart';
 import 'releases_page.dart';
 import 'settings_page.dart';
 import 'theme.dart';
+import 'wishlist_page.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
@@ -21,17 +22,19 @@ class HomeShell extends ConsumerStatefulWidget {
 class _HomeShellState extends ConsumerState<HomeShell> {
   static const _destinations = [
     (Icons.local_movies_outlined, Icons.local_movies, 'Sorties'),
+    (Icons.bookmarks_outlined, Icons.bookmarks, 'Souhaits'),
     (Icons.downloading_outlined, Icons.downloading, 'Transferts'),
     (Icons.notifications_outlined, Icons.notifications, 'Notifications'),
     (Icons.tune_outlined, Icons.tune, 'Réglages'),
   ];
   static const _pages = [
     ReleasesPage(),
+    WishlistPage(),
     DownloadsPage(),
     NotificationsPage(),
     SettingsPage(),
   ];
-  static const _notificationsTab = 2, _settingsTab = 3;
+  static const _notificationsTab = 3, _settingsTab = 4;
 
   int _index = 0;
   bool _routed = false;
@@ -82,7 +85,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.listen(reviveProvider, (_, _) {});
 
     final c = context.colors;
-    final body = IndexedStack(index: _index, children: _pages);
+    // Onglets masqués : gardés en mémoire, mais leurs animations à l'arrêt.
+    final body = IndexedStack(index: _index, children: [
+      for (final (i, page) in _pages.indexed)
+        TickerMode(enabled: i == _index, child: page),
+    ]);
 
     return LayoutBuilder(builder: (context, constraints) {
       if (constraints.maxWidth >= 720) {

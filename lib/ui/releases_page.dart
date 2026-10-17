@@ -345,6 +345,13 @@ class ReleaseCard extends StatelessWidget {
   }
 }
 
+/// HDR d'une sortie (« DV · HDR10+ »), ou null en SDR / inconnu.
+String? hdrLabel(Release r) {
+  final f = r.hdrFormat?.trim();
+  if (f == null || f.isEmpty || f.toUpperCase() == 'SDR') return null;
+  return f.split('.').join(' · ');
+}
+
 /// Ligne compacte pour la vue liste.
 class ReleaseRow extends StatelessWidget {
   const ReleaseRow({super.key, required this.release});
@@ -414,8 +421,11 @@ class ReleaseRow extends StatelessWidget {
                         Tag(r.subcategory, color: c.accent),
                         if (r.resolution != null) Tag(r.resolution!),
                         if (r.source != null) Tag(r.source!),
+                        if (hdrLabel(r) case final hdr?) Tag(hdr, color: c.info),
                         if (r.languages.isNotEmpty)
                           Tag(r.languages.take(2).join('/')),
+                        if (r.audioCodec != null)
+                          Tag([r.audioCodec!, ?r.audioChannels].join(' ')),
                         if (r.isFreeleech) Tag('FREELEECH', color: c.success),
                         if (r.isExclusive) Tag('EXCLU', color: c.info),
                       ],

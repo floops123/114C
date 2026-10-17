@@ -107,6 +107,14 @@ void main() {
       expect(mentions('mail@MonPseudo.fr', 'monpseudo'), isFalse);
       expect(mentions('coucou @Autre', 'monpseudo'), isFalse);
       expect(mentions('coucou', null), isFalse);
+      // Format enregistré par le site : {{pseudo}}.
+      expect(plainMentions('{{Zed}} vous a mentionné, {{x y}}'), '@Zed vous a mentionné, {{x y}}');
+      expect(mentions('merci {{MonPseudo}} !', 'monpseudo'), isTrue);
+      expect(render(chatSpans('merci {{MonPseudo}} et {{Autre}}',
+              colors: AppColors.dark, me: 'monpseudo')),
+          'merci [@:@MonPseudo] et [@:@Autre]');
+      expect(render(chatSpans('{{pas une mention}}', colors: AppColors.dark)),
+          '{{pas une mention}}');
     });
   });
 

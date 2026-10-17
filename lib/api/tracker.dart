@@ -97,6 +97,7 @@ class Release {
     this.audioCodec,
     this.audioChannels,
     this.languages = const [],
+    this.mediaKind,
   });
 
   final Tracker tracker;
@@ -136,6 +137,11 @@ class Release {
   final String? audioCodec;
   final String? audioChannels;
   final List<String> languages;
+
+  /// Fiche rattachée par le tracker (C411) : `movie`, `tv`, `music`, `game`…
+  /// [title], [originalTitle] et [year] viennent alors de TMDB, ce qui
+  /// permet de reconnaître un film sans se fier au nom de la release.
+  final String? mediaKind;
 }
 
 class ReleasePage {

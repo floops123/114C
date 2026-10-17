@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'theme.dart';
@@ -316,6 +317,77 @@ class ErrorBanner extends StatelessWidget {
   }
 }
 
+/// Défilement de l'application : en plus du doigt, du stylet et du pavé
+/// tactile, on fait défiler les listes en cliquant et en faisant glisser la
+/// souris (version PC).
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices =>
+      {...super.dragDevices, PointerDeviceKind.mouse};
+}
+
+/// Zone où glisser à la souris sélectionne du texte au lieu de faire défiler
+/// (la molette fait toujours défiler).
+class MouseSelectsText extends StatelessWidget {
+  const MouseSelectsText({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final behavior = ScrollConfiguration.of(context);
+    return ScrollConfiguration(
+      behavior: behavior.copyWith(dragDevices: {
+        for (final d in behavior.dragDevices)
+          if (d != PointerDeviceKind.mouse) d,
+      }),
+      child: child,
+    );
+  }
+}
+
+/// Liste horizontale utilisable à la molette (version PC) : la molette
+/// verticale la fait défiler de côté, puis rend la main à la page une fois au
+/// bout.
+class HorizontalScroller extends StatefulWidget {
+  const HorizontalScroller({super.key, required this.builder});
+
+  /// Construit la liste horizontale avec le contrôleur à lui donner.
+  final Widget Function(ScrollController controller) builder;
+
+  @override
+  State<HorizontalScroller> createState() => _HorizontalScrollerState();
+}
+
+class _HorizontalScrollerState extends State<HorizontalScroller> {
+  final _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_controller.hasClients) return;
+    final delta = event.scrollDelta;
+    // Pavé tactile ou molette horizontale : la liste s'en charge déjà.
+    if (delta.dy == 0 || delta.dx != 0) return;
+    final p = _controller.position;
+    final atEnd = delta.dy > 0 ? p.pixels >= p.maxScrollExtent : p.pixels <= p.minScrollExtent;
+    if (atEnd) return; // La page défile.
+    GestureBinding.instance.pointerSignalResolver.register(
+        event, (_) => p.pointerScroll(delta.dy));
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+        onPointerSignal: _onSignal,
+        child: widget.builder(_controller),
+      );
+}
+
 /// Rangée horizontale de pastilles sélectionnables.
 class ChipRow<T> extends StatelessWidget {
   const ChipRow({
@@ -334,16 +406,19 @@ class ChipRow<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 34,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 6),
-        itemBuilder: (_, i) => Center(
-          child: ChoiceChip(
-            label: Text(label(items[i])),
-            selected: items[i] == selected,
-            onSelected: (_) => onSelected(items[i]),
+      child: HorizontalScroller(
+        builder: (controller) => ListView.separated(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: items.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 6),
+          itemBuilder: (_, i) => Center(
+            child: ChoiceChip(
+              label: Text(label(items[i])),
+              selected: items[i] == selected,
+              onSelected: (_) => onSelected(items[i]),
+            ),
           ),
         ),
       ),

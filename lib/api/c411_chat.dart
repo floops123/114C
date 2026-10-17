@@ -21,9 +21,15 @@ String unescapeHtml(String s) => s.replaceAllMapped(
       },
     );
 
+/// Mentions telles que le site les enregistre (`{{pseudo}}`) écrites
+/// `@pseudo`, pour les textes affichés sans mise en forme (notifications,
+/// aperçu d'une réponse).
+String plainMentions(String s) => s.replaceAllMapped(
+    RegExp(r'\{\{([^{}\s]{1,32})\}\}'), (m) => '@${m[1]}');
+
 /// Texte enrichi (message épinglé…) : HTML décodé puis balises et gras
 /// Markdown retirés, pour un affichage en texte simple.
-String cleanRichText(String s) => unescapeHtml(s)
+String cleanRichText(String s) => plainMentions(unescapeHtml(s))
     .replaceAll(RegExp(r'<[^>]+>'), '')
     .replaceAll('**', '')
     .trim();
@@ -118,7 +124,7 @@ class ChatMessage {
           '';
       replyText = reply['isDeleted'] == true
           ? '$who : message supprimé'
-          : unescapeHtml('$who : ${reply['content'] ?? ''}');
+          : plainMentions(unescapeHtml('$who : ${reply['content'] ?? ''}'));
     }
     return ChatMessage(
       id: (json['id'] as num?)?.toInt() ?? 0,

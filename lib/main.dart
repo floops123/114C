@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/preferences.dart';
 import 'ui/home_shell.dart';
+import 'ui/smooth_wheel.dart';
 import 'ui/theme.dart';
+import 'ui/widgets.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Défilement fluide à la molette (version PC).
+  SmoothWheelBinding.ensureInitialized();
   // Licence de la police Inter, visible dans l'écran des licences.
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks(
@@ -36,6 +39,7 @@ class App extends ConsumerWidget {
       theme: _light,
       darkTheme: _dark,
       themeMode: themeMode,
+      scrollBehavior: const AppScrollBehavior(),
       home: const HomeShell(),
     );
   }

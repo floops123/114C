@@ -10,6 +10,7 @@ class AppSettings {
     this.rpcPassword = '',
     this.apiKeys = const {},
     this.sessionCookie = '',
+    this.tmdbKey = '',
   });
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
@@ -22,6 +23,7 @@ class AppSettings {
           ...?(json['apiKeys'] as Map?)?.cast<String, String>(),
         },
         sessionCookie: json['sessionCookie'] as String? ?? '',
+        tmdbKey: json['tmdbKey'] as String? ?? '',
       );
 
   final String rpcUrl;
@@ -35,6 +37,9 @@ class AppSettings {
   /// exigés par le WebSocket des notifications.
   final String sessionCookie;
 
+  /// Clé d'API ou jeton de lecture TMDB (liste de souhaits).
+  final String tmdbKey;
+
   bool get hasTransmission => rpcUrl.isNotEmpty;
   bool get hasTracker => apiKeys.values.any((k) => k.isNotEmpty);
 
@@ -44,6 +49,7 @@ class AppSettings {
         'rpcPassword': rpcPassword,
         'apiKeys': apiKeys,
         'sessionCookie': sessionCookie,
+        'tmdbKey': tmdbKey,
       };
 }
 

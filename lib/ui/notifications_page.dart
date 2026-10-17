@@ -565,19 +565,22 @@ class _ChatViewState extends State<_ChatView> {
                   Icons.forum_outlined,
                   'Aucun message dans ce salon pour le moment.',
                 )
-              // Texte sélectionnable sur tout le fil (copier un message…).
-              : SelectionArea(
-                  child: ListView.builder(
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: chat.length,
-                    itemBuilder: (_, i) {
-                      final index = chat.length - 1 - i;
-                      return _ChatTile(
-                        message: chat[index],
-                        previous: index > 0 ? chat[index - 1] : null,
-                      );
-                    },
+              // Texte sélectionnable sur tout le fil (copier un message…) :
+              // glisser à la souris y sélectionne au lieu de faire défiler.
+              : MouseSelectsText(
+                  child: SelectionArea(
+                    child: ListView.builder(
+                      reverse: true,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: chat.length,
+                      itemBuilder: (_, i) {
+                        final index = chat.length - 1 - i;
+                        return _ChatTile(
+                          message: chat[index],
+                          previous: index > 0 ? chat[index - 1] : null,
+                        );
+                      },
+                    ),
                   ),
                 ),
         ),

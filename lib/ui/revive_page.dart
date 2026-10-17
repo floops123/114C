@@ -156,27 +156,30 @@ class _RevivePageState extends ConsumerState<RevivePage> {
         const _Label('Chercher les copies sur'),
         SizedBox(
           height: 34,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [
-              for (final t in configured)
-                if (t != deadOn)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Center(
-                      child: FilterChip(
-                        label: Text(t.label),
-                        selected: searchOn.contains(t),
-                        onSelected: idle
-                            ? (on) => setState(() => _searchOn = on
-                                ? {...searchOn, t}
-                                : ({...searchOn}..remove(t)))
-                            : null,
+          child: HorizontalScroller(
+            builder: (controller) => ListView(
+              controller: controller,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                for (final t in configured)
+                  if (t != deadOn)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Center(
+                        child: FilterChip(
+                          label: Text(t.label),
+                          selected: searchOn.contains(t),
+                          onSelected: idle
+                              ? (on) => setState(() => _searchOn = on
+                                  ? {...searchOn, t}
+                                  : ({...searchOn}..remove(t)))
+                              : null,
+                        ),
                       ),
                     ),
-                  ),
-            ],
+              ],
+            ),
           ),
         ),
         const _Label('Catégorie'),
