@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:c411_remote/api/c411.dart';
 import 'package:c411_remote/api/tmdb.dart';
+import 'package:c411_remote/core/release_profile.dart';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/state/wishlist.dart';
 import 'package:c411_remote/ui/releases_page.dart';
@@ -334,10 +335,15 @@ void main() {
       expect(names(WishSort.quality, true).first, 'Film.2026.FRENCH-GRP');
     });
 
-    test('type : groupes par source', () {
-      expect(headers(WishSort.type), ['Remux:1', 'BluRay:1', 'WEB-DL:2', 'HDLight:1']);
-      expect(names(WishSort.type).take(2),
-          ['Film.2026.2160p.BluRay.REMUX-GRP', 'Film.2026.MULTi.1080p.BluRay-GRP']);
+    test('profil C411 : groupes du plus exigeant au plus léger', () {
+      expect(headers(WishSort.profile),
+          ['Home Cinéma Pure:1', 'Home Cinéma Optimisé:2', 'Non classé:2']);
+      // Dans un groupe : la meilleure résolution d'abord.
+      expect(names(WishSort.profile).take(3), [
+        'Film.2026.2160p.BluRay.REMUX-GRP',
+        'Film.2026.MULTi.1080p.BluRay-GRP',
+        'Film 2026 720p HDLight',
+      ]);
     });
 
     test('taille, seeders, pertinence : sans groupe', () {
@@ -372,6 +378,13 @@ void main() {
     expect(find.text('1080p (1)'), findsOneWidget);
     expect(tester.getTopLeft(find.text('2160p (1)')).dy,
         lessThan(tester.getTopLeft(find.text('1080p (1)')).dy));
+
+    // Par profil C411 : intertitre, description et étiquette sur la ligne.
+    container.read(wishSortProvider.notifier).set(WishSort.profile, false);
+    await tester.pumpAndSettle();
+    expect(find.text('Home Cinéma Optimisé (1)'), findsOneWidget);
+    expect(find.text(C411Profile.hcOptimized.description), findsOneWidget);
+    expect(find.text('HC Opti'), findsOneWidget);
   });
 
   testWidgets('fiche : disponibilité par tracker, ouverture sur son onglet',

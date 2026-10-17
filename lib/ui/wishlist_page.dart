@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../api/tmdb.dart';
 import '../api/tracker.dart';
 import '../core/format.dart';
+import '../core/release_profile.dart';
 import '../state/wishlist.dart';
 import 'releases_page.dart';
 import 'theme.dart';
@@ -1185,7 +1186,7 @@ class _TrackerResults extends ConsumerWidget {
         // Intertitres (groupes) et sorties à plat, pour une liste paresseuse.
         final rows = <Object>[
           for (final (header, group) in sortWish(items, sort, ascending)) ...[
-            ?(header == null ? null : '$header (${group.length})'),
+            ?(header == null ? null : (header, group.length)),
             ...group,
           ],
         ];
@@ -1193,7 +1194,10 @@ class _TrackerResults extends ConsumerWidget {
           itemCount: rows.length,
           itemBuilder: (_, i) => switch (rows[i]) {
             final Release r => ReleaseRow(release: r),
-            final header => _GroupHeader('$header'),
+            (final String label, final int count) => _GroupHeader(
+                '$label ($count)',
+                subtitle: _profileByLabel[label]?.description),
+            _ => const SizedBox.shrink(),
           },
         );
       },
@@ -1201,9 +1205,12 @@ class _TrackerResults extends ConsumerWidget {
   }
 }
 
+final _profileByLabel = {for (final p in C411Profile.values) p.label: p};
+
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader(this.text);
+  const _GroupHeader(this.text, {this.subtitle});
   final String text;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -1213,8 +1220,12 @@ class _GroupHeader extends StatelessWidget {
       decoration: BoxDecoration(
           color: c.surfaceAlt,
           border: Border(bottom: BorderSide(color: c.border, width: 0.5))),
-      child: Text(text,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(text,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+        if (subtitle != null)
+          Text(subtitle!, style: TextStyle(fontSize: 11.5, color: c.muted)),
+      ]),
     );
   }
 }

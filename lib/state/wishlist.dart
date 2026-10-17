@@ -7,6 +7,7 @@ import '../api/tmdb.dart';
 import '../api/tracker.dart';
 import '../core/preferences.dart';
 import '../core/release_name.dart';
+import '../core/release_profile.dart';
 
 // Liste de souhaits : films et séries choisis sur TMDB, mémorisés sur
 // l'appareil, avec les dates de sortie françaises des films (salles, VOD,
@@ -275,7 +276,7 @@ final wishSearchProvider = FutureProvider.autoDispose
 enum WishSort {
   relevance('Pertinence'),
   quality('Qualité'),
-  type('Type (BluRay, WEB…)'),
+  profile('Profil C411'),
   size('Taille'),
   seeders('Seeders'),
   date('Date');
@@ -286,7 +287,7 @@ enum WishSort {
   /// Sens par défaut : les meilleures, les plus grosses, les plus récentes
   /// d'abord.
   bool get ascendingByDefault => false;
-  bool get grouped => this == quality || this == type;
+  bool get grouped => this == quality || this == profile;
 }
 
 /// Sources de la meilleure à la moins bonne.
@@ -325,6 +326,11 @@ String? typeOf(Release r) {
 
 int _qualityRank(Release r) => _resolutions[qualityOf(r)] ?? 0;
 
+/// Rang de profil C411 : du plus exigeant (Home Cinéma Pure) au plus léger,
+/// les sorties non classées à la fin.
+int _profileRank(Release r) =>
+    profileOf(r)?.index ?? C411Profile.values.length;
+
 /// Rang de source : 0 pour la meilleure, la liste entière pour une inconnue.
 int _typeRank(Release r) {
   final i = releaseTypes.indexOf(typeOf(r) ?? '');
@@ -355,12 +361,14 @@ List<(String?, List<Release>)> sortWish(
         final t = _typeRank(a) - _typeRank(b);
         return t != 0 ? t : bySeeders(a, b);
       });
-    case WishSort.type:
+    case WishSort.profile:
       list.sort((a, b) {
-        final t = sign * (_typeRank(a) - _typeRank(b));
-        if (t != 0) return t;
+        final p = sign * (_profileRank(a) - _profileRank(b));
+        if (p != 0) return p;
         final q = _qualityRank(b) - _qualityRank(a);
-        return q != 0 ? q : bySeeders(a, b);
+        if (q != 0) return q;
+        final t = _typeRank(a) - _typeRank(b);
+        return t != 0 ? t : bySeeders(a, b);
       });
   }
   if (!sort.grouped) return [(null, list)];
@@ -368,7 +376,7 @@ List<(String?, List<Release>)> sortWish(
   // Groupes consécutifs (la liste est déjà triée par la clé du groupe).
   String key(Release r) => sort == WishSort.quality
       ? qualityOf(r) ?? 'Qualité inconnue'
-      : typeOf(r) ?? 'Type inconnu';
+      : profileOf(r)?.label ?? 'Non classé';
   final groups = <(String?, List<Release>)>[];
   for (final r in list) {
     if (groups.isEmpty || groups.last.$1 != key(r)) groups.add((key(r), []));

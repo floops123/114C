@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
 import '../core/format.dart';
+import '../core/release_profile.dart';
 import '../core/preferences.dart';
 import '../state/releases.dart';
 import 'release_detail_page.dart';
@@ -345,6 +346,14 @@ class ReleaseCard extends StatelessWidget {
   }
 }
 
+/// Couleur d'étiquette d'un profil C411.
+Color profileColor(AppColors c, C411Profile p) => switch (p) {
+      C411Profile.hcPure => c.warning,
+      C411Profile.hcOptimized => c.info,
+      C411Profile.optimization => c.success,
+      C411Profile.compatibility => c.muted,
+    };
+
 /// HDR d'une sortie (« DV · HDR10+ »), ou null en SDR / inconnu.
 String? hdrLabel(Release r) {
   final f = r.hdrFormat?.trim();
@@ -419,6 +428,8 @@ class ReleaseRow extends StatelessWidget {
                       spacing: 4,
                       children: [
                         Tag(r.subcategory, color: c.accent),
+                        if (profileOf(r) case final p?)
+                          Tag(p.short, color: profileColor(c, p)),
                         if (r.resolution != null) Tag(r.resolution!),
                         if (r.source != null) Tag(r.source!),
                         if (hdrLabel(r) case final hdr?) Tag(hdr, color: c.info),
