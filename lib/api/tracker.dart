@@ -10,12 +10,29 @@ import 'torznab.dart';
 
 /// Trackers pris en charge. Ajouter un tracker Torznab = une ligne ici.
 enum Tracker {
-  c411('C411', 'https://c411.org'),
-  tr4ker('tr4ker', 'https://tr4ker.net/api/', apiKeyHeader: 'X-Api-Key');
+  c411('C411', 'https://c411.org', announceHint: 'c411'),
+  tr4ker('tr4ker', 'https://tr4ker.net/api/',
+      apiKeyHeader: 'X-Api-Key', announceHint: 'tr4ker');
 
-  const Tracker(this.label, this.baseUrl, {this.apiKeyHeader});
+  const Tracker(this.label, this.baseUrl,
+      {this.apiKeyHeader, required this.announceHint});
   final String label;
   final String baseUrl;
+
+  /// Fragment de nom d'hôte des URL d'annonce : sert à reconnaître le tracker
+  /// d'origine d'un torrent de Transmission (cross-seed).
+  final String announceHint;
+
+  /// Tracker d'origine d'après les URL d'annonce, ou null (autre tracker).
+  static Tracker? fromAnnounces(Iterable<String> announces) {
+    for (final url in announces) {
+      final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+      for (final t in values) {
+        if (host.contains(t.announceHint)) return t;
+      }
+    }
+    return null;
+  }
 
   /// En-tête d'authentification attendu par le tracker, en plus du paramètre
   /// Torznab standard `apikey`.

@@ -1,8 +1,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Flutter ne l'ajoute qu'aux versions de développement. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- usesCleartextTraffic : l'adresse RPC de Transmission est souvent en
+         http:// (bloqué par défaut depuis Android 9). Préférer https://.
+         allowBackup=false : les secrets (clé API, cookie de session, mot de
+         passe) sont chiffrés par une clé propre à l'appareil ; ils ne doivent
+         ni partir dans la sauvegarde Google ni être restaurés ailleurs. -->
     <application
-        android:label="c411_remote"
+        android:label="C411 Remote"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -40,6 +52,15 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- url_launcher : ouvrir les liens du site dans le navigateur. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
         </intent>
     </queries>
 </manifest>

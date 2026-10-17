@@ -818,46 +818,43 @@ class _ChatTile extends ConsumerWidget {
             ),
           );
 
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (startsGroup)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: Wrap(
-              spacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(
-                  m.username,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: mine ? c.accent : c.text,
-                  ),
-                ),
-                if (_roles[m.role] != null)
-                  Tag(_roles[m.role]!, color: c.danger),
-                if (m.badge != null)
-                  Tag(
-                    m.badge!,
-                    color: m.badgeColor != null ? Color(m.badgeColor!) : null,
-                  ),
-                Text(hhmm, style: TextStyle(color: c.muted, fontSize: 11.5)),
-              ],
+    final header = Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Wrap(
+        spacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          // Comme sur le site : pseudo coloré selon le rang (bronze, argent…).
+          Text(
+            m.username,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: mine ? c.accent : c.tone(m.nameTone),
             ),
           ),
+          if (_roles[m.role] != null) Tag(_roles[m.role]!, color: c.danger),
+          if (m.badge != null)
+            Tag(
+              m.badge!,
+              color: m.badgeColor != null ? Color(m.badgeColor!) : null,
+            ),
+        ],
+      ),
+    );
+
+    final bubbleContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
         if (m.replyTo != null)
           Container(
-            margin: const EdgeInsets.only(top: 2, bottom: 4),
-            padding: const EdgeInsets.fromLTRB(8, 2, 0, 2),
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
             decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(
-                  color: c.accent.withValues(alpha: 0.5),
-                  width: 2,
-                ),
-              ),
+              color: c.quote,
+              borderRadius: BorderRadius.circular(6),
+              border: Border(left: BorderSide(color: c.accent, width: 2)),
             ),
             child: Text(
               m.replyTo!,
@@ -878,14 +875,7 @@ class _ChatTile extends ConsumerWidget {
         else if (m.content.isNotEmpty)
           Text.rich(
             TextSpan(
-              children: [
-                ...chatSpans(m.content, colors: c, me: me),
-                if (m.isEdited)
-                  TextSpan(
-                    text: '  (modifié)',
-                    style: TextStyle(color: c.muted, fontSize: 11.5),
-                  ),
-              ],
+              children: chatSpans(m.content, colors: c, me: me),
             ),
             style: TextStyle(
               fontSize: 14,
@@ -902,13 +892,13 @@ class _ChatTile extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(8),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
-                    maxWidth: 320,
-                    maxHeight: 240,
+                    maxWidth: 300,
+                    maxHeight: 220,
                   ),
                   child: CachedNetworkImage(
                     imageUrl: url,
                     fit: BoxFit.contain,
-                    memCacheWidth: 640,
+                    memCacheWidth: 600,
                     errorWidget: (_, _, _) => Text(
                       url,
                       style: TextStyle(color: c.muted, fontSize: 12),
@@ -917,55 +907,57 @@ class _ChatTile extends ConsumerWidget {
                 ),
               ),
             ),
-        if (m.reactions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                for (final r in m.reactions) _ReactionChip(reaction: r),
-              ],
-            ),
+        // Pied de bulle : réactions, heure, « modifié ».
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final r in m.reactions) _ReactionChip(reaction: r),
+              Text(
+                m.isEdited ? '$hhmm · modifié' : hhmm,
+                style: TextStyle(color: c.muted, fontSize: 11),
+              ),
+            ],
           ),
+        ),
       ],
     );
 
-    // Nos messages : liseré d'accent ; ceux qui nous mentionnent : fond teinté.
-    final Color? bar = mine
-        ? c.accent.withValues(alpha: 0.6)
-        : mentioned
-        ? c.warning
-        : null;
-    final tile = Container(
-      decoration: BoxDecoration(
-        color: mentioned ? c.warning.withValues(alpha: 0.08) : null,
-        border: Border(
-          left: BorderSide(color: bar ?? Colors.transparent, width: 3),
+    // Nos messages : bulle teintée de vert ; nous mentionnant : bordure orange.
+    final bubble = Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
+          decoration: BoxDecoration(
+            color: mine
+                ? Color.alphaBlend(c.accent.withValues(alpha: 0.16), c.bubble)
+                : c.bubble,
+            borderRadius: BorderRadius.circular(12),
+            border: mentioned ? Border.all(color: c.warning, width: 1.2) : null,
+          ),
+          child: bubbleContent,
         ),
       ),
-      padding: EdgeInsets.fromLTRB(13, startsGroup ? 8 : 1, 16, 2),
+    );
+
+    final tile = Padding(
+      padding: EdgeInsets.fromLTRB(12, startsGroup ? 10 : 3, 12, 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 32,
-            child: startsGroup
-                ? avatar
-                // Heure discrète à la place de l'avatar dans un groupe.
-                : Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      hhmm,
-                      style: TextStyle(
-                        color: c.muted.withValues(alpha: 0.7),
-                        fontSize: 9.5,
-                      ),
-                    ),
-                  ),
+          SizedBox(width: 32, child: startsGroup ? avatar : null),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [if (startsGroup) header, bubble],
+            ),
           ),
-          const SizedBox(width: 10),
-          Expanded(child: body),
         ],
       ),
     );
@@ -1126,6 +1118,23 @@ class _ComposerState extends ConsumerState<_Composer> {
                 keyboardType: TextInputType.multiline,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
+                  filled: true,
+                  fillColor: c.bubble,
+                  // Bordure verte, comme la zone de saisie du site.
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: c.accent.withValues(alpha: 0.45),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: c.accent, width: 1.4),
+                  ),
+                  disabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: c.border),
+                  ),
                   hintText: connected
                       ? 'Message à ${info?.name ?? 'ce salon'}'
                       : 'Connexion au salon…',

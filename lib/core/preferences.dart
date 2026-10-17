@@ -19,6 +19,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         UiPrefsNotifier._transferAscKey,
         'tracker', // SelectedTrackerNotifier
         'notifications', // PrefsNotificationStore
+        'crossSeed', // PrefsCrossSeedCache
       }),
     );
 

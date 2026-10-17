@@ -85,6 +85,7 @@ class ChatMessage {
     required this.createdAt,
     this.senderId,
     this.role,
+    this.nameTone,
     this.avatarUrl,
     this.badge,
     this.badgeColor,
@@ -125,6 +126,7 @@ class ChatMessage {
       username: sender['username'] as String? ?? '?',
       senderId: (sender['id'] as num?)?.toInt(),
       role: sender['role'] as String?,
+      nameTone: sender['nameTone'] as String?,
       content: content,
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.now(),
@@ -160,6 +162,7 @@ class ChatMessage {
         username: username ?? this.username,
         senderId: senderId,
         role: role,
+        nameTone: nameTone,
         content: content,
         createdAt: createdAt,
         avatarUrl: avatarUrl ?? this.avatarUrl,
@@ -183,6 +186,9 @@ class ChatMessage {
 
   /// `user`, `moderator`, `admin`… (absent des messages envoyés d'avance).
   final String? role;
+
+  /// Rang affiché par la couleur du pseudo (`bronze`, `argent`, `or`…).
+  final String? nameTone;
   final String content;
   final DateTime createdAt;
   final String? avatarUrl;

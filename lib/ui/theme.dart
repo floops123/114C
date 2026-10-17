@@ -18,6 +18,12 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.info,
     required this.download,
     required this.upload,
+    required this.onAccent,
+    required this.bubble,
+    required this.quote,
+    required this.toneBronze,
+    required this.toneSilver,
+    required this.toneGold,
   });
 
   final Color bg;
@@ -38,36 +44,69 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color download;
   final Color upload;
 
+  /// Texte et icônes posés sur l'accent (le vert C411 est trop clair pour du
+  /// blanc : texte sombre, comme les boutons du site).
+  final Color onAccent;
+
+  /// Salon : bulles des messages et réponses citées.
+  final Color bubble;
+  final Color quote;
+
+  /// Couleur des pseudos selon le rang (`nameTone` : bronze, argent, or).
+  final Color toneBronze;
+  final Color toneSilver;
+  final Color toneGold;
+
+  Color tone(String? nameTone) => switch (nameTone) {
+        'argent' || 'silver' => toneSilver,
+        'or' || 'gold' => toneGold,
+        'bronze' => toneBronze,
+        _ => text,
+      };
+
+  // Couleurs relevées sur c411.org.
   static const dark = AppColors(
-    bg: Color(0xFF0B0E14),
-    surface: Color(0xFF131823),
-    surfaceAlt: Color(0xFF1B2130),
-    border: Color(0xFF252C3B),
-    text: Color(0xFFE7EAF0),
-    muted: Color(0xFF8B94A7),
-    accent: Color(0xFF4C8DFF),
-    success: Color(0xFF22C55E),
-    warning: Color(0xFFF59E0B),
-    danger: Color(0xFFEF4444),
-    info: Color(0xFFA78BFA),
+    bg: Color(0xFF061712),
+    surface: Color(0xFF101E19),
+    surfaceAlt: Color(0xFF17302A),
+    border: Color(0xFF21352C),
+    text: Color(0xFFF4FFF8),
+    muted: Color(0xFF9DB9AC),
+    accent: Color(0xFF00D492),
+    success: Color(0xFF46C35A),
+    warning: Color(0xFFFFB900),
+    danger: Color(0xFFF85245),
+    info: Color(0xFFB45CF0),
     download: Color(0xFF3987E5),
     upload: Color(0xFFD95926),
+    onAccent: Color(0xFF04100C),
+    bubble: Color(0xFF013226),
+    quote: Color(0xFF01402F),
+    toneBronze: Color(0xFFDB9153),
+    toneSilver: Color(0xFFC3D0CA),
+    toneGold: Color(0xFFFFB900),
   );
 
   static const light = AppColors(
-    bg: Color(0xFFF5F6F8),
+    bg: Color(0xFFF2F7F4),
     surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFECEEF2),
-    border: Color(0xFFE1E4EA),
-    text: Color(0xFF12151C),
-    muted: Color(0xFF5E6676),
-    accent: Color(0xFF2563EB),
-    success: Color(0xFF16A34A),
-    warning: Color(0xFFD97706),
-    danger: Color(0xFFDC2626),
-    info: Color(0xFF7C3AED),
+    surfaceAlt: Color(0xFFE3EEE8),
+    border: Color(0xFFD3E2DA),
+    text: Color(0xFF0B1A14),
+    muted: Color(0xFF4F6A5E),
+    accent: Color(0xFF00855B),
+    success: Color(0xFF2F8F3E),
+    warning: Color(0xFFB27800),
+    danger: Color(0xFFD63A2E),
+    info: Color(0xFF8B3BD1),
     download: Color(0xFF2A78D6),
     upload: Color(0xFFEB6834),
+    onAccent: Color(0xFFFFFFFF),
+    bubble: Color(0xFFE6F3EC),
+    quote: Color(0xFFD3EBDF),
+    toneBronze: Color(0xFFA8642B),
+    toneSilver: Color(0xFF5F7069),
+    toneGold: Color(0xFF9A6C00),
   );
 
   @override
@@ -91,6 +130,12 @@ class AppColors extends ThemeExtension<AppColors> {
       info: l(info, other.info),
       download: l(download, other.download),
       upload: l(upload, other.upload),
+      onAccent: l(onAccent, other.onAccent),
+      bubble: l(bubble, other.bubble),
+      quote: l(quote, other.quote),
+      toneBronze: l(toneBronze, other.toneBronze),
+      toneSilver: l(toneSilver, other.toneSilver),
+      toneGold: l(toneGold, other.toneGold),
     );
   }
 }
@@ -108,11 +153,11 @@ ThemeData buildTheme(Brightness brightness) {
   final scheme = ColorScheme(
     brightness: brightness,
     primary: c.accent,
-    onPrimary: Colors.white,
+    onPrimary: c.onAccent,
     primaryContainer: c.accent.withValues(alpha: 0.15),
     onPrimaryContainer: c.accent,
     secondary: c.accent,
-    onSecondary: Colors.white,
+    onSecondary: c.onAccent,
     tertiary: c.info,
     onTertiary: Colors.white,
     error: c.danger,
@@ -140,7 +185,7 @@ ThemeData buildTheme(Brightness brightness) {
       .copyWith(
         titleLarge: TextStyle(
           fontFamily: font,
-          fontSize: 22,
+          fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.4,
           color: c.text,
@@ -186,7 +231,10 @@ ThemeData buildTheme(Brightness brightness) {
     highlightColor: c.text.withValues(alpha: 0.05),
     hoverColor: c.text.withValues(alpha: 0.04),
     focusColor: c.accent.withValues(alpha: 0.12),
+    // Mêmes tailles que sur ordinateur : Android agrandit sinon les zones
+    // tactiles à 48 px (cases, interrupteurs, puces, boutons).
     visualDensity: VisualDensity.compact,
+    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     appBarTheme: AppBarTheme(
       backgroundColor: c.bg,
       foregroundColor: c.text,
@@ -209,7 +257,7 @@ ThemeData buildTheme(Brightness brightness) {
       filled: true,
       fillColor: c.surfaceAlt,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       border: OutlineInputBorder(
         borderRadius: radius,
         borderSide: BorderSide.none,
@@ -231,9 +279,9 @@ ThemeData buildTheme(Brightness brightness) {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: c.accent,
-        foregroundColor: Colors.white,
+        foregroundColor: c.onAccent,
         elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: radius),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
@@ -242,7 +290,7 @@ ThemeData buildTheme(Brightness brightness) {
       style: OutlinedButton.styleFrom(
         foregroundColor: c.text,
         side: BorderSide(color: c.border),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: radius),
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
@@ -256,6 +304,9 @@ ThemeData buildTheme(Brightness brightness) {
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
         foregroundColor: c.muted,
+        iconSize: 20,
+        minimumSize: const Size(36, 36),
+        padding: const EdgeInsets.all(6),
         shape: RoundedRectangleBorder(borderRadius: radius),
       ),
     ),
@@ -272,19 +323,21 @@ ThemeData buildTheme(Brightness brightness) {
         fontSize: 13,
         fontWeight: FontWeight.w500,
         color: WidgetStateColor.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? Colors.white : c.text,
+          (s) => s.contains(WidgetState.selected) ? c.onAccent : c.text,
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: c.surface,
       elevation: 0,
-      height: 62,
+      height: 56,
       indicatorColor: Colors.transparent,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       iconTheme: WidgetStateProperty.resolveWith(
         (s) => IconThemeData(
+          size: 22,
           color: s.contains(WidgetState.selected) ? c.accent : c.muted,
         ),
       ),
@@ -359,8 +412,11 @@ ThemeData buildTheme(Brightness brightness) {
       trackColor: selected(c.accent, c.border),
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
       thumbIcon: WidgetStateProperty.all(const Icon(null)),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     ),
     checkboxTheme: CheckboxThemeData(
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
       fillColor: selected(c.accent, Colors.transparent),
       side: BorderSide(color: c.muted, width: 1.5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -368,7 +424,7 @@ ThemeData buildTheme(Brightness brightness) {
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         backgroundColor: selected(c.accent, c.surfaceAlt),
-        foregroundColor: selected(Colors.white, c.text),
+        foregroundColor: selected(c.onAccent, c.text),
         side: WidgetStateProperty.all(BorderSide.none),
         shape: WidgetStateProperty.all(
           RoundedRectangleBorder(borderRadius: radius),
@@ -378,6 +434,9 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     listTileTheme: ListTileThemeData(
       iconColor: c.muted,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      minVerticalPadding: 4,
       shape: RoundedRectangleBorder(borderRadius: radius),
     ),
     tooltipTheme: TooltipThemeData(

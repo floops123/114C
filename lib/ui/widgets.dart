@@ -39,6 +39,21 @@ class Tag extends StatelessWidget {
 }
 
 /// Affiche TMDB. Sans dimensions, elle remplit l'espace disponible.
+/// Tailles proposées par TMDB pour les affiches.
+const _tmdbWidths = [92, 154, 185, 342, 500, 780];
+final _tmdbSize = RegExp(r'(image\.tmdb\.org/t/p/)(w\d+|original)/');
+
+/// Remplace la taille d'une image TMDB par la plus petite couvrant [pixels] :
+/// une vignette w185 pèse 4 à 5 fois moins qu'une w500 à télécharger et
+/// à décoder.
+String tmdbSized(String url, double pixels) {
+  if (!_tmdbSize.hasMatch(url)) return url;
+  final w = _tmdbWidths.firstWhere((w) => w >= pixels, orElse: () => 780);
+  return url.replaceFirstMapped(_tmdbSize, (m) => '${m[1]}w$w/');
+}
+
+/// Affiche TMDB. Sans dimensions, elle remplit l'espace disponible.
+/// Les coins arrondis sont dessinés avec l'image (pas de découpe séparée).
 class Poster extends StatelessWidget {
   const Poster(this.url, {super.key, this.width, this.height, this.radius = 8});
   final String? url;
@@ -49,59 +64,79 @@ class Poster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: LayoutBuilder(builder: (context, constraints) {
-          final placeholder = ColoredBox(
-            color: c.surfaceAlt,
-            child: Center(child: Icon(Icons.movie_outlined, color: c.muted)),
-          );
-          if (url == null) return placeholder;
-          final w = constraints.maxWidth.isFinite ? constraints.maxWidth : 160;
-          return CachedNetworkImage(
-            imageUrl: url!,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            // Décodage à la taille affichée : beaucoup moins de mémoire.
-            memCacheWidth: (w * MediaQuery.devicePixelRatioOf(context)).round(),
-            fadeInDuration: const Duration(milliseconds: 150),
-            placeholder: (_, _) => placeholder,
-            errorWidget: (_, _, _) => placeholder,
-          );
-        }),
-      ),
+    final shape = BorderRadius.circular(radius);
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: shape),
+      child: Center(child: Icon(Icons.movie_outlined, color: c.muted)),
+    );
+    return SizedBox(
+      width: width,
+      height: height,
+      child: url == null
+          ? placeholder
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth.isFinite
+                    ? constraints.maxWidth
+                    : 160.0;
+                final pixels = w * MediaQuery.devicePixelRatioOf(context);
+                return CachedNetworkImage(
+                  imageUrl: tmdbSized(url!, pixels),
+                  // Décodage à la taille affichée : beaucoup moins de mémoire.
+                  memCacheWidth: pixels.round(),
+                  fadeInDuration: const Duration(milliseconds: 120),
+                  imageBuilder: (_, image) => DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: shape,
+                      image: DecorationImage(image: image, fit: BoxFit.cover),
+                    ),
+                  ),
+                  placeholder: (_, _) => placeholder,
+                  errorWidget: (_, _, _) => placeholder,
+                );
+              },
+            ),
     );
   }
 }
 
 /// En-tête de page : grand titre, sous-titre et actions.
 class PageHeader extends StatelessWidget {
-  const PageHeader(
-      {super.key, required this.title, this.subtitle, this.actions = const []});
+  const PageHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.actions = const [],
+  });
   final String title;
   final Widget? subtitle;
   final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
+    // Le sous-titre occupe toute la largeur sous la ligne titre + actions :
+    // sur téléphone, il ne se tasse pas à côté des boutons.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-      child: Row(children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-              if (subtitle != null) ...[const SizedBox(height: 2), subtitle!],
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              ...actions,
             ],
           ),
-        ),
-        ...actions,
-      ]),
+          if (subtitle != null) ...[const SizedBox(height: 2), subtitle!],
+        ],
+      ),
     );
   }
 }
@@ -122,11 +157,11 @@ class Section extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (title != null) ...[
-              Text(title!.toUpperCase(),
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelSmall
-                      ?.copyWith(letterSpacing: 0.8)),
+              Text(
+                title!.toUpperCase(),
+                style: Theme.of(context).textTheme.labelSmall
+                    ?.copyWith(letterSpacing: 0.8),
+              ),
               const SizedBox(height: 12),
             ],
             ...children,
@@ -149,23 +184,33 @@ class InfoRow extends StatelessWidget {
     final c = context.colors;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(
-          width: 150,
-          child: Text(label, style: TextStyle(color: c.muted, fontSize: 13)),
-        ),
-        Expanded(
-          child: SelectableText(value,
-              style: TextStyle(fontSize: 13, color: valueColor ?? c.text)),
-        ),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(label, style: TextStyle(color: c.muted, fontSize: 13)),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: TextStyle(fontSize: 13, color: valueColor ?? c.text),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 /// Pastille de statistique (vitesse, compteur…).
 class StatPill extends StatelessWidget {
-  const StatPill({super.key, required this.icon, required this.label, this.color});
+  const StatPill({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.color,
+  });
   final IconData icon;
   final String label;
   final Color? color;
@@ -180,16 +225,22 @@ class StatPill extends StatelessWidget {
         color: c.surfaceAlt,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: fg),
-        const SizedBox(width: 4),
-        Text(label,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
             style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: c.text,
-                fontFeatures: const [FontFeature.tabularFigures()])),
-      ]),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: c.text,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -206,18 +257,26 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration:
-                BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-            child: Icon(icon, size: 28, color: c.muted),
-          ),
-          const SizedBox(height: 16),
-          Text(message,
-              textAlign: TextAlign.center, style: TextStyle(color: c.muted)),
-          if (action != null) ...[const SizedBox(height: 16), action!],
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 28, color: c.muted),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.muted),
+            ),
+            if (action != null) ...[const SizedBox(height: 16), action!],
+          ],
+        ),
       ),
     );
   }
@@ -239,14 +298,20 @@ class ErrorBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: c.danger.withValues(alpha: 0.3)),
       ),
-      child: Row(children: [
-        Icon(Icons.error_outline, size: 18, color: c.danger),
-        const SizedBox(width: 10),
-        Expanded(
-            child: Text(message, style: TextStyle(color: c.danger, fontSize: 13))),
-        if (onRetry != null)
-          TextButton(onPressed: onRetry, child: const Text('Réessayer')),
-      ]),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 18, color: c.danger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: c.danger, fontSize: 13),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Réessayer')),
+        ],
+      ),
     );
   }
 }
@@ -268,7 +333,7 @@ class ChipRow<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 40,
+      height: 34,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -335,7 +400,10 @@ class SortMenu<T extends Object> extends StatelessWidget {
           ),
         for (final o in options)
           CheckedPopupMenuItem(
-              value: o, checked: o == selected, child: Text(label(o))),
+            value: o,
+            checked: o == selected,
+            child: Text(label(o)),
+          ),
         const PopupMenuDivider(),
         CheckedPopupMenuItem(
           value: _SortDirection.ascending,
@@ -348,32 +416,62 @@ class SortMenu<T extends Object> extends StatelessWidget {
           child: const Text('Décroissant'),
         ),
       ],
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: c.surfaceAlt,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.sort_rounded, size: 16, color: c.muted),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
-            child: Text(label(selected),
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 12.5, fontWeight: FontWeight.w600, color: c.text)),
-          ),
-          const SizedBox(width: 2),
-          Icon(
-              ascending
-                  ? Icons.arrow_upward_rounded
-                  : Icons.arrow_downward_rounded,
-              size: 14,
-              color: c.accent),
-        ]),
-      ),
+      // Écran étroit : icône et sens seulement (critère en info-bulle).
+      child: MediaQuery.sizeOf(context).width < 600
+          ? Tooltip(
+              message: 'Tri : ${label(selected)}',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.sort_rounded, size: 20, color: c.muted),
+                    Icon(
+                      ascending
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded,
+                      size: 14,
+                      color: c.accent,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.sort_rounded, size: 16, color: c.muted),
+                  const SizedBox(width: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Text(
+                      label(selected),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: c.text,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    ascending
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    size: 14,
+                    color: c.accent,
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

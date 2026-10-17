@@ -33,8 +33,10 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
   réannoncer, déplacer dans la file, déplacer les fichiers
   (`torrent-set-location`), étiquettes, priorité, copier le magnet, supprimer
   (avec ou sans les données).
-- Ajout par lien magnet ou URL, et envoi depuis un tracker, avec options :
-  dossier, étiquettes, priorité, en pause.
+- Ajout de fichiers `.torrent` depuis l'appareil (sélecteur natif via
+  `file_selector`, plusieurs à la fois, contenu vérifié avant l'envoi :
+  nom, taille, fichier invalide signalé), par lien magnet ou URL, et envoi
+  depuis un tracker ; options : dossier, étiquettes, priorité, en pause.
 - Détail en 5 onglets :
   - Infos : progression, carte des pièces, transfert, origine des pairs
     (tracker, DHT, PEX…), dates, créateur, hash ;
@@ -43,6 +45,21 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
   - Trackers : annonces et scrapes, paliers, édition de la liste (`trackerList`) ;
   - Options : priorité, limites de vitesse, groupe de bande passante, ratio et
     inactivité propres au torrent, nombre de pairs.
+
+**Cross-seed** (menu ⋮ de l'écran Transferts)
+- Pour chaque torrent terminé de Transmission, cherche la même release sur
+  les autres trackers configurés (C411 → tr4ker, tr4ker → C411, autre tracker
+  → les deux) : recherche par nom, candidats de même taille à l'octet près,
+  puis comparaison fichier par fichier du `.torrent` candidat (lecteur
+  bencode intégré). Les torrents déjà présents dans Transmission sont
+  reconnus par leur infohash.
+- Une correspondance s'ajoute (« Ajouter » / « Tout ajouter ») dans le dossier
+  des données existantes, avec l'étiquette `cross-seed` : Transmission vérifie
+  les données et partage sans rien retélécharger.
+- Une requête à la fois avec une pause de 1,1 s (quota C411 : 120 / min) ;
+  les résultats « introuvable », « fichiers différents » et « déjà partagé »
+  sont mémorisés 7 jours (« Tout réanalyser » pour les ignorer).
+- Le tracker d'origine est reconnu dans les URL d'annonce (`c411`, `tr4ker`).
 
 **Statistiques** (icône 📈 de l'écran Transferts)
 - Chiffres clés : vitesses actuelles, volumes envoyés / reçus (session et
@@ -110,7 +127,8 @@ Transmission et aux API des trackers, sans serveur intermédiaire.
 | Plateforme | État |
 |---|---|
 | Linux | testé |
-| Android, iOS, Windows, macOS | projet généré, non testé |
+| Android | APK compilé (API 24 → 36), mise en page téléphone vérifiée |
+| iOS, Windows, macOS | projet généré, non testé |
 | Web | **non supporté** : ni Transmission ni C411 n'envoient d'en-têtes CORS |
 
 ## Démarrer
@@ -132,6 +150,30 @@ flutter test                # tests unitaires
 flutter analyze             # analyse statique
 ```
 
+### Android
+
+SDK installé sans Android Studio (outils en ligne de commande) :
+
+```sh
+export ANDROID_HOME="$HOME/Android/Sdk"
+# Une fois : outils en ligne de commande dans $ANDROID_HOME/cmdline-tools/latest, puis
+sdkmanager --install "platform-tools" "platforms/android-36" \
+  "build-tools/36.1.0" "ndk/28.2.13676358"
+flutter config --android-sdk "$ANDROID_HOME"
+
+flutter build apk --release --split-per-abi   # build/app/outputs/flutter-apk/
+adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+flutter run -d <id du téléphone>              # développement (débogage USB)
+```
+
+Réglages propres à Android (`android/app/src/main/AndroidManifest.xml`) :
+permission Internet, trafic HTTP autorisé (adresse RPC Transmission souvent en
+`http://` — préférer `https://`), ouverture des liens (`<queries>`), sauvegarde
+Google désactivée (`allowBackup=false`, `data_extraction_rules.xml`) car les
+secrets sont chiffrés par une clé propre à l'appareil. L'APK de version est
+signé avec la clé de débogage : suffisant pour une installation personnelle,
+une clé dédiée serait nécessaire pour le Play Store.
+
 Au premier lancement, l'application ouvre les Réglages : renseigner l'adresse RPC
 (ex. `https://serveur:9091/transmission/rpc` ; sans chemin, `/transmission/rpc`
 est ajouté) et la clé API C411.
@@ -145,6 +187,7 @@ lib/
 │   ├── format.dart            Formatage (octets, vitesses, durées, dates) en français
 │   ├── preferences.dart       Préférences d'interface (thème, grille/liste, tracker)
 │   ├── release_name.dart      Titre, année, résolution… extraits d'un nom de release
+│   ├── bencode.dart           Lecture des fichiers .torrent (bencode)
 │   └── settings.dart          Réglages + persistance dans le trousseau
 ├── api/
 │   ├── tracker.dart           Modèle commun (Release…), interface TrackerApi, liste des trackers
@@ -155,6 +198,7 @@ lib/
 │   └── transmission.dart      Client RPC Transmission + modèle Torrent
 ├── state/                     Logique (Riverpod)
 │   ├── releases.dart          Pagination/filtres des sorties, envoi vers Transmission
+│   ├── cross_seed.dart        Analyse et ajout des cross-seeds
 │   ├── notifications.dart     Connexion WebSocket et liste des notifications
 │   ├── speed_history.dart     Historique des vitesses (enregistré par l'app)
 │   └── torrents.dart          Polling Transmission, détail, statistiques
@@ -166,6 +210,7 @@ lib/
     ├── send_button.dart       Bouton « Télécharger » (état d'envoi, options)
     ├── torrent_actions.dart   Menu et dialogues d'actions sur les torrents
     ├── bandwidth_groups_page.dart  Groupes de bande passante
+    ├── cross_seed_page.dart   Cross-seed (analyse, résultats, ajout)
     ├── charts.dart            Graphiques (courbe des vitesses, barres, jauge)
     ├── stats_page.dart        Statistiques
     ├── notifications_page.dart  Notifications
@@ -181,9 +226,13 @@ Stack : Flutter, `flutter_riverpod` (état), `dio` (HTTP),
 
 ### Style
 
-Thème maison « appli média » construit sur les widgets Flutter mais sans
-l'apparence Material : fond sombre profond (ou clair), cartes à bord fin sans
-ombre, pas d'effet d'onde, police Inter, une seule couleur d'accent. Toutes les
+Thème inspiré de c411.org (couleurs relevées sur le site) : fond vert très
+sombre `#061712`, cartes `#101E19` à bord fin `#21352C`, accent vert C411
+`#00D492` avec texte sombre par-dessus (le blanc y serait illisible), texte
+`#F4FFF8` / secondaire `#9DB9AC`. Salon : bulles `#013226`, citations
+`#01402F` à liseré vert, pseudos colorés selon le rang (`nameTone` : bronze,
+argent, or). Variante claire dans le même esprit. Widgets Flutter sans
+l'apparence Material : pas d'ombre ni d'effet d'onde, police Inter. Toutes les
 couleurs sont définies dans `AppColors` (`lib/ui/theme.dart`) et accessibles via
 `context.colors`.
 
@@ -200,9 +249,26 @@ mode de lancement — « Unable to load asset: AssetManifest.bin ».)
 
 ### Choix pour rester léger
 
-- **Listes virtualisées** (`ListView.builder` + `itemExtent` fixe) : seules les
-  lignes visibles sont construites.
-- **Affiches décodées à la taille affichée** (`memCacheWidth`) et mises en cache.
+- **Listes virtualisées** (`ListView.builder` + hauteur de ligne fixe) : seules
+  les lignes visibles sont construites. La hauteur des lignes est calculée
+  d'après la taille de police du système (`ReleaseRow.extent`,
+  `_TorrentRow.extent`) et les textes ont un interligne explicite : une ligne
+  ne déborde jamais, même avec une grande police Android (test
+  `row_layout_test.dart`).
+- **Transferts** : seuls la liste et le bloc des vitesses suivent les
+  rafraîchissements (toutes les 2 s) ; en-tête, puces et recherche ne se
+  reconstruisent pas. Les lignes dont le torrent n'a pas changé sont
+  réutilisées telles quelles (même objet `Torrent` d'un rafraîchissement à
+  l'autre). Mesuré : 1 163 éléments reconstruits par rafraîchissement avant,
+  154 après (20 torrents modifiés sur 424).
+- **Affiches** : vignette TMDB à la taille affichée (`tmdbSized` : `w154` /
+  `w185` en liste, `w342` en grille au lieu de `w500`), décodée à cette taille
+  (`memCacheWidth`), mise en cache, coins arrondis dessinés avec l'image (pas
+  de découpe séparée).
+- **Onglets masqués** : Riverpod 3 met en pause les écrans hors de vue (ils ne
+  se reconstruisent pas en arrière-plan).
+- **Pas d'info-bulle dans les lignes de liste** : coût par élément, et sur
+  mobile elle capterait l'appui long (options d'ajout du bouton ⬇).
 - **Transmission** : `torrent-get` ne demande que les champs affichés ; les
   rafraîchissements utilisent `ids: "recently-active"` (seuls les torrents
   modifiés reviennent, `removed` signale les suppressions). Une liste complète
@@ -314,17 +380,59 @@ magnet : sur un tracker privé, c'est le `.torrent` qui contient le passkey.
 - Valeurs spéciales : `eta` et `uploadRatio` valent `-1` (indisponible) ou `-2`
   (infini).
 
+## Tests
+
+```sh
+flutter test        # tests unitaires et d'interface
+flutter analyze
+```
+
+| Fichier | Ce qui est vérifié |
+|---|---|
+| `parsing_test.dart` | noms de release, dates RFC 822, tri local, tailles TMDB |
+| `cross_seed_test.dart` | lecture bencode, origine par les annonces, analyse dans les deux sens, mémoire, ajout |
+| `add_files_test.dart` | envoi de `.torrent` : ajoutés, doublons, invalides, refusés |
+| `socket_test.dart`, `chat_send_test.dart` | client Socket.IO contre un faux serveur (ping, événements, refus, envoi avec accusé de réception, réessai) |
+| `notifications_test.dart`, `chat_test.dart`, `chat_format_test.dart` | trames WebSocket et réponses d'API réelles anonymisées, salon, mise en forme, notifications du site, cache |
+| `server_settings_test.dart`, `torrent_detail_test.dart` | écrans de configuration et de détail sur des réponses réelles de `transmission-daemon` 4.0.5 (`test/fixtures/`) |
+| `charts_test.dart` | graphiques (survol, info-bulle sans débordement) |
+| `row_layout_test.dart` | lignes de liste sans débordement (390 / 1 705 px, police × 1 et × 1,3) |
+| `reorder_test.dart`, `smoke_test.dart` | aucune erreur : liste réordonnée à chaque rafraîchissement, app complète (onglets, info-bulles, rafraîchissements) |
+
+Banc d'essai de fluidité (défilement des Transferts et des Sorties, temps de
+calcul et de dessin de chaque image), à lancer de préférence sur un téléphone
+branché en débogage USB — sur ordinateur, les mesures varient avec la charge
+de la machine :
+
+```sh
+flutter drive --profile -d <appareil> --driver=test_driver/perf_driver.dart \
+  --target=integration_test/scroll_perf_test.dart   # résultats : build/perf/*.json
+```
+
+Après l'ajout d'un paquet à code natif (`file_selector`, `url_launcher`…), un
+redémarrage à chaud ne suffit pas : relancer `flutter run`.
+
 ## Sécurité
 
 - Aucun secret dans le dépôt : clé API et identifiants sont saisis dans
   l'application et stockés dans le trousseau du système.
 - L'onglet Trackers n'affiche que l'hôte, jamais l'URL d'annonce (qui contient
   le passkey).
+- Le cookie de session C411 donne un accès complet au compte : il n'est saisi
+  que dans l'application (trousseau), jamais journalisé.
+- Android : sauvegarde Google désactivée pour ne pas exporter les secrets ;
+  trafic HTTP autorisé uniquement parce que l'adresse RPC de Transmission est
+  souvent en `http://` (dans ce cas le mot de passe Transmission circule en
+  clair : préférer `https://`).
 
 ## Pistes
 
-- Build et test Android.
-- Ajout d'un `.torrent` depuis un fichier local.
-- Choix du dossier de destination à l'envoi.
+- Mesurer la fluidité sur téléphone avec le banc d'essai.
+- Marquer les notifications du site comme lues (requête à identifier).
+- Répondre à un message et réagir depuis le salon (trames à identifier) ;
+  remonter plus loin dans l'historique d'un salon (pagination à identifier).
+- Cross-seed des releases renommées (`torrent-rename-path` après ajout).
+- Glisser-déposer de fichiers `.torrent` sur la fenêtre (ordinateur).
+- Icône d'application dédiée ; clé de signature pour une diffusion publique.
+- Notifications système quand l'application est fermée (service de fond).
 - Tableau de bord du profil C411 (`/api/user/profile`, scope `profile:read`).
-- Notifications de nouvelles sorties (filtres sauvegardés).

@@ -1,6 +1,7 @@
 import 'package:c411_remote/api/torznab.dart';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/core/release_name.dart';
+import 'package:c411_remote/ui/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -60,5 +61,16 @@ void main() {
     expect(sorted(ReleaseSort.size, true), ['A', 'c', 'b']);
     expect(sorted(ReleaseSort.name, true), ['A', 'b', 'c']);
     expect(sorted(ReleaseSort.date, false), ['c', 'b', 'A']);
+  });
+
+  test('taille des vignettes TMDB adaptée à l’affichage', () {
+    const url = 'https://image.tmdb.org/t/p/w500/abc.jpg';
+    expect(tmdbSized(url, 150), 'https://image.tmdb.org/t/p/w154/abc.jpg');
+    expect(tmdbSized(url, 155), 'https://image.tmdb.org/t/p/w185/abc.jpg');
+    expect(tmdbSized(url, 330), 'https://image.tmdb.org/t/p/w342/abc.jpg');
+    expect(tmdbSized('https://image.tmdb.org/t/p/original/x.jpg', 2000),
+        'https://image.tmdb.org/t/p/w780/x.jpg');
+    expect(tmdbSized('https://c411.org/uploads/a.webp', 100),
+        'https://c411.org/uploads/a.webp');
   });
 }

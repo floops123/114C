@@ -80,7 +80,7 @@ class ReleaseDetailPage extends StatelessWidget {
           Wrap(spacing: 4, runSpacing: 4, children: [
             for (final g in r.genres) Tag(g),
             if (r.isFreeleech) Tag('FREELEECH', color: c.success),
-            if (r.isExclusive) Tag('EXCLU', color: c.warning),
+            if (r.isExclusive) Tag('EXCLU', color: c.info),
           ]),
           const SizedBox(height: 14),
           SendButton(release: r, large: true),

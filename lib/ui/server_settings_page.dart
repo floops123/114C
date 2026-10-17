@@ -502,13 +502,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                     FilledButton(
                       onPressed: _saving ? null : _save,
                       child: _saving
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
+                          ? SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.onAccent))
                           : const Text('Enregistrer'),
                     ),
                   ],

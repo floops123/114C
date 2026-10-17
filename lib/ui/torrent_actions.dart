@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/transmission.dart';
+import '../core/bencode.dart';
 import '../core/format.dart';
 import '../state/torrents.dart';
 import 'theme.dart';
@@ -467,4 +471,158 @@ Future<AddOptions?> askAddOptions(BuildContext context, WidgetRef ref,
   dir.dispose();
   labels.dispose();
   return ok == true ? options : null;
+}
+
+/// Bilan de l'envoi de fichiers .torrent.
+class FileAddReport {
+  int added = 0;
+  int duplicates = 0;
+
+  /// Fichiers qui ne sont pas des .torrent valides (nom du fichier).
+  final invalid = <String>[];
+
+  /// Refusés par Transmission (nom du fichier : raison).
+  final failed = <String>[];
+
+  String get summary => [
+        if (added > 0) '$added ajouté(s)',
+        if (duplicates > 0) '$duplicates déjà présent(s)',
+        if (invalid.isNotEmpty) '${invalid.length} invalide(s)',
+        if (failed.isNotEmpty) '${failed.length} refusé(s)',
+      ].join(' · ');
+}
+
+/// Vérifie puis envoie des fichiers .torrent ; un fichier invalide ou refusé
+/// n'empêche pas l'envoi des autres.
+Future<FileAddReport> addTorrentFiles(
+  TransmissionClient client,
+  List<(String name, Uint8List bytes)> files,
+  AddOptions options,
+) async {
+  final report = FileAddReport();
+  for (final (name, bytes) in files) {
+    try {
+      TorrentContent.parse(bytes);
+    } on FormatException {
+      report.invalid.add(name);
+      continue;
+    }
+    try {
+      final added = await client.addTorrent(metainfo: bytes, options: options);
+      added ? report.added++ : report.duplicates++;
+    } on TransmissionException catch (e) {
+      report.failed.add('$name : ${e.message}');
+    }
+  }
+  return report;
+}
+
+/// Choisit un ou plusieurs .torrent sur l'appareil et les envoie.
+Future<void> pickAndAddTorrentFiles(BuildContext context, WidgetRef ref) async {
+  final client = ref.read(transmissionProvider);
+  if (client == null) return;
+  final picked = await openFiles(
+    // Android : pas de filtre, beaucoup de gestionnaires de fichiers ne
+    // reconnaissent pas le type .torrent ; le contenu est vérifié ensuite.
+    acceptedTypeGroups: Platform.isAndroid
+        ? const []
+        : const [
+            XTypeGroup(
+              label: 'Fichiers .torrent',
+              extensions: ['torrent'],
+              mimeTypes: ['application/x-bittorrent'],
+            ),
+          ],
+    confirmButtonText: 'Ajouter',
+  );
+  if (picked.isEmpty || !context.mounted) return;
+
+  final files = <(String, Uint8List)>[];
+  final preview = <(String, TorrentContent?)>[];
+  for (final f in picked) {
+    final bytes = await f.readAsBytes();
+    files.add((f.name, bytes));
+    TorrentContent? content;
+    try {
+      content = TorrentContent.parse(bytes);
+    } on FormatException {
+      content = null;
+    }
+    preview.add((f.name, content));
+  }
+  if (!context.mounted) return;
+
+  final valid = preview.where((p) => p.$2 != null).length;
+  var withOptions = false;
+  final c = context.colors;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text(picked.length == 1
+            ? 'Ajouter ce torrent ?'
+            : 'Ajouter $valid torrent(s) ?'),
+        content: SizedBox(
+          width: 480,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView(shrinkWrap: true, children: [
+                for (final (file, content) in preview)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      content == null
+                          ? Icons.error_outline_rounded
+                          : Icons.description_outlined,
+                      color: content == null ? c.danger : c.muted,
+                      size: 20,
+                    ),
+                    title: Text(content?.name ?? file,
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(content == null
+                        ? 'Pas un fichier .torrent valide'
+                        : '${formatBytes(content.totalSize)} · '
+                            '${content.files.length} fichier(s)'),
+                  ),
+              ]),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: withOptions,
+              onChanged: valid == 0
+                  ? null
+                  : (v) => setState(() => withOptions = v ?? false),
+              title: const Text('Choisir le dossier, les étiquettes…'),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annuler')),
+          FilledButton(
+              onPressed: valid == 0 ? null : () => Navigator.pop(context, true),
+              child: const Text('Ajouter')),
+        ],
+      ),
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+
+  var options = const AddOptions();
+  if (withOptions) {
+    final chosen = await askAddOptions(context, ref);
+    if (chosen == null || !context.mounted) return;
+    options = chosen;
+  }
+  final messenger = ScaffoldMessenger.of(context);
+  final report = await addTorrentFiles(client, files, options);
+  await ref.read(torrentsProvider.notifier).refresh(full: true);
+  messenger.showSnackBar(SnackBar(
+    content: Text([
+      report.summary,
+      ...report.failed,
+    ].where((l) => l.isNotEmpty).join('\n')),
+  ));
 }

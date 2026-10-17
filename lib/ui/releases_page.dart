@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -220,9 +221,9 @@ class _ReleaseList extends ConsumerWidget {
     final f = state.filter;
     final items = api == null || api.serverSorts.contains(f.sort)
         ? state.items
-        : (List.of(state.items)
-          ..sort((a, b) =>
-              f.ascending ? f.sort.compare(a, b) : f.sort.compare(b, a)));
+        : (List.of(state.items)..sort(
+            (a, b) => f.ascending ? f.sort.compare(a, b) : f.sort.compare(b, a),
+          ));
 
     final count = items.length + (state.hasMore ? 1 : 0);
     Widget item(BuildContext context, int i) {
@@ -246,19 +247,27 @@ class _ReleaseList extends ConsumerWidget {
       onRefresh: notifier.reload,
       child: grid
           ? GridView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 180,
-                mainAxisSpacing: 18,
-                crossAxisSpacing: 14,
-                childAspectRatio: 0.55,
-              ),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+              // Téléphone : 3 colonnes ; au-delà, des cartes de 170 px au plus.
+              gridDelegate: MediaQuery.sizeOf(context).width < 600
+                  ? const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: 0.52,
+                    )
+                  : const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 170,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.55,
+                    ),
               itemCount: count,
               itemBuilder: item,
             )
           : ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemExtent: 108,
+              itemExtent: ReleaseRow.extent(context),
               itemCount: count,
               itemBuilder: item,
             ),
@@ -304,7 +313,7 @@ class ReleaseCard extends StatelessWidget {
                       if (r.isFreeleech)
                         Tag('FL', solid: true, color: c.success),
                       if (r.isExclusive)
-                        Tag('EXCLU', solid: true, color: c.warning),
+                        Tag('EXCLU', solid: true, color: c.info),
                     ],
                   ),
                 ),
@@ -341,6 +350,17 @@ class ReleaseRow extends StatelessWidget {
   const ReleaseRow({super.key, required this.release});
   final Release release;
 
+  /// Hauteur de ligne : fixe pour la fluidité du défilement, mais calculée
+  /// d'après la taille de police du système (texte agrandi sur Android).
+  /// Textes : titre 13,5, nom 12, étiquettes 10,5 (+ 4 de marge), infos 12 ;
+  /// interligne 1,25 (1,3 pour les étiquettes) ; espacements 10 ; marges 12.
+  static double extent(BuildContext context) {
+    final s = MediaQuery.textScalerOf(context).scale(100) / 100;
+    return 12 + math.max(75, (13.5 + 12 + 12) * 1.25 * s + 10.5 * 1.3 * s + 16);
+  }
+
+  static const _line = 1.25;
+
   @override
   Widget build(BuildContext context) {
     final r = release;
@@ -348,10 +368,10 @@ class ReleaseRow extends StatelessWidget {
     return InkWell(
       onTap: () => _openDetail(context, r),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         child: Row(
           children: [
-            Poster(r.posterUrl, width: 60, height: 90),
+            Poster(r.posterUrl, width: 50, height: 75, radius: 6),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -366,7 +386,8 @@ class ReleaseRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 13.5,
+                      height: _line,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -375,28 +396,42 @@ class ReleaseRow extends StatelessWidget {
                     r.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: c.muted),
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: _line,
+                      color: c.muted,
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    clipBehavior: Clip.hardEdge,
-                    children: [
-                      Tag(r.subcategory, color: c.accent),
-                      if (r.resolution != null) Tag(r.resolution!),
-                      if (r.source != null) Tag(r.source!),
-                      if (r.languages.isNotEmpty)
-                        Tag(r.languages.take(2).join('/')),
-                      if (r.isFreeleech) Tag('FREELEECH', color: c.success),
-                      if (r.isExclusive) Tag('EXCLU', color: c.warning),
-                    ],
+                  const SizedBox(height: 4),
+                  // Une seule ligne d'étiquettes, coupée à droite si besoin
+                  // (un retour à la ligne ferait déborder la ligne de liste).
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: Row(
+                      spacing: 4,
+                      children: [
+                        Tag(r.subcategory, color: c.accent),
+                        if (r.resolution != null) Tag(r.resolution!),
+                        if (r.source != null) Tag(r.source!),
+                        if (r.languages.isNotEmpty)
+                          Tag(r.languages.take(2).join('/')),
+                        if (r.isFreeleech) Tag('FREELEECH', color: c.success),
+                        if (r.isExclusive) Tag('EXCLU', color: c.info),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     '${formatBytes(r.size)}  ·  ▲ ${r.seeders}  ▼ ${r.leechers}'
                     '  ·  ${formatAgo(r.createdAt)}',
-                    style: TextStyle(fontSize: 12, color: c.muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: _line,
+                      color: c.muted,
+                    ),
                   ),
                 ],
               ),

@@ -100,9 +100,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                     color: c.accent,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text('411',
+                  child: Text('411',
                       style: TextStyle(
-                          color: Colors.white,
+                          color: c.onAccent,
                           fontWeight: FontWeight.w800,
                           fontSize: 13)),
                 ),

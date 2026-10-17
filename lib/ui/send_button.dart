@@ -45,11 +45,11 @@ class _SendButtonState extends ConsumerState<SendButton> {
     // Sans infoHash (certains flux Torznab), on ne peut pas savoir s'il est présent.
     final onPressed = inClient || _sending ? null : () => _send();
     final icon = _sending
-        ? const SizedBox.square(
+        ? SizedBox.square(
             dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            child: CircularProgressIndicator(strokeWidth: 2, color: c.onAccent))
         : Icon(inClient ? Icons.check_rounded : Icons.download_rounded,
-            size: 18, color: Colors.white);
+            size: 18, color: c.onAccent);
 
     if (widget.large) {
       final main = FilledButton.icon(
@@ -79,8 +79,11 @@ class _SendButtonState extends ConsumerState<SendButton> {
       ]);
     }
 
-    return Tooltip(
-      message: inClient
+    // Pas d'info-bulle : sur mobile elle s'ouvre à l'appui long, réservé ici
+    // aux options d'ajout (et elle alourdit chaque élément de liste).
+    return Semantics(
+      button: true,
+      label: inClient
           ? 'Déjà dans Transmission'
           : 'Télécharger (appui long : options)',
       child: Material(
@@ -90,7 +93,7 @@ class _SendButtonState extends ConsumerState<SendButton> {
           customBorder: const CircleBorder(),
           onTap: onPressed,
           onLongPress: inClient || _sending ? null : _sendWithOptions,
-          child: SizedBox.square(dimension: 34, child: Center(child: icon)),
+          child: SizedBox.square(dimension: 30, child: Center(child: icon)),
         ),
       ),
     );
