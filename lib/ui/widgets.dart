@@ -59,8 +59,17 @@ String tmdbSized(String url, double pixels) {
 /// Les coins arrondis sont dessinés avec l'image (pas de découpe séparée).
 class Poster extends StatelessWidget {
   const Poster(this.url,
-      {super.key, this.width, this.height, this.radius = 8, this.fallback});
+      {super.key,
+      this.width,
+      this.height,
+      this.radius = 8,
+      this.fallback,
+      this.alignment = Alignment.center});
   final String? url;
+
+  /// Partie gardée quand l'image est recadrée (haut pour une image de fond :
+  /// les visages y sont).
+  final Alignment alignment;
   final double? width;
   final double? height;
   final double radius;
@@ -97,7 +106,8 @@ class Poster extends StatelessWidget {
                   imageBuilder: (_, image) => DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: shape,
-                      image: DecorationImage(image: image, fit: BoxFit.cover),
+                      image: DecorationImage(
+                          image: image, fit: BoxFit.cover, alignment: alignment),
                     ),
                   ),
                   placeholder: (_, _) => placeholder,

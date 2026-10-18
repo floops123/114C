@@ -149,8 +149,11 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    // En haut de la fiche et dans « Déjà chez toi ».
-    expect(find.widgetWithText(FilledButton, 'Lire'), findsNWidgets(2));
+    // Un seul bouton de lecture, sur l'affiche ; plus de « Chercher sur les
+    // trackers » (la disponibilité s'affiche d'office).
+    expect(find.byTooltip('Lire'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Lire'), findsNothing);
+    expect(find.text('Chercher sur les trackers'), findsNothing);
     expect(find.text('Déjà chez toi'), findsOneWidget);
     expect(find.text('Dune : Deuxième partie · 2024 · déjà vu'), findsOneWidget);
     expect(find.text('Dune.Deuxieme.Partie.2024.MULTI.VF2.2160p.WEB.H265-HYPERION'),

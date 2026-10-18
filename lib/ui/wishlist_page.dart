@@ -714,7 +714,17 @@ class TitleDetailPage extends ConsumerWidget {
     // viennent se poser sur son bas, en fondu (façon Seerr).
     final backdrop = d?.backdropUrl;
     final backdropHeight =
-        (MediaQuery.sizeOf(context).width * 0.5).clamp(240.0, 460.0);
+        (MediaQuery.sizeOf(context).width * 0.45).clamp(220.0, 420.0);
+
+    // Déjà chez soi : lecture depuis l'affiche (un seul bouton dans la fiche).
+    final local = localForTmdb(ref, t);
+    final jellyfin = local == null ? ref.watch(jellyfinItemProvider(t)).value : null;
+    final series = local?.isSeries ?? jellyfin?.isSeries ?? false;
+    final VoidCallback? play = local != null
+        ? () => playLocal(context, local)
+        : jellyfin != null
+            ? () => playOnJellyfin(context, jellyfin)
+            : null;
 
     String hours(int minutes) => minutes < 60
         ? '$minutes min'
@@ -728,7 +738,17 @@ class TitleDetailPage extends ConsumerWidget {
             BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 16),
           ],
         ),
-        child: Poster(t.posterUrl, width: 120, height: 180, radius: 10),
+        child: Stack(alignment: Alignment.center, children: [
+          Poster(t.posterUrl, width: 120, height: 180, radius: 10),
+          if (play != null)
+            RoundAction(
+              icon: series ? Icons.video_library_rounded : Icons.play_arrow_rounded,
+              color: c.success,
+              tooltip: series ? 'Épisodes' : 'Lire',
+              size: 52,
+              onTap: play,
+            ),
+        ]),
       ),
       const SizedBox(width: 16),
       Expanded(
@@ -792,7 +812,8 @@ class TitleDetailPage extends ConsumerWidget {
                 height: backdropHeight,
                 width: double.infinity,
                 child: Stack(fit: StackFit.expand, children: [
-                  Poster(backdrop, radius: 0),
+                  // Recadrée par le haut : on garde les visages.
+                  Poster(backdrop, radius: 0, alignment: Alignment.topCenter),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -829,22 +850,6 @@ class TitleDetailPage extends ConsumerWidget {
                   const SizedBox(height: 14),
                 ],
                 Wrap(spacing: 8, runSpacing: 8, children: [
-                  if (localForTmdb(ref, t) case final local?)
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                          backgroundColor: c.success, foregroundColor: Colors.white),
-                      onPressed: () => playLocal(context, local),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: Text(local.isSeries ? 'Épisodes' : 'Lire'),
-                    )
-                  else if (ref.watch(jellyfinItemProvider(t)).value case final item?)
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                          backgroundColor: c.success, foregroundColor: Colors.white),
-                      onPressed: () => playOnJellyfin(context, item),
-                      icon: const Icon(Icons.play_arrow_rounded),
-                      label: Text(item.isSeries ? 'Épisodes' : 'Lire'),
-                    ),
                   FilledButton.icon(
                     onPressed: () =>
                         ref.read(wishlistProvider.notifier).toggle(t),
@@ -852,12 +857,6 @@ class TitleDetailPage extends ConsumerWidget {
                         ? Icons.bookmark_remove_outlined
                         : Icons.bookmark_add_outlined),
                     label: Text(inList ? 'Retirer de la liste' : 'Ajouter à la liste'),
-                  ),
-                  FilledButton.icon(
-                    style: _tinted(c, c.download),
-                    onPressed: () => _openSearch(context, t),
-                    icon: const Icon(Icons.travel_explore_rounded),
-                    label: const Text('Chercher sur les trackers'),
                   ),
                   if (d?.trailer case final url?)
                     FilledButton.icon(
@@ -1034,8 +1033,6 @@ class _OwnedBlock extends ConsumerWidget {
                     for (final f in MediaTitle.best(local.files).take(3))
                       [?f.guess.resolution, formatBytes(f.size)].join(' '),
                   ].join(' · '),
-            trailing: _PlayButton(
-                series: local.isSeries, onPressed: () => playLocal(context, local)),
           ),
         if (item != null && local == null)
           _InfoRow(
@@ -1049,9 +1046,6 @@ class _OwnedBlock extends ConsumerWidget {
               else if (item.progress case final p?)
                 'vu à ${(p * 100).round()} %',
             ].join(' · '),
-            trailing: _PlayButton(
-                series: item.isSeries,
-                onPressed: () => playOnJellyfin(context, item)),
           ),
         if (jellyfin.hasError && local == null)
           _InfoRow(
@@ -1061,30 +1055,6 @@ class _OwnedBlock extends ConsumerWidget {
           ),
         for (final torrent in torrents) _LocalTorrent(torrent: torrent),
       ],
-    );
-  }
-}
-
-/// « Lire » / « Épisodes », compact, aux couleurs de « Déjà chez toi ».
-class _PlayButton extends StatelessWidget {
-  const _PlayButton({required this.series, required this.onPressed});
-  final bool series;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return FilledButton.icon(
-      style: FilledButton.styleFrom(
-        backgroundColor: c.success,
-        foregroundColor: Colors.white,
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-      ),
-      onPressed: onPressed,
-      icon: Icon(series ? Icons.video_library_rounded : Icons.play_arrow_rounded,
-          size: 18),
-      label: Text(series ? 'Épisodes' : 'Lire'),
     );
   }
 }
