@@ -18,10 +18,19 @@ default:
       - .gradle/caches/
       - .gradle/wrapper/
 
+# L'image Flutter peut avoir du retard sur la derniere version stable.
+# Le projet requiert Dart ^3.13.5 (Flutter >= 3.47.0) : on met Flutter a jour.
+.flutter_setup:
+  before_script:
+    - git config --global --add safe.directory '*'
+    - flutter channel stable
+    - flutter upgrade --force
+    - flutter --version
+
 analyze:
   stage: prepare
+  extends: .flutter_setup
   script:
-    - flutter --version
     - flutter pub get
     - flutter analyze --no-fatal-infos --no-fatal-warnings
     - flutter test
@@ -29,6 +38,7 @@ analyze:
 
 build_android_apk:
   stage: build
+  extends: .flutter_setup
   script:
     - flutter pub get
     - flutter build apk --release
@@ -41,6 +51,7 @@ build_android_apk:
 build_linux:
   stage: build
   before_script:
+    - !reference [.flutter_setup, before_script]
     - apt-get update
     - apt-get install -y --no-install-recommends clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev mpv libsecret-1-dev libjsoncpp-dev
   script:
