@@ -1,0 +1,97 @@
+# Tests
+
+[← Sommaire](../README.md)
+
+## Lancer
+
+```sh
+flutter test              # tous les tests unitaires et d'interface
+flutter test test/ftp_test.dart   # un seul fichier
+flutter analyze           # analyse statique (doit rester sans remarque)
+```
+
+Les tests ne touchent à aucun service réel : trackers, TMDB, Jellyfin et
+Transmission sont remplacés par des faux, et le FTP par un petit serveur
+local. Ils tournent hors ligne en une trentaine de secondes.
+
+## Ce qui est vérifié
+
+**Sorties et trackers**
+
+| Fichier | Contenu |
+|---|---|
+| `parsing_test.dart` | noms de release, dates RFC 822, tri local, tailles d'affiches |
+| `release_profile_test.dart` | profils de qualité C411 sur des sorties réelles |
+| `content_art_test.dart` | type de contenu d'une sortie, pictos des catégories |
+| `row_layout_test.dart` | lignes sans débordement (390 / 1 705 px, police × 1 et × 1,3) |
+| `mouse_scroll_test.dart`, `smooth_wheel_test.dart` | glisser à la souris, molette adoucie |
+
+**Transmission**
+
+| Fichier | Contenu |
+|---|---|
+| `add_files_test.dart` | envoi de `.torrent` : ajoutés, doublons, invalides, refusés |
+| `server_settings_test.dart`, `torrent_detail_test.dart` | écrans sur des réponses réelles d'un daemon 4.0.5 |
+| `charts_test.dart` | graphiques (survol, info-bulle sans débordement) |
+| `reorder_test.dart` | liste réordonnée à chaque rafraîchissement sans erreur |
+
+**Cross-seed et sans seeder**
+
+| Fichier | Contenu |
+|---|---|
+| `cross_seed_test.dart` | bencode, tracker d'origine, analyse dans les deux sens, mémoire, ajout |
+| `revive_test.dart` | sorties mortes retrouvées, téléchargées, puis ajoutées depuis le tracker d'origine |
+
+**Souhaits, base et lecture**
+
+| Fichier | Contenu |
+|---|---|
+| `wishlist_test.dart` | TMDB, liste, Découvrir, fiche, recherche par tracker, tris et intertitres |
+| `media_name_test.dart` | film ou épisode d'après le chemin, extraits et bonus ignorés |
+| `ftp_test.dart` | client FTP **et FTPS** : liste, taille, lecture à une position, repli sur `LIST`, identifiants refusés |
+| `media_relay_test.dart` | relais HTTP : plages `Range`, 206 / 416, contenu exact via FTPS |
+| `media_library_test.dart` | parcours complet (Transmission + dossiers), correspondance des chemins, TMDB, rattachement aux fiches et aux sorties, vue « Sur le disque » et épisodes |
+| `jellyfin_test.dart` | bibliothèque, versions, épisodes, bibliothèque mixte (dossiers nommés comme la release, une sortie par saison) |
+
+**C411 en direct**
+
+| Fichier | Contenu |
+|---|---|
+| `socket_test.dart`, `chat_send_test.dart` | client Socket.IO contre un faux serveur : ping, événements, refus, envoi avec accusé, réessai |
+| `notifications_test.dart`, `chat_test.dart`, `chat_format_test.dart` | trames et réponses réelles anonymisées, salon, mise en forme, cache |
+
+**Ensemble**
+
+| Fichier | Contenu |
+|---|---|
+| `smoke_test.dart` | l'application complète : tous les onglets, info-bulles, rafraîchissements, à plusieurs largeurs |
+
+## Outils de test
+
+- **`test/fake_ftp.dart`** : serveur FTP en mémoire (`EPSV`, `MLSD` / `LIST`,
+  `SIZE`, `REST`, `RETR`), avec TLS explicite facultatif grâce à un
+  certificat autosigné **réservé aux tests** (`test/fixtures/ftp_test_*.pem`).
+- **`test/fixtures/`** : réponses réelles (Transmission 4.0.5, C411,
+  AstraTorrent), anonymisées.
+- **Stores en mémoire** : `MemoryWishlistStore`, `MemoryPlaybackStore`,
+  `MemoryMediaLibraryStore`… à passer en `overrideWithValue`.
+- **Faux clients** : sous-classes de `TmdbApi`, `TransmissionClient`,
+  `JellyfinClient` (avec un `HttpClientAdapter` factice) ou implémentations
+  de `TrackerApi`.
+
+## Performances
+
+`integration_test/scroll_perf_test.dart` (avec `test_driver/perf_driver.dart`)
+mesure la fluidité du défilement des transferts (424 torrents rafraîchis
+toutes les 2 s) et des sorties, en mode profil :
+
+```sh
+flutter drive --profile -d linux --driver=test_driver/perf_driver.dart \
+  --target=integration_test/scroll_perf_test.dart
+```
+
+## Captures d'écran
+
+Les images de `docs/images/` sont produites par un test temporaire : il charge
+les polices (Inter et MaterialIcons) avec `FontLoader`, affiche un écran avec
+des données fictives, puis enregistre le rendu d'un `RepaintBoundary` en PNG.
