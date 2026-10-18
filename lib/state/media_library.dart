@@ -521,7 +521,8 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     } on Object catch (e) {
       _set(MediaLibraryState(state.library, error: '$e'));
     } finally {
-      unawaited(ftp?.close());
+      // Attend la fermeture propre pour libérer le descripteur de fichier.
+      await ftp?.close();
     }
   }
 

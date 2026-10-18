@@ -74,6 +74,8 @@ class _Torrents extends TorrentsNotifier {
 
 class _Tracker implements TrackerApi {
   @override
+  void close() {}
+  @override
   Tracker get tracker => Tracker.c411;
   @override
   List<ReleaseSort> get sorts => ReleaseSort.values;

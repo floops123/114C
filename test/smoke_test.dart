@@ -68,6 +68,9 @@ class _T extends TorrentsNotifier {
 }
 
 class _Tr implements TrackerApi {
+
+  @override
+  void close() {}
   @override
   Tracker get tracker => Tracker.c411;
   @override

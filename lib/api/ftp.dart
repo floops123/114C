@@ -50,6 +50,10 @@ class FtpClient {
   final FtpConfig config;
 
   Socket? _control;
+
+  /// Connexions de données ouvertes : fermées avec la connexion de contrôle
+  /// (un flux de [read] abandonné par le lecteur ne ferme pas la sienne).
+  final _dataSockets = <Socket>{};
   final _lines = <String>[];
   final _waiting = <Completer<void>>[];
   String _partial = '';
@@ -81,12 +85,18 @@ class FtpClient {
       // Facultatif : certains serveurs répondent 500, sans gravité.
       await _send('OPTS UTF8 ON');
       await _reply();
-    } on SocketException catch (e) {
-      throw FtpException('Serveur FTP injoignable : ${e.message}');
-    } on HandshakeException catch (e) {
-      throw FtpException('TLS refusé par le serveur FTP : ${e.message}');
-    } on TimeoutException {
-      throw const FtpException('Le serveur FTP ne répond pas');
+    } on Object catch (e) {
+      // Connexion ratée (identifiants, TLS…) : on libère la socket, sinon
+      // chaque essai garde un descripteur ouvert.
+      await _release();
+      throw switch (e) {
+        SocketException(:final message) =>
+          FtpException('Serveur FTP injoignable : $message'),
+        HandshakeException(:final message) =>
+          FtpException('TLS refusé par le serveur FTP : $message'),
+        TimeoutException() => const FtpException('Le serveur FTP ne répond pas'),
+        _ => e,
+      };
     }
   }
 
@@ -188,13 +198,25 @@ class FtpClient {
       // L'adresse annoncée est souvent interne : on garde celle du serveur.
       port = int.parse(m[5]!) * 256 + int.parse(m[6]!);
     }
-    return Socket.connect(config.host, port, timeout: _timeout);
+    final socket = await Socket.connect(config.host, port, timeout: _timeout);
+    _dataSockets.add(socket);
+    return socket;
   }
 
-  Future<Socket> _secureData(Socket socket) => config.tls
-      ? SecureSocket.secure(socket,
-          host: config.host, onBadCertificate: (_) => true)
-      : Future.value(socket);
+  Future<Socket> _secureData(Socket socket) async {
+    if (!config.tls) return socket;
+    final secure = await SecureSocket.secure(socket,
+        host: config.host, onBadCertificate: (_) => true);
+    _dataSockets
+      ..remove(socket)
+      ..add(secure);
+    return secure;
+  }
+
+  void _drop(Socket socket) {
+    _dataSockets.remove(socket);
+    socket.destroy();
+  }
 
   /// Contenu d'un dossier.
   Future<List<FtpEntry>> list(String path) async {
@@ -210,16 +232,20 @@ class FtpClient {
     await _send(command);
     final r = await _reply();
     if (r.code != 125 && r.code != 150) {
-      socket.destroy();
+      _drop(socket);
       return null;
     }
     final data = await _secureData(socket);
-    final bytes = <int>[];
-    await for (final chunk in data) {
-      bytes.addAll(chunk);
+    try {
+      final bytes = <int>[];
+      await for (final chunk in data) {
+        bytes.addAll(chunk);
+      }
+      await _expect([226, 250]);
+      return utf8.decode(bytes, allowMalformed: true);
+    } finally {
+      _drop(data);
     }
-    await _expect([226, 250]);
-    return utf8.decode(bytes, allowMalformed: true);
   }
 
   static List<FtpEntry> _parseMlsd(String raw) => [
@@ -269,10 +295,29 @@ class FtpClient {
     await _send('RETR ${_path(path)}');
     final r = await _reply();
     if (r.code != 125 && r.code != 150) {
-      socket.destroy();
+      _drop(socket);
       throw FtpException('Lecture refusée : ${r.code} ${r.text}');
     }
-    return _secureData(socket);
+    final data = await _secureData(socket);
+    // Fin de lecture ou abandon (le lecteur saute ailleurs) : la connexion
+    // de données est fermée tout de suite.
+    final controller = StreamController<List<int>>();
+    late final StreamSubscription<List<int>> sub;
+    controller
+      ..onListen = () {
+        sub = data.listen(controller.add,
+            onError: controller.addError, onDone: () {
+          _drop(data);
+          controller.close();
+        });
+      }
+      ..onPause = (() => sub.pause())
+      ..onResume = (() => sub.resume())
+      ..onCancel = () async {
+        await sub.cancel();
+        _drop(data);
+      };
+    return controller.stream;
   }
 
   String _path(String p) => p.isEmpty ? '/' : p;
@@ -283,8 +328,18 @@ class FtpClient {
     } on Object {
       // Déjà fermée.
     }
+    await _release();
+  }
+
+  /// Ferme toutes les sockets, contrôle et données.
+  Future<void> _release() async {
     await _subscription?.cancel();
+    _subscription = null;
     _control?.destroy();
     _control = null;
+    for (final s in [..._dataSockets]) {
+      s.destroy();
+    }
+    _dataSockets.clear();
   }
 }

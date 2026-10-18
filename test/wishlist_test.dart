@@ -17,6 +17,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Tracker qui cherche la chaîne telle quelle.
 class _Tracker implements TrackerApi {
+
+  @override
+  void close() {}
   _Tracker(this.results);
   final Map<String, List<Release>> results;
   final queries = <String>[];

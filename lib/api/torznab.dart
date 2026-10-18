@@ -115,6 +115,9 @@ class TorznabApi implements TrackerApi {
     return checkTorrent(tracker, res.data);
   }
 
+  @override
+  void close() => _dio.close();
+
   Release _release(XmlElement item) {
     String? text(String name) =>
         item.findElements(name).firstOrNull?.innerText.trim();

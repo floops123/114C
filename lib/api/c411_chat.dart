@@ -354,4 +354,7 @@ class C411ChatApi {
           : null,
     );
   }
+
+  /// Libère les connexions (cookie changé : un nouveau client le remplace).
+  void close() => _dio.close();
 }

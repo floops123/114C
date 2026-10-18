@@ -576,9 +576,15 @@ class TmdbApi {
 
   Future<FrenchDates> frenchDates(int movieId) async =>
       FrenchDates.fromApi(await _get('/movie/$movieId/release_dates'));
+
+  /// Libère les connexions (clé changée : un nouveau client le remplace).
+  void close() => _dio.close();
 }
 
 final tmdbProvider = Provider<TmdbApi?>((ref) {
   final key = ref.watch(settingsProvider).value?.tmdbKey ?? '';
-  return key.isEmpty ? null : TmdbApi(key);
+  if (key.isEmpty) return null;
+  final api = TmdbApi(key);
+  ref.onDispose(api.close);
+  return api;
 });

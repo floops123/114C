@@ -589,12 +589,17 @@ class JellyfinClient {
 
   /// En-têtes d'authentification pour le lecteur.
   Map<String, String> get headers => {'X-Emby-Token': apiKey};
+
+  /// Libère les connexions (réglages changés : un nouveau client le remplace).
+  void close() => _dio.close();
 }
 
 final jellyfinProvider = Provider<JellyfinClient?>((ref) {
   final s = ref.watch(settingsProvider).value;
   if (s == null || s.jellyfinUrl.isEmpty || s.jellyfinKey.isEmpty) return null;
-  return JellyfinClient(url: s.jellyfinUrl, apiKey: s.jellyfinKey);
+  final client = JellyfinClient(url: s.jellyfinUrl, apiKey: s.jellyfinKey);
+  ref.onDispose(client.close);
+  return client;
 });
 
 /// Index des films et séries de Jellyfin, pour savoir sans requête si un

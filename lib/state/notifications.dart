@@ -722,7 +722,10 @@ final socketUrlProvider = Provider<Uri>((ref) => C411Socket.defaultUrl);
 final chatApiProvider = Provider<C411ChatApi?>((ref) {
   final cookie =
       ref.watch(settingsProvider.select((s) => s.value?.sessionCookie ?? ''));
-  return cookie.isEmpty ? null : C411ChatApi(cookie);
+  if (cookie.isEmpty) return null;
+  final api = C411ChatApi(cookie);
+  ref.onDispose(api.close);
+  return api;
 });
 
 final notificationsProvider =

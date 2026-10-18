@@ -330,6 +330,9 @@ class TransmissionClient {
 
   /// Arrête le daemon : il faudra le relancer sur le serveur.
   Future<void> sessionClose() => call('session-close');
+
+  /// Libère les connexions (réglages changés : un nouveau client le remplace).
+  void close() => _dio.close();
 }
 
 /// Options de `torrent-add`.
@@ -358,6 +361,8 @@ class AddOptions {
 final transmissionProvider = Provider<TransmissionClient?>((ref) {
   final s = ref.watch(settingsProvider).value;
   if (s == null || !s.hasTransmission) return null;
-  return TransmissionClient(
+  final client = TransmissionClient(
       url: s.rpcUrl, user: s.rpcUser, password: s.rpcPassword);
+  ref.onDispose(client.close);
+  return client;
 });

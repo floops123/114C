@@ -82,6 +82,9 @@ class C411Api implements TrackerApi {
     return checkTorrent(tracker, res.data);
   }
 
+  @override
+  void close() => _dio.close();
+
   static Release _release(Map<String, dynamic> json) {
     final media = json['media'] as Map<String, dynamic>? ?? const {};
     final tech = json['tech'] as Map<String, dynamic>? ?? const {};

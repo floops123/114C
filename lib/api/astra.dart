@@ -251,6 +251,9 @@ class AstraApi implements TrackerApi {
     }
     throw const TrackerException('AstraTorrent : réponse illisible');
   }
+
+  @override
+  void close() => _dio.close();
 }
 
 /// `2026-10-17 15:17:38`, heure de Paris (le flux RSS du site l'annonce en

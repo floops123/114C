@@ -110,6 +110,9 @@ class _Transmission extends TransmissionClient {
 }
 
 class _Tracker implements TrackerApi {
+
+  @override
+  void close() {}
   _Tracker(this.tracker, this.results, this.files);
   @override
   final Tracker tracker;

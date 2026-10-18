@@ -219,6 +219,9 @@ abstract class TrackerApi {
 
   /// Le .torrent brut de la sortie.
   Future<Uint8List> downloadTorrent(Release release);
+
+  /// Ferme le client HTTP (réglages changés : un nouveau client le remplace).
+  void close();
 }
 
 /// Client HTTP commun : délais, traduction des erreurs HTTP en messages.
@@ -288,8 +291,15 @@ Uint8List checkTorrent(Tracker tracker, List<int>? data) {
 final trackersProvider = Provider<Map<Tracker, TrackerApi>>((ref) {
   final s = ref.watch(settingsProvider).value;
   if (s == null) return const {};
-  return {
+  final clients = {
     for (final t in Tracker.values)
       if ((s.apiKeys[t.name] ?? '').isNotEmpty) t: t.client(s.apiKeys[t.name]!),
   };
+  // Réglages changés : les anciens clients libèrent leurs connexions.
+  ref.onDispose(() {
+    for (final c in clients.values) {
+      c.close();
+    }
+  });
+  return clients;
 });

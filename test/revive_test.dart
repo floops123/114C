@@ -26,6 +26,9 @@ class _Transmission extends TransmissionClient {
 
 /// C411 : pages triées par seeders croissants ; tr4ker : recherche par nom.
 class _Tracker implements TrackerApi {
+
+  @override
+  void close() {}
   _Tracker(this.tracker, {this.pages = const [], this.results = const {}});
   @override
   final Tracker tracker;

@@ -60,4 +60,46 @@ void main() {
     await relay.close();
     await server.close();
   });
+
+  // Descripteurs : le lecteur abandonne une lecture à chaque saut dans la
+  // vidéo, et une connexion peut être refusée. Rien ne doit rester ouvert
+  // (sinon « Trop de fichiers ouverts » au bout d'un moment).
+  test('ni lecture abandonnée ni connexion refusée ne laisse de socket ouverte',
+      () async {
+    int fds() => Directory('/proc/self/fd').listSync().length;
+    final server = await FakeFtpServer.start(
+        {'/f.mkv': List.filled(4 << 20, 7)}, tls: true);
+    final config = FtpConfig(
+        host: '127.0.0.1', port: server.port, user: 'moi', password: 'secret');
+    final relay = MediaRelay(config);
+    final url = await relay.urlFor('/f.mkv');
+    final http = HttpClient();
+    Future<void> seek() async {
+      final request = await http.getUrl(url);
+      request.headers.set('Range', 'bytes=1000-');
+      final response = await request.close();
+      await response.first;
+      (await response.detachSocket()).destroy();
+    }
+
+    await seek();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final before = fds();
+    for (var i = 0; i < 20; i++) {
+      await seek();
+    }
+    for (var i = 0; i < 20; i++) {
+      await expectLater(
+          FtpClient(FtpConfig(
+                  host: '127.0.0.1', port: server.port, user: 'moi', password: 'faux'))
+              .connect(),
+          throwsA(isA<FtpException>()));
+    }
+    await Future<void>.delayed(const Duration(seconds: 1));
+    expect(fds(), lessThanOrEqualTo(before + 2));
+
+    http.close(force: true);
+    await relay.close();
+    await server.close();
+  }, skip: !Directory('/proc/self/fd').existsSync());
 }

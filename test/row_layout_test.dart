@@ -17,6 +17,9 @@ import 'package:flutter_test/flutter_test.dart';
 // police du système.
 
 class _Tracker implements TrackerApi {
+
+  @override
+  void close() {}
   @override
   Tracker get tracker => Tracker.c411;
   @override
