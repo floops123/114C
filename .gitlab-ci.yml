@@ -5,6 +5,9 @@ stages:
   - build
 
 variables:
+  # Branche ou tag Flutter a installer (ex: stable, beta, 3.47.0).
+  # Le projet requiert Dart ^3.13.5 (Flutter >= 3.47.0).
+  FLUTTER_REF: "stable"
   PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
 
@@ -18,13 +21,13 @@ default:
       - .gradle/caches/
       - .gradle/wrapper/
 
-# L'image Flutter peut avoir du retard sur la derniere version stable.
-# Le projet requiert Dart ^3.13.5 (Flutter >= 3.47.0) : on met Flutter a jour.
+# L'image embarque un Flutter plus ancien (Dart 3.12) dont le depot git est
+# incomplet : on clone une version recente de Flutter et on la place en tete du PATH.
 .flutter_setup:
   before_script:
     - git config --global --add safe.directory '*'
-    - flutter channel stable
-    - flutter upgrade --force
+    - git clone --depth 1 --branch "$FLUTTER_REF" https://github.com/flutter/flutter.git "$CI_PROJECT_DIR/.flutter-sdk"
+    - export PATH="$CI_PROJECT_DIR/.flutter-sdk/bin:$PATH"
     - flutter --version
 
 analyze:
