@@ -57,6 +57,7 @@ void main() {
     final movie = TmdbTitle.fromApi({
       'id': 1, 'title': 'Dune : Troisième partie', 'original_title': 'Dune: Part Three',
       'release_date': '2026-12-16', 'poster_path': '/a.jpg', 'overview': ' Suite. ',
+      'vote_average': 7.83, 'vote_count': 1520,
     }, TmdbType.movie);
     expect((movie.title, movie.originalTitle, movie.year), ('Dune : Troisième partie', 'Dune: Part Three', 2026));
     expect(movie.posterUrl, 'https://image.tmdb.org/t/p/w500/a.jpg');
@@ -64,10 +65,31 @@ void main() {
     final tv = TmdbTitle.fromApi(
         {'id': 2, 'name': 'Série', 'first_air_date': '', 'overview': ''}, TmdbType.tv);
     expect((tv.title, tv.date, tv.overview, tv.upcoming), ('Série', null, null, true));
+    expect((movie.rating, movie.votes), (7.83, 1520));
+    expect((tv.rating, tv.votes), (null, 0), reason: 'sans vote : pas de note');
 
     final back = TmdbTitle.fromJson(movie.toJson());
     expect(back, movie);
     expect((back.title, back.date, back.posterUrl), (movie.title, movie.date, movie.posterUrl));
+    expect((back.rating, back.votes), (7.83, 1520));
+    // Titre enregistré avant la note : votes inconnus, à relire.
+    expect(TmdbTitle.fromJson({'id': 3, 'type': 'movie', 'title': 'Ancien'}).votes, isNull);
+  });
+
+  testWidgets('note TMDB sous l’affiche', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        tmdbProvider.overrideWithValue(_Tmdb()),
+        wishlistStoreProvider.overrideWithValue(MemoryWishlistStore()),
+        trackersProvider.overrideWithValue(const {}),
+      ],
+      child: MaterialApp(
+        theme: buildTheme(Brightness.dark),
+        home: FeedPage(feed: TmdbFeed.discover().first),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('2099  ★ 7,8'), findsOneWidget);
   });
 
   test('liste : ajout, retrait, sorties proches d’abord, mémorisée', () {
@@ -588,7 +610,7 @@ class _Tmdb extends TmdbApi {
   @override
   Future<({List<TmdbTitle> items, int totalPages})> feed(TmdbFeed feed,
           {int page = 1}) async =>
-      (items: [_movie(1, '2099-01-01')], totalPages: 1);
+      (items: [_movie(1, '2099-01-01').withRating(7.83, 1520)], totalPages: 1);
 
   @override
   Future<List<TmdbGenre>> genres(TmdbType type) async => const [TmdbGenre(28, 'Action')];

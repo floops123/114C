@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../core/format.dart';
 import 'theme.dart';
 
 /// Petite étiquette plate (résolution, langue, freeleech…).
@@ -741,3 +742,11 @@ class RoundAction extends StatelessWidget {
         ),
       );
 }
+
+/// Note TMDB : étoile dorée et note (« ★ 7,8 »), à placer dans une ligne de
+/// texte (même taille et interligne que le texte voisin).
+InlineSpan ratingSpan(BuildContext context, double rating, TextStyle style) =>
+    TextSpan(
+      text: '★ ${formatRating(rating)}',
+      style: style.copyWith(color: context.colors.warning, fontWeight: FontWeight.w700),
+    );

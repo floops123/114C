@@ -50,3 +50,7 @@ String formatAgo(DateTime d) {
 
 DateTime fromEpoch(int seconds) =>
     DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+
+/// Note TMDB sur 10, à la française : 7.83 → « 7,8 ».
+String formatRating(double rating) =>
+    rating.toStringAsFixed(1).replaceAll('.', ',');

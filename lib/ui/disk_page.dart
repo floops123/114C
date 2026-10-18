@@ -219,9 +219,21 @@ class LocalTitleCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600)),
-        Text([if (t.year != null) '${t.year}', ?count].join(' · '),
+        Builder(builder: (context) {
+          final style = TextStyle(fontSize: 11.5, height: 1.3, color: c.muted);
+          return Text.rich(
+            TextSpan(children: [
+              TextSpan(text: [if (t.year != null) '${t.year}', ?count].join(' · ')),
+              if (t.tmdb?.rating case final r?) ...[
+                const TextSpan(text: ' · '),
+                ratingSpan(context, r, style),
+              ],
+            ]),
             maxLines: 1,
-            style: TextStyle(fontSize: 11.5, height: 1.3, color: c.muted)),
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          );
+        }),
       ]),
     );
   }

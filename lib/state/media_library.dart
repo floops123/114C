@@ -533,8 +533,22 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
         if (!library.tmdb.containsKey(MediaLibrary.groupKey(f.guess)))
           MediaLibrary.groupKey(f.guess): f.guess,
     };
+    // Fiches gardées avant la note TMDB : la note seule est relue.
+    final unrated = [
+      for (final MapEntry(:key, :value) in library.tmdb.entries)
+        if (value != null && value.votes == null) (key, value),
+    ];
     var done = 0;
     final found = {...library.tmdb};
+    for (final (key, t) in unrated) {
+      try {
+        final r = await tmdb.rating(t);
+        found[key] = t.withRating(r.rating, r.votes);
+      } on TmdbException {
+        continue; // Réessayé au prochain parcours.
+      }
+      if (!ref.mounted) break;
+    }
     for (final MapEntry(:key, value: guess) in pending.entries) {
       _set(MediaLibraryState(library,
           scanning: true, status: 'Fiches TMDB ${++done}/${pending.length}'));

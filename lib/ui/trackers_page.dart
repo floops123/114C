@@ -383,13 +383,25 @@ class GroupCard extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
                 fontSize: 12.5, height: 1.3, fontWeight: FontWeight.w600)),
-        Text(
-            [
-              ?year?.toString(),
-              '${g.releases.length} version${g.releases.length > 1 ? 's' : ''}',
-            ].join(' · '),
+        Builder(builder: (context) {
+          final style = TextStyle(fontSize: 11.5, height: 1.3, color: c.muted);
+          return Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: [
+                ?year?.toString(),
+                '${g.releases.length} version${g.releases.length > 1 ? 's' : ''}',
+              ].join(' · ')),
+              if (tmdb?.rating case final r?) ...[
+                const TextSpan(text: ' · '),
+                ratingSpan(context, r, style),
+              ],
+            ]),
             maxLines: 1,
-            style: TextStyle(fontSize: 11.5, height: 1.3, color: c.muted)),
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          );
+        }),
         Text(
             [
               g.trackers.map((t) => t.label).join(', '),
@@ -492,6 +504,8 @@ class GroupTile extends ConsumerWidget {
                       child: Row(children: [
                         if (playable != null)
                           info(Icons.dns_rounded, 'Sur le disque', color: c.success),
+                        if (tmdb?.rating case final r?)
+                          info(Icons.star_rounded, formatRating(r), color: c.warning),
                         if (g.bestResolution case final res?) info(Icons.hd_rounded, res),
                         info(Icons.layers_rounded,
                             '${g.releases.length} version${g.releases.length > 1 ? 's' : ''}'),

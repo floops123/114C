@@ -140,6 +140,28 @@ class WishlistNotifier extends Notifier<List<WishItem>> {
     }
   }
 
+  /// Note TMDB des souhaits enregistrés avant qu'elle ne soit gardée.
+  Future<void> refreshRatings() async {
+    final api = ref.read(tmdbProvider);
+    if (api == null) return;
+    for (final t in [for (final i in state) if (i.title.votes == null) i.title]) {
+      final ({double? rating, int votes}) r;
+      try {
+        r = await api.rating(t);
+      } on TmdbException {
+        continue; // Nouvel essai à la prochaine ouverture.
+      }
+      if (!ref.mounted) return;
+      _save([
+        for (final i in state)
+          i.title.key == t.key
+              ? WishItem(i.title.withRating(r.rating, r.votes), i.addedAt,
+                  datesAt: i.datesAt)
+              : i,
+      ]);
+    }
+  }
+
   void remove(TmdbTitle t) =>
       _save([for (final i in state) if (i.title.key != t.key) i]);
 

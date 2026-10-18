@@ -64,10 +64,19 @@ class TmdbTitle {
     this.posterUrl,
     this.overview,
     this.french,
+    this.rating,
+    this.votes,
   });
 
   final int id;
   final TmdbType type;
+
+  /// Note moyenne TMDB (sur 10) ; null sans vote.
+  final double? rating;
+
+  /// Nombre de votes ; null : titre enregistré avant que la note ne soit
+  /// gardée (à relire).
+  final int? votes;
 
   /// Titre français (langue demandée à TMDB).
   final String title;
@@ -108,6 +117,19 @@ class TmdbTitle {
     return d == null || d.isAfter(DateTime.now());
   }
 
+  TmdbTitle withRating(double? rating, int votes) => TmdbTitle(
+        id: id,
+        type: type,
+        title: title,
+        originalTitle: originalTitle,
+        date: date,
+        posterUrl: posterUrl,
+        overview: overview,
+        french: french,
+        rating: rating,
+        votes: votes,
+      );
+
   TmdbTitle withFrench(FrenchDates? french) => TmdbTitle(
         id: id,
         type: type,
@@ -117,6 +139,8 @@ class TmdbTitle {
         posterUrl: posterUrl,
         overview: overview,
         french: french,
+        rating: rating,
+        votes: votes,
       );
 
   factory TmdbTitle.fromApi(Map<String, dynamic> json, TmdbType type) {
@@ -132,7 +156,15 @@ class TmdbTitle {
           json[movie ? 'release_date' : 'first_air_date'] as String? ?? ''),
       posterUrl: poster == null ? null : '${TmdbApi.imageBase}$poster',
       overview: overview == null || overview.isEmpty ? null : overview,
+      rating: ratingOf(json),
+      votes: (json['vote_count'] as num?)?.toInt() ?? 0,
     );
+  }
+
+  /// `vote_average`, sans les notes à 0 (aucun vote).
+  static double? ratingOf(Map<String, dynamic> json) {
+    final r = (json['vote_average'] as num?)?.toDouble();
+    return r == null || r == 0 ? null : r;
   }
 
   static String? _day(DateTime? d) => d?.toIso8601String().substring(0, 10);
@@ -154,6 +186,8 @@ class TmdbTitle {
               cinema: _parse(fr['cinema']),
               digital: _parse(fr['digital']),
               physical: _parse(fr['physical'])),
+      rating: (json['rating'] as num?)?.toDouble(),
+      votes: (json['votes'] as num?)?.toInt(),
     );
   }
 
@@ -165,6 +199,8 @@ class TmdbTitle {
         'date': ?_day(date),
         'posterUrl': ?posterUrl,
         'overview': ?overview,
+        'rating': ?rating,
+        'votes': ?votes,
         if (french case final f?)
           'fr': {
             'cinema': ?_day(f.cinema),
@@ -572,6 +608,15 @@ class TmdbApi {
           .whereType<Map<String, dynamic>>())
         TmdbEpisode.fromApi(e),
     ];
+  }
+
+  /// Note et nombre de votes d'un titre (fiche simple, sans compléments).
+  Future<({double? rating, int votes})> rating(TmdbTitle t) async {
+    final body = await _get('/${t.type.name}/${t.id}');
+    return (
+      rating: TmdbTitle.ratingOf(body),
+      votes: (body['vote_count'] as num?)?.toInt() ?? 0,
+    );
   }
 
   Future<FrenchDates> frenchDates(int movieId) async =>

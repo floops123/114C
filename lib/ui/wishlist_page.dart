@@ -43,7 +43,10 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
     super.initState();
     // Dates françaises des films de la liste, relues une fois par jour.
     Future.microtask(() {
-      if (mounted) ref.read(wishlistProvider.notifier).refreshDates();
+      if (!mounted) return;
+      final wishes = ref.read(wishlistProvider.notifier);
+      wishes.refreshDates();
+      wishes.refreshRatings();
     });
   }
 
@@ -564,9 +567,20 @@ class _PosterCard extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontSize: 12.5, height: _line, fontWeight: FontWeight.w600)),
-          Text(t.year?.toString() ?? '—',
+          Builder(builder: (context) {
+            final style = TextStyle(fontSize: 11.5, height: _line, color: c.muted);
+            return Text.rich(
+              TextSpan(children: [
+                TextSpan(text: t.year?.toString() ?? '—'),
+                if (t.rating case final r?) ...[
+                  const TextSpan(text: '  '),
+                  ratingSpan(context, r, style),
+                ],
+              ]),
               maxLines: 1,
-              style: TextStyle(fontSize: 11.5, height: _line, color: c.muted)),
+              style: style,
+            );
+          }),
         ],
       ),
     );
@@ -1610,6 +1624,8 @@ class _TitleTile extends ConsumerWidget {
                             style: TextStyle(
                                 fontSize: 12,
                                 color: t.upcoming ? c.text : c.muted)),
+                        if (t.rating case final r?)
+                          Text.rich(ratingSpan(context, r, const TextStyle(fontSize: 12))),
                         if (wished) _OwnedTags(title: t),
                       ],
                     ),

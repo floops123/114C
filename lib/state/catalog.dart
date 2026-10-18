@@ -512,7 +512,10 @@ class TmdbMatchNotifier extends Notifier<Map<String, TmdbTitle?>> {
   Map<String, TmdbTitle?> build() => ref.read(tmdbMatchStoreProvider).load();
 
   void request(ReleaseGroup g) {
-    if (state.containsKey(g.key) || _pending.contains(g.key)) return;
+    // Déjà cherchée (fiche gardée avec sa note, ou rien trouvé) ou en cours.
+    final known = state.containsKey(g.key) && state[g.key]?.votes != null ||
+        state.containsKey(g.key) && state[g.key] == null;
+    if (known || _pending.contains(g.key)) return;
     final q = g.tmdbQuery;
     final tmdb = ref.read(tmdbProvider);
     if (q == null || tmdb == null) return; // Ni film ni série : pas de fiche.
