@@ -42,7 +42,8 @@ Bouton **+** :
 - **lien magnet** ou **URL** ;
 - options : dossier, étiquettes, priorité, démarrer en pause.
 
-Depuis un tracker, c'est le bouton ⬇ des [Sorties](sorties.md#télécharger).
+Depuis un tracker, c'est le bouton ⬇ d'une version dans la vue
+[Trackers](trackers.md#télécharger).
 
 ## Le détail d'un torrent
 

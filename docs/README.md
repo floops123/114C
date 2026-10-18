@@ -10,8 +10,8 @@ et faire évoluer le code.
 |---|---|
 | [Installation](guide/installation.md) | installer l'application sur Linux ou Android |
 | [Configuration](guide/configuration.md) | brancher Transmission, les trackers, TMDB, le FTP, Jellyfin |
-| [Sorties](guide/sorties.md) | parcourir les dernières sorties et les télécharger |
-| [Souhaits](guide/souhaits.md) | suivre les films et séries que tu attends, et les trouver |
+| [Films & séries](guide/films-et-series.md) | les tops TMDB et ta liste : lire ce que tu as, télécharger ce qui manque |
+| [Trackers](guide/trackers.md) | les sorties de tous les trackers, regroupées par titre |
 | [Sur le disque et lecture](guide/sur-le-disque.md) | ta vidéothèque, le lecteur intégré |
 | [Transferts](guide/transferts.md) | piloter Transmission |
 | [Cross-seed et sans seeder](guide/cross-seed.md) | partager sur plusieurs trackers, relancer les torrents morts |
@@ -31,8 +31,8 @@ et faire évoluer le code.
 
 ```
               ┌───────────────── C411 Remote ─────────────────┐
-              │  Sorties · Souhaits · Transferts · Notifs ·   │
-              │  Salon · Réglages            + lecteur (mpv)  │
+              │  Films & séries · Trackers · Transferts ·     │
+              │  Notifs · Salon · Réglages   + lecteur (mpv)  │
               └──┬──────────┬──────────┬──────────┬───────┬───┘
                  │          │          │          │       │
           Trackers      Transmission   TMDB     FTP(S)  Jellyfin

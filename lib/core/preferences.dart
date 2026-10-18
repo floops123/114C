@@ -24,6 +24,8 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'wishlist', // PrefsWishlistStore
         'playback', // PrefsPlaybackStore
         'mediaLibrary', // PrefsMediaLibraryStore
+        'availability', // PrefsAvailabilityStore
+        'tmdbMatches', // PrefsTmdbMatchStore
         'revive', // PrefsReviveStore
       }),
     );

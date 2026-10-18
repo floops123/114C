@@ -46,14 +46,17 @@ Principes visuels :
 | `ContentArt`, `categoryIcon` | `content_art.dart` | image d'un type de contenu, picto d'une catégorie |
 | `ReleaseCard`, `ReleaseTile`, `ReleaseRow`, `releaseGrid` | `releases_page.dart` | une sortie en carte, tuile PC, ligne ; la grille commune |
 | `_InfoCard`, `_InfoRow` | `wishlist_page.dart` | encadrés de la fiche d'un titre |
+| `AvailabilityBadge`, `DiskFilterChips` | `wishlist_page.dart` | pastille ▶ / ⬇ d'une affiche, filtre Tout / Sur le disque / À télécharger |
+| `GroupCard`, `GroupVersionsPage` | `trackers_page.dart` | un titre des trackers, ses versions par tracker |
+| `RoundAction` | `widgets.dart` | pastille ronde d'action sur une affiche |
 
 ## Mise en page
 
 - **Rail latéral** à partir de 720 px, barre en bas en dessous.
 - Sur PC, les encadrés côte à côte prennent la hauteur du plus grand
   (`IntrinsicHeight`) ; sur téléphone ils s'empilent.
-- Les boutons de mode (Découvrir / Ma liste / Sur le disque) passent sur deux
-  lignes sous 520 px ; les libellés se tronquent plutôt que de déborder.
+- Les libellés des boutons et des pastilles se tronquent plutôt que de
+  déborder sur un petit écran.
 
 ## Souris
 
@@ -79,8 +82,8 @@ Principes visuels :
   grille), décodées à cette taille (`memCacheWidth`), en cache.
 - **Pas d'info-bulle dans les lignes** : coûteux par élément, et sur mobile
   elle capterait l'appui long.
-- **Index précalculés** : la base « Sur le disque » indexe infohash, noms de
-  fichiers et titres, pour que chaque tuile des Sorties sache instantanément
+- **Index précalculés** : la vidéothèque indexe infohash, noms de fichiers et
+  titres, pour que chaque affiche et chaque version sache instantanément
   si le titre est déjà là.
 - **Vidéo** : l'image est produite à la taille de l'écran (pas de 4K pour un
   écran 1080p) ; sous Linux, le module vidéo corrigé garde le rendu sur le GPU.

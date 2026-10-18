@@ -16,10 +16,11 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 
 ## Ce qui est vérifié
 
-**Sorties et trackers**
+**Trackers et sorties**
 
 | Fichier | Contenu |
 |---|---|
+| `catalog_test.dart` | regroupement par titre (français et original), disponibilité (un tracker suffit, mémorisée), pages fusionnées, vue Trackers et ses filtres |
 | `parsing_test.dart` | noms de release, dates RFC 822, tri local, tailles d'affiches |
 | `release_profile_test.dart` | profils de qualité C411 sur des sorties réelles |
 | `content_art_test.dart` | type de contenu d'une sortie, pictos des catégories |
@@ -42,7 +43,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `cross_seed_test.dart` | bencode, tracker d'origine, analyse dans les deux sens, mémoire, ajout |
 | `revive_test.dart` | sorties mortes retrouvées, téléchargées, puis ajoutées depuis le tracker d'origine |
 
-**Souhaits, base et lecture**
+**Films & séries, vidéothèque et lecture**
 
 | Fichier | Contenu |
 |---|---|
@@ -50,7 +51,8 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `media_name_test.dart` | film ou épisode d'après le chemin, extraits et bonus ignorés |
 | `ftp_test.dart` | client FTP **et FTPS** : liste, taille, lecture à une position, repli sur `LIST`, identifiants refusés |
 | `media_relay_test.dart` | relais HTTP : plages `Range`, 206 / 416, contenu exact via FTPS |
-| `media_library_test.dart` | parcours complet (Transmission + dossiers), correspondance des chemins, TMDB, rattachement aux fiches et aux sorties, vue « Sur le disque » et épisodes |
+| `media_library_test.dart` | parcours complet (Transmission + dossiers), correspondance des chemins, TMDB, rattachement aux fiches et aux sorties, cartes de la vidéothèque et épisodes |
+| `player_tracks_test.dart` | choix de la piste audio et des sous-titres, appliqué même quand les commandes se masquent |
 | `jellyfin_test.dart` | bibliothèque, versions, épisodes, bibliothèque mixte (dossiers nommés comme la release, une sortie par saison) |
 
 **C411 en direct**

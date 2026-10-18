@@ -72,5 +72,5 @@ Ils vivent dans le trousseau (libsecret sous Linux). Si le trousseau a été
 réinitialisé, il faut les ressaisir.
 
 **L'application est lente sur un vieux téléphone**
-Préfère l'affichage **liste** dans les Sorties : les affiches en grille
-coûtent plus cher à afficher.
+Préfère l'affichage **liste** dans les résultats de recherche : les affiches
+en grille coûtent plus cher à afficher.

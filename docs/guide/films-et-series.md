@@ -1,21 +1,53 @@
-# Souhaits
+# Films & séries
 
 [← Sommaire](../README.md)
 
-L'onglet **Souhaits** sert à suivre les films et séries que tu attends, à en
-découvrir d'autres, et à les trouver sur les trackers. Il demande une
+L'onglet **Films & séries** part de **TMDB** : les titres du moment, ta liste
+de souhaits, et pour chacun ce que tu peux en faire — le **lire** s'il est
+déjà chez toi, le **télécharger** s'il est sur un tracker. Il demande une
 [clé TMDB](configuration.md#tmdb).
 
-Trois boutons en haut de la page :
+Deux boutons en haut de la page :
 
 | Bouton | Contenu |
 |---|---|
 | **Découvrir** | des rangées thématiques tournées vers les sorties françaises |
 | **Ma liste** | tes souhaits, avec leur nombre |
-| **Sur le disque** | ta vidéothèque (voir [Sur le disque](sur-le-disque.md)) |
 
 La barre de recherche interroge TMDB (films et séries) ; une recherche en cours
-s'affiche à la place des trois vues.
+s'affiche à la place des deux vues.
+
+## Lire ou télécharger depuis une affiche
+
+Chaque affiche porte, en bas à droite :
+
+| Pastille | Signification | Au clic |
+|---|---|---|
+| **▶** vert | déjà chez toi (notre base, ou Jellyfin) | lecture, ou liste des épisodes |
+| **⬇** bleu | disponible sur au moins un tracker | résultats de recherche sur les trackers |
+| rien | pas encore trouvé, ou en cours de vérification | — |
+
+La disponibilité est **vérifiée à l'affichage**, sans surcharger les trackers :
+
+- au plus deux recherches par titre (titre français, puis original) ;
+- arrêt dès qu'un tracker a le titre, les trackers les moins sollicités
+  d'abord et C411 (quota de 120 requêtes / minute) en dernier ;
+- les requêtes sont espacées, les films pas encore sortis ne sont pas
+  vérifiés ;
+- le résultat est **mémorisé 12 h**.
+
+Les pastilles apparaissent donc au fil de l'eau, les premières secondes.
+
+## Filtrer
+
+Sous la recherche : **Tout / Sur le disque / À télécharger**. Le filtre
+s'applique aux rangées, à Ma liste, à la recherche et aux pages « Tout voir ».
+
+- **Sur le disque** ajoute en tête une rangée **Ta vidéothèque** avec tout ce
+  que tu possèdes (voir [Sur le disque et lecture](sur-le-disque.md)), et
+  l'état de la base avec son bouton **Actualiser**.
+- **À télécharger** ne garde que les titres trouvés sur un tracker et absents
+  du disque ; la vérification des titres affichés est lancée aussitôt.
 
 ## Découvrir
 
@@ -40,7 +72,8 @@ tu possèdes déjà :
   sinon la VOD française, à défaut la date mondiale. Les dates françaises sont
   relues une fois par jour.
 - **Pastilles** : *Sur le disque*, *Dans Jellyfin*, *Téléchargé*,
-  *En cours 42 %*.
+  *En cours 42 %* ;
+- à droite, la pastille ▶ / ⬇ décrite plus haut.
 
 ## Fiche d'un titre
 
@@ -85,7 +118,7 @@ résultats.
   | Profil C411 | groupes par profil, avec leur description |
   | Taille, Seeders, Date | ordre simple |
 
-- **Grille ou liste** : même bouton que dans les Sorties.
+- **Grille ou liste** : bouton en haut, choix mémorisé.
 
 <p align="center">
   <img src="../images/recherche-liste.png" alt="Résultats en liste sur téléphone" width="320">

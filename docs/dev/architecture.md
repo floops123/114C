@@ -49,7 +49,8 @@ lib/
 │   ├── ftp.dart               client FTP / FTPS (TLS explicite, passif)
 │   └── media_relay.dart       relais HTTP local vers le FTP, pour mpv
 ├── state/
-│   ├── releases.dart          pagination, filtres, envoi vers Transmission
+│   ├── releases.dart          envoi d'une sortie vers Transmission
+│   ├── catalog.dart           tops des trackers regroupés, fiches TMDB, disponibilité
 │   ├── torrents.dart          interrogation de Transmission, détail, statistiques
 │   ├── speed_history.dart     historique des vitesses
 │   ├── cross_seed.dart        analyse et ajout des cross-seeds, sens choisis
@@ -60,9 +61,10 @@ lib/
 │   └── notifications.dart     WebSocket, notifications, compteurs
 └── ui/
     ├── home_shell.dart        navigation : barre en bas, rail latéral ≥ 720 px
-    ├── releases_page.dart     Sorties (grille, liste, tuiles partagées)
-    ├── wishlist_page.dart     Souhaits, Découvrir, fiche, recherche par tracker
-    ├── disk_page.dart         Sur le disque, épisodes de la base
+    ├── wishlist_page.dart     Films & séries : Découvrir, Ma liste, fiche, recherche par tracker
+    ├── trackers_page.dart     Trackers : sorties regroupées par titre, versions
+    ├── releases_page.dart     une sortie en carte, tuile ou ligne ; grille commune
+    ├── disk_page.dart         vidéothèque : cartes, épisodes de la base, lecture
     ├── series_page.dart       épisodes Jellyfin
     ├── player_page.dart       lecteur, choix de version
     ├── on_disk.dart           « déjà chez toi » pour une sortie (base, Jellyfin)
@@ -146,7 +148,8 @@ environ à chaque saut dans la vidéo.
 2. Le brancher dans `Tracker.client` : `TorznabApi` s'il parle Torznab,
    sinon une nouvelle classe qui implémente `TrackerApi`.
 
-Les Réglages, les Sorties, la recherche des souhaits et le cross-seed
+Les Réglages, la vue Trackers, la disponibilité des titres, la recherche
+des souhaits et le cross-seed
 s'adaptent tout seuls.
 
 ## Dépendance corrigée

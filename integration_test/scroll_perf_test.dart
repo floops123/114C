@@ -9,10 +9,9 @@ import 'dart:typed_data';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/api/transmission.dart';
 import 'package:c411_remote/core/preferences.dart';
-import 'package:c411_remote/state/releases.dart';
 import 'package:c411_remote/state/torrents.dart';
 import 'package:c411_remote/ui/downloads_page.dart';
-import 'package:c411_remote/ui/releases_page.dart';
+import 'package:c411_remote/ui/trackers_page.dart';
 import 'package:c411_remote/ui/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -123,7 +122,6 @@ Widget _app(Widget page, SharedPreferencesWithCache prefs, {bool grid = true}) =
         uiPrefsProvider.overrideWith(() => _Prefs(grid)),
         torrentsProvider.overrideWith(_Torrents.new),
         transmissionProvider.overrideWithValue(TransmissionClient(url: 'http://127.0.0.1:1')),
-        currentTrackerApiProvider.overrideWithValue(_Tracker()),
         trackersProvider.overrideWithValue({Tracker.c411: _Tracker()}),
       ],
       child: MaterialApp(
@@ -160,15 +158,11 @@ void main() {
         reportKey: 'transferts');
   });
 
-  for (final grid in [true, false]) {
-    testWidgets('sorties ${grid ? 'grille' : 'liste'}', (tester) async {
-      await tester.pumpWidget(
-          _app(const ReleasesPage(), await loadSharedPrefs(), grid: grid));
-      await tester.pump(const Duration(seconds: 2));
-      await binding.watchPerformance(
-          () => _scroll(tester,
-              find.byType(grid ? GridView : ListView).last),
-          reportKey: 'sorties_${grid ? 'grille' : 'liste'}');
-    });
-  }
+  testWidgets('trackers', (tester) async {
+    await tester.pumpWidget(_app(const TrackersPage(), await loadSharedPrefs()));
+    await tester.pump(const Duration(seconds: 2));
+    await binding.watchPerformance(
+        () => _scroll(tester, find.byType(GridView).last),
+        reportKey: 'trackers');
+  });
 }

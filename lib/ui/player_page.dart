@@ -140,8 +140,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             style: const TextStyle(
                 color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
       ),
-      _TrackMenu(player: _player, audio: true),
-      _TrackMenu(player: _player, audio: false),
+      TrackMenu(player: _player, audio: true),
+      TrackMenu(player: _player, audio: false),
       IconButton(
         tooltip: 'Statistiques de lecture',
         icon: Icon(Icons.info_outline_rounded,
@@ -265,14 +265,75 @@ class _StatsState extends State<_Stats> {
 }
 
 /// Choix de la piste audio ou des sous-titres (pistes du fichier).
-class _TrackMenu extends StatelessWidget {
-  const _TrackMenu({required this.player, required this.audio});
+/// Choix de la piste audio ou des sous-titres.
+///
+/// Les commandes de media_kit se masquent quand la souris quitte la vidéo,
+/// et l'ouverture d'un menu suffit à les masquer : le bouton est alors retiré
+/// de l'arbre. Un `PopupMenuButton` ignore en silence le choix fait après son
+/// retrait ; le menu est donc ouvert avec `showMenu`, et le choix appliqué
+/// directement au lecteur, que le bouton soit encore là ou non.
+class TrackMenu extends StatelessWidget {
+  const TrackMenu({super.key, required this.player, required this.audio});
   final Player player;
   final bool audio;
 
   static String _label(String? title, String? language, String id, String? codec) {
     final parts = [?title, if (language != null) language.toUpperCase(), ?codec];
     return parts.isEmpty ? 'Piste $id' : parts.join(' · ');
+  }
+
+  /// Entrées du menu : pistes réelles (sans « auto » ni « no ») ; pour les
+  /// sous-titres, « Aucun » en tête.
+  List<PopupMenuEntry<Object>> _items() {
+    final tracks = player.state.tracks;
+    final current = player.state.track;
+    if (audio) {
+      return [
+        for (final t in tracks.audio)
+          if (t.id != 'auto' && t.id != 'no')
+            CheckedPopupMenuItem(
+              value: t,
+              checked: current.audio.id == t.id,
+              child: Text(_label(t.title, t.language, t.id, t.codec)),
+            ),
+      ];
+    }
+    return [
+      CheckedPopupMenuItem(
+        value: SubtitleTrack.no(),
+        checked: current.subtitle.id == 'no',
+        child: const Text('Aucun'),
+      ),
+      for (final t in tracks.subtitle)
+        if (t.id != 'auto' && t.id != 'no')
+          CheckedPopupMenuItem(
+            value: t,
+            checked: current.subtitle.id == t.id,
+            child: Text(_label(t.title, t.language, t.id, t.codec)),
+          ),
+    ];
+  }
+
+  Future<void> _open(BuildContext context) async {
+    final items = _items();
+    final button = context.findRenderObject()! as RenderBox;
+    final overlay =
+        Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(button.size.bottomLeft(Offset.zero), ancestor: overlay),
+        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+    final chosen = await showMenu<Object>(
+        context: context, position: position, items: items);
+    switch (chosen) {
+      case final AudioTrack a:
+        await player.setAudioTrack(a);
+      case final SubtitleTrack t:
+        await player.setSubtitleTrack(t);
+    }
   }
 
   @override
@@ -282,43 +343,16 @@ class _TrackMenu extends StatelessWidget {
       initialData: player.state.tracks,
       builder: (context, snapshot) {
         final tracks = snapshot.data ?? const Tracks();
-        final current = player.state.track;
-        final items = <PopupMenuEntry<Object>>[];
-        if (audio) {
-          for (final t in tracks.audio) {
-            if (t.id == 'auto' || t.id == 'no') continue;
-            items.add(CheckedPopupMenuItem(
-              value: t,
-              checked: current.audio.id == t.id,
-              child: Text(_label(t.title, t.language, t.id, t.codec)),
-            ));
-          }
-        } else {
-          items.add(CheckedPopupMenuItem(
-            value: SubtitleTrack.no(),
-            checked: current.subtitle.id == 'no',
-            child: const Text('Aucun'),
-          ));
-          for (final t in tracks.subtitle) {
-            if (t.id == 'auto' || t.id == 'no') continue;
-            items.add(CheckedPopupMenuItem(
-              value: t,
-              checked: current.subtitle.id == t.id,
-              child: Text(_label(t.title, t.language, t.id, t.codec)),
-            ));
-          }
-        }
-        return PopupMenuButton<Object>(
+        final count = (audio ? tracks.audio : tracks.subtitle)
+            .where((t) => t.id != 'auto' && t.id != 'no')
+            .length;
+        // Rien à choisir : bouton grisé (et non blanc comme s'il était actif).
+        final enabled = count > 0;
+        return IconButton(
           tooltip: audio ? 'Piste audio' : 'Sous-titres',
-          enabled: items.length > (audio ? 0 : 1),
           icon: Icon(audio ? Icons.audiotrack_rounded : Icons.subtitles_rounded,
-              color: Colors.white),
-          onSelected: (t) => switch (t) {
-            final AudioTrack a => player.setAudioTrack(a),
-            final SubtitleTrack s => player.setSubtitleTrack(s),
-            _ => null,
-          },
-          itemBuilder: (_) => items,
+              color: enabled ? Colors.white : Colors.white38),
+          onPressed: enabled ? () => _open(context) : null,
         );
       },
     );

@@ -11,6 +11,8 @@ import '../api/tracker.dart';
 import '../core/format.dart';
 import '../core/preferences.dart';
 import '../core/release_profile.dart';
+import '../core/settings.dart';
+import '../state/catalog.dart';
 import '../state/media_library.dart';
 import '../state/wishlist.dart';
 import 'disk_page.dart';
@@ -20,7 +22,7 @@ import 'series_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum _Mode { list, discover, disk }
+enum _Mode { list, discover }
 
 /// Liste de souhaits : recherche TMDB, page Découvrir (rangées par catégorie,
 /// genres) et recherche manuelle d'un souhait sur les trackers.
@@ -70,8 +72,7 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
       body = _SearchResults(query: _query);
     } else if (mode == _Mode.discover) {
       body = const _Discover();
-    } else if (mode == _Mode.disk) {
-      body = const DiskView();
+
     } else if (wishes.isEmpty) {
       body = const EmptyState(
         Icons.bookmark_border_rounded,
@@ -79,16 +80,21 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
         'les ajouter à ta liste.',
       );
     } else {
-      body = ListView.builder(
-        itemCount: wishes.length,
-        itemBuilder: (_, i) => _TitleTile(title: wishes[i].title, wished: true),
-      );
+      final (:items, :checking) =
+          filterTitles(ref, [for (final w in wishes) w.title]);
+      body = items.isEmpty
+          ? EmptyState(Icons.filter_alt_off_rounded,
+              checking ? 'Vérification sur les trackers…' : 'Aucun souhait pour ce filtre.')
+          : ListView.builder(
+              itemCount: items.length,
+              itemBuilder: (_, i) => _TitleTile(title: items[i], wished: true),
+            );
     }
 
     return Scaffold(
       body: Column(children: [
         PageHeader(
-          title: 'Souhaits',
+          title: 'Films & séries',
           subtitle: wishes.isEmpty
               ? null
               : Text('${wishes.length} dans la liste',
@@ -101,7 +107,7 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
+              constraints: const BoxConstraints(maxWidth: 620),
               child: _ModeSwitch(
                 selected: _query.isEmpty ? mode : null,
                 count: wishes.length,
@@ -132,11 +138,107 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
             ),
           ),
         ),
+        DiskFilterChips(provider: tmdbDiskFilterProvider),
+        const SizedBox(height: 8),
         Divider(height: 1, color: c.border),
         Expanded(child: body),
       ]),
     );
   }
+}
+
+/// Titre déjà chez soi : dans notre base, sinon dans l'index Jellyfin (déjà
+/// chargé : aucune requête par affiche).
+bool tmdbOnDisk(WidgetRef ref, TmdbTitle t) =>
+    localForTmdb(ref, t) != null ||
+    ref.watch(jellyfinLibraryProvider.select((l) => l.value?.find(t) != null));
+
+/// Titres que laisse passer le filtre de la vue TMDB. Pour « À
+/// télécharger », la disponibilité des titres pas encore vérifiés est
+/// demandée ; [checking] : il en reste en cours.
+({List<TmdbTitle> items, bool checking}) filterTitles(
+    WidgetRef ref, List<TmdbTitle> items) {
+  final filter = ref.watch(tmdbDiskFilterProvider);
+  if (filter == DiskFilter.all) return (items: items, checking: false);
+  final availability = ref.watch(availabilityProvider);
+  final notifier = ref.read(availabilityProvider.notifier);
+  var checking = false;
+  final kept = <TmdbTitle>[];
+  for (final t in items) {
+    final onDisk = tmdbOnDisk(ref, t);
+    final known = availability[t.key];
+    if (filter == DiskFilter.toDownload && !onDisk && known == null &&
+        !(t.type == TmdbType.movie && t.upcoming)) {
+      checking = true;
+      Future.microtask(() => notifier.request(t));
+    }
+    if (passesDiskFilter(filter, onDisk: onDisk, available: known?.any)) {
+      kept.add(t);
+    }
+  }
+  return (items: kept, checking: checking);
+}
+
+/// Pastille d'une affiche TMDB : ▶ si le titre est déjà chez soi, sinon ⬇
+/// s'il est sur au moins un tracker (vérifié à l'affichage, mémorisé).
+class AvailabilityBadge extends ConsumerWidget {
+  const AvailabilityBadge({super.key, required this.title, this.size = 30});
+  final TmdbTitle title;
+  final double size;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = title;
+    final local = localForTmdb(ref, t);
+    final jellyfin =
+        ref.watch(jellyfinLibraryProvider.select((l) => l.value?.find(t)));
+    if (local != null || jellyfin != null) {
+      final series = local?.isSeries ?? jellyfin!.isSeries;
+      return RoundAction(
+        icon: Icons.play_arrow_rounded,
+        color: c.success,
+        tooltip: series ? 'Épisodes' : 'Lire',
+        size: size,
+        onTap: () => local != null
+            ? playLocal(context, local)
+            : playOnJellyfin(context, jellyfin!),
+      );
+    }
+    final known = ref.watch(availabilityProvider.select((m) => m[t.key]));
+    if (known == null) {
+      final notifier = ref.read(availabilityProvider.notifier);
+      Future.microtask(() => notifier.request(t));
+      return const SizedBox.shrink();
+    }
+    if (!known.any) return const SizedBox.shrink();
+    return RoundAction(
+      icon: Icons.download_rounded,
+      color: c.download,
+      tooltip: 'Télécharger (${known.trackers.map((t) => t.label).join(', ')})',
+      size: size,
+      onTap: () => _openSearch(context, t),
+    );
+  }
+}
+
+/// Filtre « Tout / Sur le disque / À télécharger » d'une vue.
+class DiskFilterChips extends ConsumerWidget {
+  const DiskFilterChips({super.key, required this.provider});
+  final NotifierProvider<DiskFilterNotifier, DiskFilter> provider;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ChipRow<DiskFilter>(
+        items: DiskFilter.values,
+        selected: ref.watch(provider),
+        label: (f) => f.label,
+        icon: (f) => switch (f) {
+          DiskFilter.all => Icons.apps_rounded,
+          DiskFilter.onDisk => Icons.dns_rounded,
+          DiskFilter.toDownload => Icons.download_rounded,
+        },
+        onSelected: ref.read(provider.notifier).set,
+      );
 }
 
 /// Deux boutons : « Découvrir », décoré (dégradé, sous-titre) pour qu'on le
@@ -196,45 +298,10 @@ class _ModeSwitch extends StatelessWidget {
       ),
     );
 
-    final disk = selected == _Mode.disk;
-    final narrow = MediaQuery.sizeOf(context).width < 520;
-    final diskButton = SizedBox(
-      height: 56,
-      child: (disk ? FilledButton.icon : OutlinedButton.icon)(
-        onPressed: () => onSelected(_Mode.disk),
-        style: (disk ? FilledButton.styleFrom : OutlinedButton.styleFrom)(
-          backgroundColor: disk ? c.success : null,
-          foregroundColor: disk ? Colors.white : c.success,
-          side: disk ? null : BorderSide(color: c.success.withValues(alpha: 0.6)),
-          shape: RoundedRectangleBorder(borderRadius: shape),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-        ),
-        icon: const Icon(Icons.dns_rounded, size: 20),
-        label: Text(narrow ? 'Disque' : 'Sur le disque',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-      ),
-    );
-
-    // Écran étroit : « Découvrir » seul sur sa ligne, les deux autres dessous.
-    if (narrow) {
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        discoverButton,
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: listButton),
-          const SizedBox(width: 10),
-          Expanded(child: diskButton),
-        ]),
-      ]);
-    }
     return Row(children: [
       Flexible(child: discoverButton),
       const SizedBox(width: 10),
       listButton,
-      const SizedBox(width: 10),
-      diskButton,
     ]);
   }
 }
@@ -255,12 +322,19 @@ class _SearchResults extends ConsumerWidget {
                 child: const Text('Réessayer'),
               ),
             ),
-            data: (titles) => titles.isEmpty
-                ? const EmptyState(Icons.search_off_rounded, 'Aucun résultat.')
-                : ListView.builder(
-                    itemCount: titles.length,
-                    itemBuilder: (_, i) => _TitleTile(title: titles[i]),
-                  ),
+            data: (all) {
+              final (items: titles, :checking) = filterTitles(ref, all);
+              return titles.isEmpty
+                  ? EmptyState(
+                      Icons.search_off_rounded,
+                      checking
+                          ? 'Vérification sur les trackers…'
+                          : 'Aucun résultat.')
+                  : ListView.builder(
+                      itemCount: titles.length,
+                      itemBuilder: (_, i) => _TitleTile(title: titles[i]),
+                    );
+            },
           );
 }
 
@@ -274,13 +348,50 @@ class _Discover extends ConsumerWidget {
       return const EmptyState(Icons.key_rounded,
           'Ajoute une clé TMDB dans Réglages pour découvrir les sorties.');
     }
+    final onDisk = ref.watch(tmdbDiskFilterProvider) == DiskFilter.onDisk;
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
+        // Filtre « Sur le disque » : tout ce qu'on possède d'abord, rangées
+        // TMDB ensuite.
+        if (onDisk) ...[const LibraryStatus(), const _LibraryRow()],
         for (final feed in TmdbFeed.discover()) _FeedRow(feed: feed),
         for (final type in TmdbType.values) _GenreRow(type: type),
       ],
     );
+  }
+}
+
+/// « Ta vidéothèque » : tous les titres de notre base, les derniers arrivés
+/// d'abord.
+class _LibraryRow extends ConsumerWidget {
+  const _LibraryRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final titles = [...ref.watch(mediaLibraryProvider).library.titles]
+      ..sort((a, b) =>
+          (b.added ?? DateTime(0)).compareTo(a.added ?? DateTime(0)));
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _SectionTitle('Ta vidéothèque (${titles.length})',
+          icon: Icons.video_library_outlined),
+      SizedBox(
+        height: _PosterCard.height(context),
+        child: titles.isEmpty
+            ? Center(
+                child: Text(
+                    ref.watch(settingsProvider.select((s) => s.value?.hasFtp ?? false))
+                        ? 'Aucun fichier vidéo trouvé pour le moment.'
+                        : 'Renseigne l’accès FTP dans les Réglages.',
+                    style: TextStyle(color: c.muted)))
+            : _carousel(
+                titles.length,
+                (i) => SizedBox(
+                    width: _PosterCard.width,
+                    child: LocalTitleCard(title: titles[i]))),
+      ),
+    ]);
   }
 }
 
@@ -348,12 +459,18 @@ class _FeedRow extends ConsumerWidget {
                 label: Text('$e', style: TextStyle(color: c.danger)),
               ),
             ),
-            data: (items) => items.isEmpty
-                ? Center(
-                    child: Text('Rien pour l’instant.',
-                        style: TextStyle(color: c.muted)))
-                : _carousel(
-                    items.length, (i) => _PosterCard(title: items[i])),
+            data: (all) {
+              final (:items, :checking) = filterTitles(ref, all);
+              return items.isEmpty
+                  ? Center(
+                      child: Text(
+                          checking
+                              ? 'Vérification sur les trackers…'
+                              : 'Rien pour l’instant.',
+                          style: TextStyle(color: c.muted)))
+                  : _carousel(
+                      items.length, (i) => _PosterCard(title: items[i]));
+            },
           ),
         ),
       ],
@@ -438,6 +555,7 @@ class _PosterCard extends ConsumerWidget {
                   top: 4,
                   child: Icon(Icons.bookmark_rounded, color: c.accent, size: 22),
                 ),
+              Positioned(right: 5, bottom: 5, child: AvailabilityBadge(title: t)),
             ]),
           ),
           const SizedBox(height: 5),
@@ -504,9 +622,11 @@ class _FeedPageState extends ConsumerState<FeedPage> {
 
   @override
   Widget build(BuildContext context) {
+    final shown = filterTitles(ref, _items).items;
     return Scaffold(
       appBar: AppBar(title: Text(widget.feed.label)),
       body: Column(children: [
+        DiskFilterChips(provider: tmdbDiskFilterProvider),
         if (_error != null) ErrorBanner(_error!, onRetry: _more),
         Expanded(
           child: _items.isEmpty && _loading
@@ -526,9 +646,9 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                       crossAxisSpacing: 10,
                       childAspectRatio: 0.52,
                     ),
-                    itemCount: _items.length,
+                    itemCount: shown.length,
                     itemBuilder: (_, i) =>
-                        _PosterCard(title: _items[i], expand: true),
+                        _PosterCard(title: shown[i], expand: true),
                   ),
                 ),
         ),
@@ -1456,6 +1576,8 @@ class _TitleTile extends ConsumerWidget {
                   ],
                 ),
               ),
+              AvailabilityBadge(title: t),
+              const SizedBox(width: 4),
               if (wished) ...[
                 IconButton(
                   tooltip: 'Chercher sur les trackers',

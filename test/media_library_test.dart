@@ -175,7 +175,7 @@ void main() {
     expect(container.read(mediaLibraryProvider).scanning, isFalse);
   });
 
-  testWidgets('sur le disque : grille, puis épisodes d’une série (petit écran)',
+  testWidgets('vidéothèque : cartes, puis épisodes d’une série (petit écran)',
       (tester) async {
     tester.view.physicalSize = const Size(360, 700);
     tester.view.devicePixelRatio = 1;
@@ -202,7 +202,15 @@ void main() {
       ],
       child: MaterialApp(
         theme: buildTheme(Brightness.dark),
-        home: const Scaffold(body: DiskView()),
+        // Cartes de la rangée « Ta vidéothèque ».
+        home: Scaffold(
+          body: Consumer(
+            builder: (_, ref, _) => Wrap(children: [
+              for (final t in ref.watch(mediaLibraryProvider).library.titles)
+                SizedBox(width: 112, height: 220, child: LocalTitleCard(title: t)),
+            ]),
+          ),
+        ),
       ),
     ));
     await tester.pump();

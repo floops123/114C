@@ -6,12 +6,10 @@
 fichiers de ta seedbox, reconnaît les films et les épisodes, les illustre avec
 TMDB, et les lit directement — sans Jellyfin, sans transcodage.
 
-<p align="center">
-  <img src="../images/sur-le-disque.png" alt="Vue Sur le disque" width="820">
-</p>
-
 Il faut avoir renseigné le [serveur de fichiers (FTP)](configuration.md#serveur-de-fichiers-ftp).
-La vue est dans **Souhaits → Sur le disque**.
+Elle se consulte avec le filtre **Sur le disque**, dans l'onglet
+[Films & séries](films-et-series.md#filtrer) (rangée « Ta vidéothèque ») comme
+dans l'onglet [Trackers](trackers.md#trier-chercher-filtrer).
 
 ## D'où viennent les fichiers
 
@@ -56,14 +54,14 @@ parcours.
 
 ## Où elle apparaît
 
-- **Sur le disque** : grille filtrable (Tout / Films / Séries), les derniers
-  arrivés d'abord. Un clic ouvre la fiche complète du titre ; le bouton rond
-  lance la lecture (ou ouvre les épisodes).
+- **Films & séries** : rangée **Ta vidéothèque** (filtre *Sur le disque*),
+  les derniers arrivés d'abord ; un clic ouvre la fiche, le bouton rond lance
+  la lecture. Sur toutes les affiches, **▶** pour ce que tu possèdes.
+- **Trackers** : **▶** sur les titres déjà là, et pastille **SUR LE DISQUE**
+  sur les versions que tu as (même torrent, même nom de fichier ou de
+  dossier, ou même titre et année).
 - **Fiche d'un titre** : bouton **Lire** / **Épisodes**, encadré « Déjà chez
   toi », et pour une série ses saisons et épisodes.
-- **Sorties** : pastille **SUR LE DISQUE** et bouton ▶ sur les sorties que tu
-  as déjà (même torrent, même nom de fichier ou de dossier, ou même titre et
-  année).
 
 ## Séries : saisons et épisodes
 

@@ -8,8 +8,8 @@ import '../state/revive.dart';
 import 'chat_page.dart';
 import 'downloads_page.dart';
 import 'notifications_page.dart';
-import 'releases_page.dart';
 import 'settings_page.dart';
+import 'trackers_page.dart';
 import 'theme.dart';
 import 'wishlist_page.dart';
 
@@ -30,16 +30,16 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   static const _destinations = [
-    (Icons.local_movies_outlined, Icons.local_movies, 'Sorties'),
-    (Icons.bookmarks_outlined, Icons.bookmarks, 'Souhaits'),
+    (Icons.movie_outlined, Icons.movie, 'Films & séries'),
+    (Icons.hub_outlined, Icons.hub, 'Trackers'),
     (Icons.downloading_outlined, Icons.downloading, 'Transferts'),
     (Icons.notifications_outlined, Icons.notifications, 'Notifications'),
     (Icons.forum_outlined, Icons.forum, 'Salon'),
     (Icons.tune_outlined, Icons.tune, 'Réglages'),
   ];
   static const _pages = [
-    ReleasesPage(),
     WishlistPage(),
+    TrackersPage(),
     DownloadsPage(),
     NotificationsPage(),
     ChatPage(),
@@ -181,7 +181,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                       selectedIcon: _icon(selected, i, unread),
                       // Barre du bas : libellés courts (6 onglets sur un
                       // téléphone), « Notifications » ne tient pas.
-                      label: label == 'Notifications' ? 'Notifs' : label,
+                      label: switch (label) {
+                        'Notifications' => 'Notifs',
+                        'Films & séries' => 'Films',
+                        _ => label,
+                      },
                     ),
                 ],
               ),

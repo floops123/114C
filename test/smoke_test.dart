@@ -6,7 +6,6 @@ import 'package:c411_remote/api/transmission.dart';
 import 'package:c411_remote/core/preferences.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:c411_remote/state/notifications.dart';
-import 'package:c411_remote/state/releases.dart';
 import 'package:c411_remote/state/torrents.dart';
 import 'package:c411_remote/ui/home_shell.dart';
 import 'package:c411_remote/ui/theme.dart';
@@ -20,11 +19,6 @@ class _S extends SettingsNotifier {
   @override
   Future<AppSettings> build() async =>
       const AppSettings(rpcUrl: 'http://x', apiKeys: {'c411': 'k'});
-}
-
-class _Sel extends SelectedTrackerNotifier {
-  @override
-  Tracker? build() => Tracker.c411;
 }
 
 class _P extends UiPrefsNotifier {
@@ -123,11 +117,9 @@ void main() {
         final c = ProviderContainer(
           overrides: [
             settingsProvider.overrideWith(_S.new),
-            selectedTrackerProvider.overrideWith(_Sel.new),
             uiPrefsProvider.overrideWith(_P.new),
             notificationsProvider.overrideWith(_N.new),
             torrentsProvider.overrideWith(_T.new),
-            currentTrackerApiProvider.overrideWithValue(_Tr()),
             trackersProvider.overrideWithValue({Tracker.c411: _Tr()}),
             transmissionProvider.overrideWithValue(
               TransmissionClient(url: 'http://x'),

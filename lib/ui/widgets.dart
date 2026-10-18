@@ -697,3 +697,37 @@ class SortMenu<T extends Object> extends StatelessWidget {
     );
   }
 }
+
+/// Pastille ronde d'action sur une affiche (Lire, Télécharger…), opaque.
+class RoundAction extends StatelessWidget {
+  const RoundAction({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+    this.size = 30,
+  });
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: Material(
+          color: color,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox.square(
+              dimension: size,
+              child: Icon(icon, size: size * 0.62, color: Colors.white),
+            ),
+          ),
+        ),
+      );
+}

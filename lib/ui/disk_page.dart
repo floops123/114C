@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tmdb.dart';
 import '../core/format.dart';
-import '../core/settings.dart';
 import '../state/media_library.dart';
 import '../state/playback.dart';
 import 'content_art.dart';
@@ -161,87 +160,10 @@ class LibraryStatus extends ConsumerWidget {
   }
 }
 
-enum _Filter { all, movies, series }
-
-/// « Sur le disque » : les films et séries de notre base, les derniers
-/// arrivés d'abord.
-class DiskView extends ConsumerStatefulWidget {
-  const DiskView({super.key});
-
-  @override
-  ConsumerState<DiskView> createState() => _DiskViewState();
-}
-
-class _DiskViewState extends ConsumerState<DiskView> {
-  _Filter _filter = _Filter.all;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(mediaLibraryProvider);
-    final configured =
-        ref.watch(settingsProvider.select((s) => s.value?.hasFtp ?? false));
-    if (!configured && state.library.isEmpty) {
-      return const EmptyState(
-        Icons.dns_outlined,
-        'Renseigne l’accès FTP de ton serveur dans les Réglages : les films et '
-        'séries des torrents terminés et des dossiers choisis apparaîtront ici, '
-        'prêts à être lus.',
-      );
-    }
-    final titles = [
-      for (final t in state.library.titles)
-        if (_filter == _Filter.all ||
-            (_filter == _Filter.series) == t.isSeries)
-          t,
-    ]..sort((a, b) {
-        final d = (b.added ?? DateTime(0)).compareTo(a.added ?? DateTime(0));
-        return d != 0 ? d : a.title.compareTo(b.title);
-      });
-
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const LibraryStatus(),
-      ChipRow<_Filter>(
-        items: _Filter.values,
-        selected: _filter,
-        label: (f) => switch (f) {
-          _Filter.all => 'Tout',
-          _Filter.movies => 'Films',
-          _Filter.series => 'Séries',
-        },
-        icon: (f) => switch (f) {
-          _Filter.all => Icons.apps_rounded,
-          _Filter.movies => ContentKind.movie.icon,
-          _Filter.series => ContentKind.series.icon,
-        },
-        onSelected: (f) => setState(() => _filter = f),
-      ),
-      const SizedBox(height: 4),
-      Expanded(
-        child: titles.isEmpty
-            ? EmptyState(
-                Icons.video_library_outlined,
-                state.scanning
-                    ? 'Parcours du serveur en cours…'
-                    : 'Aucun fichier vidéo trouvé pour le moment.',
-              )
-            : GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 150,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.52,
-                ),
-                itemCount: titles.length,
-                itemBuilder: (_, i) => _DiskCard(title: titles[i]),
-              ),
-      ),
-    ]);
-  }
-}
-
-class _DiskCard extends StatelessWidget {
-  const _DiskCard({required this.title});
+/// Carte d'un titre de notre base : affiche TMDB (ou image du type),
+/// nombre d'épisodes ou de versions, bouton de lecture.
+class LocalTitleCard extends StatelessWidget {
+  const LocalTitleCard({super.key, required this.title});
   final MediaTitle title;
 
   @override

@@ -17,9 +17,9 @@ tes services.
 
 | | |
 |---|---|
-| 🎬 **Sorties** | Les dernières sorties de chaque tracker, en grille ou en liste, avec affiche, qualité, profil C411, seeders. Un clic : le `.torrent` part dans Transmission. |
-| 🔖 **Souhaits** | Une liste de films et séries (TMDB), une page *Découvrir* tournée vers les sorties françaises, la disponibilité sur chaque tracker, triée par qualité, profil ou taille. |
-| 💾 **Sur le disque** | Ta propre base de films et séries, construite à partir des fichiers de ta seedbox (FTP), reconnue et illustrée par TMDB, saisons et épisodes compris. |
+| 🎬 **Films & séries** | Les tops TMDB (rangées *Découvrir* tournées vers la France) et ta liste de souhaits ; sur chaque affiche, ▶ si tu l'as déjà, ⬇ s'il est sur un tracker. |
+| 🌐 **Trackers** | Les sorties de tous les trackers, regroupées par film ou série et illustrées par TMDB ; choisis ta version, ou lis-la si elle est sur le disque. |
+| 💾 **Ta vidéothèque** | Ta propre base de films et séries, construite à partir des fichiers de ta seedbox (FTP), reconnue par TMDB, saisons et épisodes compris ; filtre *Sur le disque* dans les deux vues. |
 | ▶️ **Lecteur intégré** | Lecture directe du fichier d'origine, sans transcodage (mpv) : pistes audio, sous-titres, reprise là où tu t'étais arrêté. |
 | ⬇️ **Transferts** | Tout Transmission : suivi en direct, tris, filtres, actions groupées, détail complet, statistiques, configuration du serveur. |
 | 🔁 **Cross-seed** | Repère tes torrents terminés présents sur d'autres trackers et les partage sans rien retélécharger. Relance aussi les sorties **sans seeder**. |
@@ -48,8 +48,8 @@ La documentation complète est dans [`docs/`](docs/README.md).
 
 1. [Installation](docs/guide/installation.md) — Linux, Android, prérequis
 2. [Configuration](docs/guide/configuration.md) — Transmission, trackers, TMDB, FTP, Jellyfin
-3. [Sorties](docs/guide/sorties.md) — parcourir et télécharger
-4. [Souhaits](docs/guide/souhaits.md) — liste, Découvrir, fiches, recherche sur les trackers
+3. [Films & séries](docs/guide/films-et-series.md) — tops TMDB, souhaits, fiches, lire ou télécharger
+4. [Trackers](docs/guide/trackers.md) — toutes les sorties regroupées par titre, versions
 5. [Sur le disque et lecture](docs/guide/sur-le-disque.md) — ta vidéothèque et le lecteur intégré
 6. [Transferts](docs/guide/transferts.md) — Transmission, statistiques, serveur
 7. [Cross-seed et sans seeder](docs/guide/cross-seed.md) — partager plus, relancer les morts

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/api/transmission.dart';
 import 'package:c411_remote/core/preferences.dart';
-import 'package:c411_remote/state/releases.dart';
 import 'package:c411_remote/state/torrents.dart';
 import 'package:c411_remote/ui/downloads_page.dart';
 import 'package:c411_remote/ui/releases_page.dart';
@@ -57,11 +56,6 @@ class _Tracker implements TrackerApi {
   Future<Uint8List> downloadTorrent(Release release) async => Uint8List(0);
 }
 
-class _Selected extends SelectedTrackerNotifier {
-  @override
-  Tracker? build() => Tracker.c411;
-}
-
 class _Prefs extends UiPrefsNotifier {
   @override
   UiPrefs build() => const UiPrefs(releasesGrid: false);
@@ -101,8 +95,6 @@ void main() {
         Widget app(Widget page) => ProviderScope(
               overrides: [
                 uiPrefsProvider.overrideWith(_Prefs.new),
-                selectedTrackerProvider.overrideWith(_Selected.new),
-                currentTrackerApiProvider.overrideWithValue(_Tracker()),
                 trackersProvider.overrideWithValue({Tracker.c411: _Tracker()}),
                 torrentsProvider.overrideWith(_Torrents.new),
                 transmissionProvider
@@ -119,8 +111,17 @@ void main() {
               ),
             );
 
-        await tester.pumpWidget(app(const ReleasesPage()));
-        await tester.pump();
+        // Lignes de sorties (résultats de recherche, versions d'un titre), à
+        // la hauteur fixe calculée par ReleaseRow.extent.
+        final releases = (await _Tracker().releases()).items;
+        await tester.pumpWidget(app(Scaffold(
+          body: Builder(
+            builder: (context) => ListView(
+              itemExtent: ReleaseRow.extent(context),
+              children: [for (final r in releases) ReleaseRow(release: r)],
+            ),
+          ),
+        )));
         await tester.pump();
         expect(find.byType(ReleaseRow), findsWidgets);
         expect(tester.takeException(), isNull, reason: 'Sorties');

@@ -8,10 +8,10 @@ indispensables ; chaque autre section ajoute une fonction et peut rester vide.
 | Section | Indispensable ? | Débloque |
 |---|---|---|
 | Transmission | oui | Transferts, envoi des sorties, cross-seed |
-| Trackers | au moins un | Sorties, recherche des souhaits |
+| Trackers | au moins un | vue Trackers, téléchargements, disponibilité des titres |
 | Cookie de session C411 | non | Notifications, Salon, Mon compte |
-| TMDB | non | Souhaits, Découvrir, fiches, affiches de la base |
-| Serveur de fichiers (FTP) | non | Sur le disque, lecture directe |
+| TMDB | non | vue Films & séries, fiches, affiches des Trackers et de la base |
+| Serveur de fichiers (FTP) | non | ta vidéothèque, lecture directe |
 | Jellyfin | non | lecture depuis Jellyfin (secours) |
 
 Les boutons **Tester** vérifient chaque service ; **Tester et enregistrer**
@@ -43,7 +43,8 @@ Un champ par tracker ; laisse vide ceux que tu n'utilises pas.
 | Nostradamus | clé API | profil sur nostradamus.foo |
 | AstraTorrent | **passkey** | profil sur astratorrent.la |
 
-Un onglet apparaît dans **Sorties** pour chaque tracker renseigné.
+Chaque tracker renseigné rejoint la vue **Trackers** et la vérification de
+disponibilité des titres.
 
 ## Cookie de session C411
 
@@ -68,7 +69,7 @@ Crée un compte gratuit sur [themoviedb.org](https://www.themoviedb.org/), puis
 
 ## Serveur de fichiers (FTP)
 
-C'est ce qui alimente ta propre vidéothèque, [Sur le disque](sur-le-disque.md),
+C'est ce qui alimente ta propre vidéothèque ([Sur le disque](sur-le-disque.md)),
 et permet de lire les fichiers directement.
 
 | Champ | Exemple (Appbox) |
