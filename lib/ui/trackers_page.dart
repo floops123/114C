@@ -1,8 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tmdb.dart';
 import '../api/tracker.dart';
+import '../core/format.dart';
+import '../core/preferences.dart';
 import '../state/catalog.dart';
 import '../state/wishlist.dart';
 import 'content_art.dart';
@@ -56,14 +60,31 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
     final trackers = ref.watch(trackersProvider);
     final state = ref.watch(topTrackersProvider);
     final notifier = ref.read(topTrackersProvider.notifier);
-    final kind = ref.watch(topKindProvider);
+    final category = ref.watch(categoryFilterProvider);
     final filter = ref.watch(trackersDiskFilterProvider);
     final matches = ref.watch(tmdbMatchProvider);
+    final only = ref.watch(trackerFilterProvider);
+    final grid = ref.watch(uiPrefsProvider.select((p) => p.releasesGrid));
 
+    // Titres par tracker, pour les pastilles du filtre.
+    final perTracker = <Tracker, int>{};
+    final all = groupReleases(state.releases);
+    for (final g in all) {
+      for (final t in g.trackers) {
+        perTracker[t] = (perTracker[t] ?? 0) + 1;
+      }
+    }
+
+    // Catégories présentes (avec leur nombre), avant le filtre de catégorie.
+    final ofTracker = sortedGroups(state, only: only);
+    final perCategory = <ContentKind, int>{};
+    for (final g in ofTracker) {
+      final k = groupKind(g);
+      perCategory[k] = (perCategory[k] ?? 0) + 1;
+    }
     final groups = [
-      for (final g in sortedGroups(state))
-        if (kind == TopKind.all || (kind == TopKind.series) == (g.type == TmdbType.tv))
-          g,
+      for (final g in ofTracker)
+        if (category == null || groupKind(g).name == category) g,
     ];
     final shown = [
       for (final g in groups)
@@ -97,22 +118,33 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
             }
             return false;
           },
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 170,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 12,
-              childAspectRatio: 0.5,
-            ),
-            itemCount: shown.length + (state.loading ? 1 : 0),
-            itemBuilder: (_, i) => i >= shown.length
-                ? const Center(
-                    child: SizedBox.square(
-                        dimension: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2)))
-                : GroupCard(group: shown[i]),
-          ),
+          child: () {
+            const loader = Center(
+                child: SizedBox.square(
+                    dimension: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2)));
+            final count = shown.length + (state.loading ? 1 : 0);
+            return grid
+                ? GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 170,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.5,
+                    ),
+                    itemCount: count,
+                    itemBuilder: (_, i) =>
+                        i >= shown.length ? loader : GroupCard(group: shown[i]),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    itemExtent: GroupTile.extent(context),
+                    itemCount: count,
+                    itemBuilder: (_, i) =>
+                        i >= shown.length ? loader : GroupTile(group: shown[i]),
+                  );
+          }(),
         ),
       );
     }
@@ -139,6 +171,12 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
               },
               ascendingByDefault: (_) => false,
               onChanged: (s, _) => notifier.configure(sort: s),
+            ),
+            IconButton(
+              tooltip: grid ? 'Affichage liste' : 'Affichage grille',
+              icon: Icon(grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
+              onPressed: () =>
+                  ref.read(uiPrefsProvider.notifier).setReleasesGrid(!grid),
             ),
             IconButton(
               tooltip: 'Actualiser',
@@ -169,19 +207,20 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
             ),
           ),
         ),
-        ChipRow<TopKind>(
-          items: TopKind.values,
-          selected: kind,
-          label: (k) => k.label,
-          icon: (k) => switch (k) {
-            TopKind.all => Icons.apps_rounded,
-            TopKind.movies => ContentKind.movie.icon,
-            TopKind.series => ContentKind.series.icon,
-          },
-          onSelected: ref.read(topKindProvider.notifier).set,
-        ),
-        const SizedBox(height: 6),
-        DiskFilterChips(provider: trackersDiskFilterProvider),
+        // Trackers, avec leur nombre de titres.
+        if (trackers.length > 1) ...[
+          ChipRow<Tracker?>(
+            items: [null, ...trackers.keys],
+            selected: only,
+            label: (t) => t == null
+                ? 'Tous les trackers (${all.length})'
+                : '${t.label} (${perTracker[t] ?? 0})',
+            icon: (t) => t == null ? Icons.hub_rounded : Icons.dns_rounded,
+            onSelected: ref.read(trackerFilterProvider.notifier).set,
+          ),
+          const SizedBox(height: 6),
+        ],
+        _FilterBar(counts: perCategory, total: ofTracker.length),
         const SizedBox(height: 8),
         if (filter == DiskFilter.onDisk) const LibraryStatus(),
         for (final MapEntry(:key, :value) in state.errors.entries)
@@ -189,6 +228,91 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
         Divider(height: 1, color: c.border),
         Expanded(child: body),
       ]),
+    );
+  }
+}
+
+/// Catégorie de contenu d'un titre, commune à tous les trackers : d'après la
+/// sortie qui a une fiche (C411), sinon la première.
+ContentKind groupKind(ReleaseGroup g) => ContentKind.of(
+    g.releases.firstWhere((r) => r.mediaKind != null, orElse: () => g.releases.first));
+
+/// Nom d'une catégorie dans les filtres.
+String categoryLabel(ContentKind k) => switch (k) {
+      ContentKind.movie => 'Films',
+      ContentKind.series => 'Séries',
+      ContentKind.documentary => 'Documentaires',
+      ContentKind.animation => 'Animation',
+      ContentKind.music => 'Musique',
+      ContentKind.book => 'Livres',
+      ContentKind.game => 'Jeux vidéo',
+      ContentKind.software => 'Logiciels',
+      ContentKind.adult => 'Adulte',
+      ContentKind.other => 'Autres',
+    };
+
+/// Étiquette de catégorie sur une affiche ou une carte.
+Widget categoryTag(AppColors c, ContentKind k, {bool solid = false}) => Tag(k.label,
+    solid: solid,
+    color: switch (k) {
+      ContentKind.series => c.info,
+      ContentKind.movie => solid ? null : c.accent,
+      _ => k.colors(c).first,
+    });
+
+/// Catégories présentes (avec leur nombre), puis Sur le disque / À
+/// télécharger, sur une seule rangée : la catégorie se choisit parmi elles,
+/// le disque s'active et se désactive.
+class _FilterBar extends ConsumerWidget {
+  const _FilterBar({required this.counts, required this.total});
+  final Map<ContentKind, int> counts;
+  final int total;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final category = ref.watch(categoryFilterProvider);
+    final disk = ref.watch(trackersDiskFilterProvider);
+    Widget chip(String label, IconData icon, bool on, VoidCallback onTap) =>
+        Center(
+          child: ChoiceChip(
+            avatar: Icon(icon, size: 16, color: on ? c.onAccent : c.muted),
+            label: Text(label),
+            selected: on,
+            onSelected: (_) => onTap(),
+          ),
+        );
+    final categories = ref.read(categoryFilterProvider.notifier);
+    final disks = ref.read(trackersDiskFilterProvider.notifier);
+    final items = [
+      chip('Tout ($total)', Icons.apps_rounded, category == null,
+          () => categories.set(null)),
+      for (final k in ContentKind.values)
+        if (counts[k] != null || category == k.name)
+          chip('${categoryLabel(k)} (${counts[k] ?? 0})', k.icon,
+              category == k.name, () => categories.set(k.name)),
+      Center(
+          child: SizedBox(
+              height: 22, child: VerticalDivider(width: 9, color: c.border))),
+      for (final f in [DiskFilter.onDisk, DiskFilter.toDownload])
+        chip(
+            f.label,
+            f == DiskFilter.onDisk ? Icons.dns_rounded : Icons.download_rounded,
+            disk == f,
+            () => disks.set(disk == f ? DiskFilter.all : f)),
+    ];
+    return SizedBox(
+      height: 38,
+      child: HorizontalScroller(
+        builder: (controller) => ListView.separated(
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: items.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (_, i) => items[i],
+        ),
+      ),
     );
   }
 }
@@ -211,7 +335,7 @@ class GroupCard extends ConsumerWidget {
     final playable = playableForGroup(ref, g, tmdb);
     final title = tmdb?.title ?? g.title;
     final year = tmdb?.year ?? g.year;
-    final series = g.type == TmdbType.tv;
+    final kind = groupKind(g);
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -224,15 +348,13 @@ class GroupCard extends ConsumerWidget {
           child: Stack(fit: StackFit.expand, children: [
             Poster(tmdb?.posterUrl ?? g.posterUrl,
                 radius: 8,
-                fallback: ContentArt(
-                    series ? ContentKind.series : ContentKind.movie)),
+                fallback: ContentArt(kind)),
             Positioned(
               left: 5,
               top: 5,
               right: 5,
               child: Wrap(spacing: 4, runSpacing: 4, children: [
-                Tag(series ? 'Série' : 'Film',
-                    solid: true, color: series ? c.info : null),
+                categoryTag(c, kind, solid: true),
                 if (g.bestResolution case final res?) Tag(res, solid: true),
               ]),
             ),
@@ -277,6 +399,130 @@ class GroupCard extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 11.5, height: 1.3, color: c.muted)),
       ]),
+    );
+  }
+}
+
+/// Un titre des trackers en liste, dessiné comme un torrent des Transferts :
+/// affiche, titre, trackers, qualité · versions · seeders, ▶ ou ⬇.
+class GroupTile extends ConsumerWidget {
+  const GroupTile({super.key, required this.group});
+  final ReleaseGroup group;
+
+  static const _line = 1.3;
+
+  /// Hauteur fixe (liste fluide), d'après la taille du texte du système :
+  /// marges 10, rembourrage 20, affiche 75 ou titre 14 + 2 lignes de 12.
+  static double extent(BuildContext context) {
+    final s = MediaQuery.textScalerOf(context);
+    return 10 + 20 + math.max(75, (s.scale(14) + 2 * s.scale(12)) * _line + 10);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final g = group;
+    final tmdb = ref.watch(tmdbMatchProvider.select((m) => m[g.key]));
+    if (!ref.read(tmdbMatchProvider).containsKey(g.key)) {
+      final notifier = ref.read(tmdbMatchProvider.notifier);
+      Future.microtask(() => notifier.request(g));
+    }
+    final playable = playableForGroup(ref, g, tmdb);
+    final kind = groupKind(g);
+    final year = tmdb?.year ?? g.year;
+    final small = TextStyle(fontSize: 12, height: _line, color: c.muted);
+    Widget info(IconData icon, String text, {Color? color}) => Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: color ?? c.muted),
+            const SizedBox(width: 4),
+            Text(text,
+                style: small.copyWith(
+                    color: color, fontWeight: color == null ? null : FontWeight.w700)),
+          ]),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 5, 12, 5),
+      child: Material(
+        color: c.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+              color: playable != null ? c.success.withValues(alpha: 0.55) : c.border),
+        ),
+        child: InkWell(
+          onTap: () => tmdb != null
+              ? openTitle(context, tmdb)
+              : openGroupVersions(context, g, null),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            child: Row(children: [
+              Poster(tmdb?.posterUrl ?? g.posterUrl,
+                  width: 50,
+                  height: 75,
+                  radius: 6,
+                  fallback: ContentArt(kind, radius: 6)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(children: [
+                      Flexible(
+                        child: Text(
+                            [tmdb?.title ?? g.title, if (year != null) '($year)'].join(' '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 14, height: _line, fontWeight: FontWeight.w700)),
+                      ),
+                      const SizedBox(width: 6),
+                      categoryTag(c, kind),
+                    ]),
+                    const SizedBox(height: 4),
+                    Text(g.trackers.map((t) => t.label).join(' · '),
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: small),
+                    const SizedBox(height: 4),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: Row(children: [
+                        if (playable != null)
+                          info(Icons.dns_rounded, 'Sur le disque', color: c.success),
+                        if (g.bestResolution case final res?) info(Icons.hd_rounded, res),
+                        info(Icons.layers_rounded,
+                            '${g.releases.length} version${g.releases.length > 1 ? 's' : ''}'),
+                        info(Icons.arrow_upward_rounded, '${g.maxSeeders}',
+                            color: g.maxSeeders > 0 ? c.success : c.danger),
+                        info(Icons.schedule_rounded, formatAgo(g.latest)),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              playable != null
+                  ? RoundAction(
+                      icon: Icons.play_arrow_rounded,
+                      color: c.success,
+                      tooltip: playable.isSeries ? 'Épisodes' : 'Lire',
+                      size: 36,
+                      onTap: () => playable.play(context),
+                    )
+                  : RoundAction(
+                      icon: Icons.download_rounded,
+                      color: c.download,
+                      tooltip: 'Choisir une version à télécharger',
+                      size: 36,
+                      onTap: () => openGroupVersions(context, g, tmdb),
+                    ),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

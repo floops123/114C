@@ -1125,7 +1125,6 @@ class _InfoRow extends StatelessWidget {
     this.subtitle,
     this.detail,
     this.trailing,
-    this.onTap,
   });
   /// Icône (20 px) ou indicateur de chargement.
   final Widget leading;
@@ -1135,12 +1134,11 @@ class _InfoRow extends StatelessWidget {
   /// Sous le titre, à la place de [subtitle] (barre de progression…).
   final Widget? detail;
   final Widget? trailing;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final row = Padding(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
       child: Row(children: [
         SizedBox(
@@ -1167,7 +1165,6 @@ class _InfoRow extends StatelessWidget {
         if (trailing != null) ...[const SizedBox(width: 8), trailing!],
       ]),
     );
-    return onTap == null ? row : InkWell(onTap: onTap, child: row);
   }
 }
 
@@ -1301,6 +1298,8 @@ class _TrackersBlockState extends ConsumerState<_TrackersBlock> {
   }
 }
 
+/// Un tracker dans « Sur les trackers », dessiné comme un torrent des
+/// Transferts : pastille d'état colorée, nom, ligne d'état, infos à icônes.
 class _TrackerSummary extends ConsumerWidget {
   const _TrackerSummary({required this.tracker, required this.title});
   final Tracker tracker;
@@ -1311,39 +1310,118 @@ class _TrackerSummary extends ConsumerWidget {
     final c = context.colors;
     final results = ref.watch(wishSearchProvider((tracker, title)));
     final items = results.value ?? const <Release>[];
+    final small = TextStyle(fontSize: 12, height: 1.3, color: c.muted);
+    const mono = [FontFeature.tabularFigures()];
 
-    final Widget leading;
-    final String detail;
+    Widget info(IconData icon, String text) => Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 14, color: c.muted),
+            const SizedBox(width: 4),
+            Text(text, style: small.copyWith(fontFeatures: mono)),
+          ]),
+        );
+
+    final Color color;
+    final IconData icon;
+    final String status;
+    final details = <Widget>[];
+    final tags = <Widget>[];
     if (results.isLoading) {
-      leading = const SizedBox.square(
-          dimension: 18, child: CircularProgressIndicator(strokeWidth: 2));
-      detail = 'Recherche…';
+      color = c.info;
+      icon = Icons.manage_search_rounded;
+      status = 'Recherche…';
     } else if (results.hasError) {
-      leading = Icon(Icons.error_outline_rounded, size: 20, color: c.danger);
-      detail = '${results.error}';
+      color = c.danger;
+      icon = Icons.error_outline_rounded;
+      status = '${results.error}';
     } else if (items.isEmpty) {
-      leading = Icon(Icons.remove_circle_outline_rounded, size: 20, color: c.muted);
-      detail = 'Rien pour l’instant';
+      color = c.muted;
+      icon = Icons.remove_circle_outline_rounded;
+      status = 'Rien pour l’instant';
     } else {
-      leading = Icon(Icons.check_circle_rounded, size: 20, color: c.success);
-      final s = summarizeReleases(items);
-      detail = [
-        '${items.length} sortie${items.length > 1 ? 's' : ''}',
-        if (s.bestQuality != null) 'jusqu’en ${s.bestQuality}',
-        if (s.hdr) 'HDR',
-        if (s.atmos) 'Atmos',
-        if (s.languages.isNotEmpty) s.languages.take(3).join('/'),
-        '▲ ${s.maxSeeders} max',
-        if (s.freeleech > 0) '${s.freeleech} freeleech',
-      ].join(' · ');
+      final sum = summarizeReleases(items);
+      color = c.success;
+      icon = Icons.check_circle_rounded;
+      status = '${items.length} sortie${items.length > 1 ? 's' : ''}';
+      details.addAll([
+        if (sum.bestQuality != null) info(Icons.hd_rounded, sum.bestQuality!),
+        if (sum.languages.isNotEmpty)
+          info(Icons.translate_rounded, sum.languages.take(3).join('/')),
+        info(Icons.arrow_upward_rounded, '${sum.maxSeeders}'),
+      ]);
+      tags.addAll([
+        if (sum.hdr) Tag('HDR', color: c.info),
+        if (sum.atmos) Tag('Atmos', color: c.info),
+        if (sum.freeleech > 0) Tag('FL ${sum.freeleech}', color: c.success),
+      ]);
     }
 
-    return _InfoRow(
-      leading: leading,
-      title: tracker.label,
-      subtitle: detail,
-      trailing: Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
-      onTap: () => _openSearch(context, title, tracker),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+      child: Material(
+        color: c.surface,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: c.border),
+        ),
+        child: InkWell(
+          onTap: () => _openSearch(context, title, tracker),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+            child: Row(children: [
+              // Pastille d'état, comme celle d'un torrent.
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: results.isLoading
+                    ? Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: color))
+                    : Icon(icon, size: 20, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text(tracker.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 13.5, height: 1.3, fontWeight: FontWeight.w700)),
+                    ),
+                    for (final t in tags)
+                      Padding(padding: const EdgeInsets.only(left: 4), child: t),
+                  ]),
+                  const SizedBox(height: 4),
+                  // Une ligne, coupée à droite si besoin.
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: Row(children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Text(status,
+                            maxLines: 1,
+                            style: small.copyWith(
+                                color: color, fontWeight: FontWeight.w700)),
+                      ),
+                      ...details,
+                    ]),
+                  ),
+                ]),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

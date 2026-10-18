@@ -60,7 +60,7 @@ Release _r(Tracker t, String name,
         createdAt: at ?? DateTime(2026, 10, 1));
 
 void main() {
-  test('regroupement par titre : titre français et original, séries, hors vidéo écarté', () {
+  test('regroupement par titre : titre français et original, séries ; le reste à part', () {
     final groups = groupReleases([
       _r(Tracker.c411, 'Dune.Deuxieme.Partie.2024.MULTi.2160p.WEB-GRP',
           title: 'Dune : Deuxième partie', original: 'Dune: Part Two', kind: 'movie', year: 2024),
@@ -72,7 +72,10 @@ void main() {
       _r(Tracker.c411, 'Artiste.Album.2024.FLAC', title: 'Album', kind: 'music'),
     ]);
     final byTitle = {for (final g in groups) '${g.title} ${g.year}': g};
-    expect(byTitle.keys.toSet(), {'Dune : Deuxième partie 2024', 'Dune 1984', 'MobLand 2025'});
+    expect(byTitle.keys.toSet(),
+        {'Dune : Deuxième partie 2024', 'Dune 1984', 'MobLand 2025', 'Album null'});
+    expect(byTitle['Album null']!.type, isNull, reason: 'musique : pas de fiche TMDB');
+    expect(byTitle['Album null']!.tmdbQuery, isNull);
     final dune = byTitle['Dune : Deuxième partie 2024']!;
     expect(dune.releases.length, 3);
     expect(dune.trackers, {Tracker.c411, Tracker.tr4ker, Tracker.astra});
@@ -213,6 +216,89 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Autre film'), findsOneWidget);
     expect(find.text('Amélie'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('vue Trackers : filtre par tracker et vue liste', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c411 = _Tracker(Tracker.c411, pages: [
+      [
+        _r(Tracker.c411, 'Dune.Part.Two.2024.MULTi.2160p.WEB-GRP',
+            title: 'Dune : Deuxième partie', original: 'Dune: Part Two', kind: 'movie',
+            year: 2024, seeders: 214),
+        _r(Tracker.c411, 'Conclave.2024.1080p.WEB-GRP', title: 'Conclave', kind: 'movie', year: 2024),
+      ],
+    ]);
+    final tr4ker = _Tracker(Tracker.tr4ker, pages: [
+      [_r(Tracker.tr4ker, 'Dune.Part.Two.2024.1080p.BluRay.x264-ABC', seeders: 48)],
+    ]);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        trackersProvider.overrideWithValue({Tracker.c411: c411, Tracker.tr4ker: tr4ker}),
+        tmdbProvider.overrideWithValue(null),
+        mediaLibraryStoreProvider.overrideWithValue(MemoryMediaLibraryStore()),
+        tmdbMatchStoreProvider.overrideWithValue(MemoryTmdbMatchStore()),
+      ],
+      child: MaterialApp(theme: buildTheme(Brightness.dark), home: const TrackersPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Tous les trackers (2)'), findsOneWidget);
+    expect(find.text('C411 (2)'), findsOneWidget);
+    expect(find.text('tr4ker (1)'), findsOneWidget);
+    expect(find.byType(GroupCard), findsNWidgets(2));
+
+    // tr4ker seul : un titre, et ses seules versions.
+    await tester.tap(find.text('tr4ker (1)'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GroupCard), findsOneWidget);
+    expect(find.text('2024 · 1 version'), findsOneWidget);
+    expect(find.text('tr4ker · ▲ 48'), findsOneWidget);
+
+    // Vue liste : cartes façon Transferts.
+    await tester.tap(find.text('Tous les trackers (2)'));
+    await tester.tap(find.byTooltip('Affichage liste'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GroupTile), findsNWidgets(2));
+    expect(find.text('C411 · tr4ker'), findsOneWidget);
+    expect(find.text('2 versions'), findsOneWidget);
+    expect(find.text('214'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('vue Trackers : toutes les catégories, avec leur nombre', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c411 = _Tracker(Tracker.c411, pages: [
+      [
+        _r(Tracker.c411, 'Dune.2024.1080p-GRP', title: 'Dune', kind: 'movie', year: 2024),
+        _r(Tracker.c411, 'MobLand.S01.1080p-GRP', title: 'MobLand', kind: 'tv', year: 2025),
+        _r(Tracker.c411, 'Artiste.Album.2024.FLAC-GRP', title: 'Album', kind: 'music'),
+        _r(Tracker.c411, 'Roman.Auteur.FR.EPUB-GRP'),
+      ],
+    ]);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        trackersProvider.overrideWithValue({Tracker.c411: c411}),
+        tmdbProvider.overrideWithValue(null),
+        mediaLibraryStoreProvider.overrideWithValue(MemoryMediaLibraryStore()),
+        tmdbMatchStoreProvider.overrideWithValue(MemoryTmdbMatchStore()),
+      ],
+      child: MaterialApp(theme: buildTheme(Brightness.dark), home: const TrackersPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(GroupCard), findsNWidgets(4));
+    for (final chip in ['Tout (4)', 'Films (1)', 'Séries (1)', 'Musique (1)', 'Livres (1)']) {
+      expect(find.text(chip), findsOneWidget, reason: chip);
+    }
+    expect(find.text('Jeux vidéo (0)'), findsNothing, reason: 'catégories absentes masquées');
+
+    await tester.tap(find.text('Musique (1)'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GroupCard), findsOneWidget);
+    expect(find.text('Album'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

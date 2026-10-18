@@ -212,12 +212,15 @@ final availabilityProvider =
 // ---------------------------------------------------------------------------
 // Tops des trackers, regroupés par titre
 
-/// Un film ou une série et ses sorties, tous trackers confondus.
+/// Un film ou une série et ses sorties, tous trackers confondus ; pour le
+/// reste (musique, livre, jeu…), une sortie seule.
 class ReleaseGroup {
   ReleaseGroup(this.key, this.type, this.title, this.year, this.originalTitle);
 
   final String key;
-  final TmdbType type;
+
+  /// Film ou série (rattachable à TMDB) ; null pour le reste.
+  final TmdbType? type;
 
   /// Titre tel que les trackers le donnent (fiche C411, sinon nom).
   final String title;
@@ -248,9 +251,11 @@ class ReleaseGroup {
     return best;
   }
 
-  /// Requête de rattachement à TMDB.
-  ({TmdbType type, String title, int? year}) get tmdbQuery =>
-      (type: type, title: originalTitle ?? title, year: year);
+  /// Requête de rattachement à TMDB ; null hors films et séries.
+  ({TmdbType type, String title, int? year})? get tmdbQuery => switch (type) {
+        final t? => (type: t, title: originalTitle ?? title, year: year),
+        null => null,
+      };
 }
 
 /// Type d'une sortie : fiche du tracker, sinon marqueur d'épisode dans le
@@ -271,15 +276,21 @@ TmdbType? releaseType(Release r) {
   return name.resolution != null ? TmdbType.movie : null;
 }
 
-/// Regroupe les sorties par titre. Une sortie C411 apporte son titre
-/// français et son titre original : les sorties des autres trackers,
-/// nommées d'après l'un ou l'autre, rejoignent le même groupe.
+/// Regroupe les films et séries par titre. Une sortie C411 apporte son
+/// titre français et son titre original : les sorties des autres trackers,
+/// nommées d'après l'un ou l'autre, rejoignent le même groupe. Le reste
+/// (musique, livre, jeu, logiciel…) reste une sortie par groupe.
 List<ReleaseGroup> groupReleases(Iterable<Release> releases) {
   final byKey = <String, ReleaseGroup>{};
   final groups = <ReleaseGroup>[];
   for (final r in releases) {
     final type = releaseType(r);
-    if (type == null) continue;
+    if (type == null) {
+      groups.add(ReleaseGroup('other:${r.tracker.name}:${r.id}', null,
+          r.title ?? r.name, r.year, r.originalTitle)
+        ..releases.add(r));
+      continue;
+    }
     final parsed = ReleaseName.parse(r.name);
     final year = r.year ?? parsed.year;
     final titles = [?r.title, ?r.originalTitle, parsed.title];
@@ -307,15 +318,6 @@ enum TopSort {
   const TopSort(this.label, this.sort);
   final String label;
   final ReleaseSort sort;
-}
-
-enum TopKind {
-  all('Tout'),
-  movies('Films'),
-  series('Séries');
-
-  const TopKind(this.label);
-  final String label;
 }
 
 class TopTrackersState {
@@ -439,9 +441,11 @@ class TopTrackersNotifier extends Notifier<TopTrackersState> {
 final topTrackersProvider =
     NotifierProvider<TopTrackersNotifier, TopTrackersState>(TopTrackersNotifier.new);
 
-/// Groupes triés selon le tri choisi.
-List<ReleaseGroup> sortedGroups(TopTrackersState s) {
-  final groups = groupReleases(s.releases);
+/// Groupes triés selon le tri choisi ; [only] : les sorties d'un seul
+/// tracker (versions, seeders et qualité ne portent alors que sur lui).
+List<ReleaseGroup> sortedGroups(TopTrackersState s, {Tracker? only}) {
+  final groups = groupReleases(
+      only == null ? s.releases : s.releases.where((r) => r.tracker == only));
   return switch (s.sort) {
     TopSort.date => groups..sort((a, b) => b.latest.compareTo(a.latest)),
     TopSort.seeders => groups..sort((a, b) => b.maxSeeders.compareTo(a.maxSeeders)),
@@ -509,11 +513,11 @@ class TmdbMatchNotifier extends Notifier<Map<String, TmdbTitle?>> {
 
   void request(ReleaseGroup g) {
     if (state.containsKey(g.key) || _pending.contains(g.key)) return;
+    final q = g.tmdbQuery;
     final tmdb = ref.read(tmdbProvider);
-    if (tmdb == null) return;
+    if (q == null || tmdb == null) return; // Ni film ni série : pas de fiche.
     _pending.add(g.key);
     unawaited(() async {
-      final q = g.tmdbQuery;
       TmdbTitle? found;
       try {
         found = await tmdb.identify(q.title, q.type, year: q.year);
@@ -548,14 +552,16 @@ final tmdbDiskFilterProvider =
 final trackersDiskFilterProvider =
     NotifierProvider<DiskFilterNotifier, DiskFilter>(DiskFilterNotifier.new);
 
-class TopKindNotifier extends Notifier<TopKind> {
+/// Catégorie choisie dans la vue Trackers (nom d'une catégorie de contenu,
+/// commune à tous les trackers) ; null : toutes.
+class CategoryFilterNotifier extends Notifier<String?> {
   @override
-  TopKind build() => TopKind.all;
-  void set(TopKind k) => state = k;
+  String? build() => null;
+  void set(String? category) => state = category;
 }
 
-final topKindProvider =
-    NotifierProvider<TopKindNotifier, TopKind>(TopKindNotifier.new);
+final categoryFilterProvider =
+    NotifierProvider<CategoryFilterNotifier, String?>(CategoryFilterNotifier.new);
 
 /// Le filtre laisse-t-il passer ce titre ?
 bool passesDiskFilter(DiskFilter f, {required bool onDisk, required bool? available}) =>
@@ -564,3 +570,13 @@ bool passesDiskFilter(DiskFilter f, {required bool onDisk, required bool? availa
       DiskFilter.onDisk => onDisk,
       DiskFilter.toDownload => !onDisk && (available ?? false),
     };
+
+/// Tracker choisi dans la vue Trackers ; null : tous.
+class TrackerFilterNotifier extends Notifier<Tracker?> {
+  @override
+  Tracker? build() => null;
+  void set(Tracker? t) => state = t;
+}
+
+final trackerFilterProvider =
+    NotifierProvider<TrackerFilterNotifier, Tracker?>(TrackerFilterNotifier.new);

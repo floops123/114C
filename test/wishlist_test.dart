@@ -414,8 +414,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('Sur les trackers'), findsOneWidget);
-    expect(find.text('2 sorties · jusqu’en 2160p · VFF/MULTI · ▲ 40 max · 1 freeleech'),
-        findsOneWidget);
+    // Carte façon Transferts : état, puis infos à icônes et étiquettes.
+    expect(find.text('2 sorties'), findsOneWidget);
+    expect(find.text('2160p'), findsOneWidget);
+    expect(find.text('VFF/MULTI'), findsOneWidget);
+    expect(find.text('40'), findsOneWidget);
+    expect(find.text('FL 1'), findsOneWidget);
     expect(find.text('Rien pour l’instant'), findsOneWidget, reason: 'tr4ker');
 
     // Le résumé tr4ker ouvre la recherche sur l'onglet tr4ker.

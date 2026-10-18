@@ -3,8 +3,8 @@
 [← Sommaire](../README.md)
 
 L'onglet **Trackers** réunit les dernières sorties de **tous** les trackers
-configurés (C411, tr4ker, Nostradamus, AstraTorrent), **regroupées par film ou
-série** et illustrées par TMDB.
+configurés (C411, tr4ker, Nostradamus, AstraTorrent), toutes catégories
+confondues. Films et séries sont **regroupés par titre** et illustrés par TMDB.
 
 ## Une affiche par titre
 
@@ -26,8 +26,8 @@ Chaque affiche indique :
 Un clic sur l'affiche ouvre la [fiche complète](films-et-series.md#fiche-dun-titre)
 du titre (ou ses versions s'il n'a pas de fiche TMDB).
 
-Seuls les films et les séries apparaissent : musique, livres, jeux et
-logiciels sont écartés.
+Le reste (musique, livres, jeux, logiciels…) apparaît sortie par sortie, avec
+l'affiche du tracker ou l'image de sa catégorie.
 
 ## Les versions
 
@@ -67,10 +67,19 @@ pause.
 - **Tri** (en haut à droite) : *Nouveautés* ou *Les plus seedées*.
 - **Recherche** : interroge tous les trackers à la fois, résultats regroupés
   de la même façon.
-- **Films / Séries** pour n'en voir qu'un type.
-- **Tout / Sur le disque / À télécharger** : ce que tu as déjà, ou seulement
-  ce qu'il te manque. Avec *Sur le disque*, l'état de ta base s'affiche avec
-  son bouton **Actualiser**.
+- **Grille ou liste** (bouton en haut, choix mémorisé) : en liste, chaque
+  titre est une carte façon Transferts — affiche, titre, trackers, puis
+  qualité · versions · seeders · ancienneté, et le bouton ▶ ou ⬇.
+- **Par tracker** : *Tous les trackers* ou un seul, avec le nombre de titres
+  de chacun. Avec un seul tracker, versions, qualité et seeders ne portent
+  que sur lui.
+- **Catégories** : *Tout*, *Films*, *Séries*, *Animation*, *Documentaires*,
+  *Musique*, *Livres*, *Jeux vidéo*, *Logiciels*… avec leur nombre ; seules
+  celles présentes s'affichent. Elles sont communes à tous les trackers
+  (d'après la fiche du tracker, sa sous-catégorie, puis le nom). Sur la même
+  rangée, **Sur le disque** ou **À télécharger** (un second appui désactive
+  le filtre). Avec *Sur le disque*, l'état de ta base s'affiche avec son bouton
+  **Actualiser**.
 - **Défilement infini** : la page suivante de chaque tracker se charge toute
   seule ; tirer vers le bas actualise.
 
