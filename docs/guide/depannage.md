@@ -59,11 +59,11 @@ Normal avec le FTP : chaque saut ouvre une nouvelle connexion au serveur.
 ## Jellyfin
 
 **Une série est « déjà chez toi » mais aucun épisode n'apparaît**
-Sous « Épisodes sur le disque », dans la fiche de la série, le bouton
-**Copier le diagnostic** interroge Jellyfin de toutes les façons connues et
-copie le rapport (sans ta clé) dans le presse-papiers : il montre quelles
-requêtes renvoient des épisodes. Avec la base FTP configurée, la série vient
-de toute façon d'abord de tes fichiers.
+Avec une bibliothèque mixte (films et séries mélangés), Jellyfin n'a pas de
+fiche « Série » : l'application cherche alors le dossier de la série (au nom
+de la série ou de la release) et lit saison et épisode dans le nom des
+fichiers. Si rien n'apparaît, renseigne le [FTP](configuration.md#serveur-de-fichiers-ftp) :
+la série viendra directement de tes fichiers, sans Jellyfin.
 
 ## Divers
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/jellyfin.dart';
@@ -69,56 +68,16 @@ Future<void> showEpisodeDetail(
       ),
     );
 
-/// Interroge Jellyfin de toutes les façons connues et affiche le rapport
-/// (sans clé), copié dans le presse-papiers. Sans fiche connue ([entries]
-/// vide), cherche la série par [title].
-Future<void> diagnoseJellyfinSeries(
-    BuildContext context, WidgetRef ref, List<JellyfinItem> entries,
-    {String? title}) async {
-  final client = ref.read(jellyfinProvider);
-  if (client == null) return;
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.showSnackBar(const SnackBar(content: Text('Diagnostic en cours…')));
-  final report = entries.isEmpty && title != null
-      ? await client.diagnoseTitle(title)
-      : await client.diagnoseSeries(entries);
-  await Clipboard.setData(ClipboardData(text: report));
-  if (!context.mounted) return;
-  messenger.hideCurrentSnackBar();
-  await showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Diagnostic copié'),
-      content: SizedBox(
-        width: 560,
-        child: SingleChildScrollView(
-          child: SelectableText(report,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Fermer'),
-        ),
-      ],
-    ),
-  );
-}
-
 /// Section « Épisodes sur le disque » de la fiche d'une série : saisons et
-/// épisodes directement dans la fiche ; sinon ce qui manque, et le
-/// diagnostic. [series] null : série non reconnue dans Jellyfin.
+/// épisodes directement dans la fiche, sinon ce qui manque. [series] null :
+/// série non reconnue dans Jellyfin.
 class SeriesEpisodesSection extends ConsumerStatefulWidget {
   const SeriesEpisodesSection(
-      {super.key, required this.series, required this.title, this.loading = false});
+      {super.key, required this.series, this.loading = false});
   final JellyfinItem? series;
 
   /// Index Jellyfin encore en chargement (rien à conclure).
   final bool loading;
-
-  /// Titre cherché dans Jellyfin pour le diagnostic sans fiche.
-  final String title;
 
   @override
   ConsumerState<SeriesEpisodesSection> createState() =>
@@ -132,26 +91,9 @@ class _SeriesEpisodesSectionState extends ConsumerState<SeriesEpisodesSection> {
   Widget build(BuildContext context) {
     final c = context.colors;
     final series = widget.series;
-    final entries = series == null
-        ? const <JellyfinItem>[]
-        : ref.watch(jellyfinLibraryProvider).value?.versionsOf(series) ??
-            [series];
     Widget message(String text) => Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(text, style: TextStyle(fontSize: 13, color: c.muted)),
-              OutlinedButton.icon(
-                onPressed: () => diagnoseJellyfinSeries(context, ref, entries,
-                    title: widget.title),
-                icon: const Icon(Icons.troubleshoot_rounded, size: 18),
-                label: const Text('Copier le diagnostic'),
-              ),
-            ],
-          ),
+          child: Text(text, style: TextStyle(fontSize: 13, color: c.muted)),
         );
 
     final Widget body;
@@ -253,12 +195,6 @@ class _EpisodesPageState extends ConsumerState<EpisodesPage> {
   Future<void> _showDetail(JellyfinItem series, JellyfinItem e) =>
       showEpisodeDetail(context, series, e);
 
-  Future<void> _diagnose(BuildContext context) => diagnoseJellyfinSeries(
-      context,
-      ref,
-      ref.read(jellyfinLibraryProvider).value?.versionsOf(widget.series) ??
-          [widget.series]);
-
   @override
   Widget build(BuildContext context) {
     final show = ref.watch(jellyfinShowProvider(widget.series));
@@ -276,14 +212,9 @@ class _EpisodesPageState extends ConsumerState<EpisodesPage> {
         data: (show) {
           final episodes = show.episodes;
           if (episodes.isEmpty) {
-            return EmptyState(
+            return const EmptyState(
               Icons.video_library_outlined,
               'Jellyfin ne renvoie aucun épisode pour cette série.',
-              action: FilledButton.icon(
-                onPressed: () => _diagnose(context),
-                icon: const Icon(Icons.troubleshoot_rounded),
-                label: const Text('Copier le diagnostic'),
-              ),
             );
           }
           final next = nextEpisode(episodes, local.keys.toSet());

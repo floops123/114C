@@ -916,7 +916,6 @@ class TitleDetailPage extends ConsumerWidget {
             child: SeriesEpisodesSection(
               series: ref.watch(jellyfinItemProvider(t)).value,
               loading: ref.watch(jellyfinItemProvider(t)).isLoading,
-              title: t.originalTitle ?? t.title,
             ),
           ),
         if (d != null && d.cast.isNotEmpty) ...[

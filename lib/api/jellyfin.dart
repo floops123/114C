@@ -233,8 +233,6 @@ class JellyfinClient {
   /// `/Users` ne répond pas (on fait alors sans).
   Future<String?> userId() => _user ??= _findUser();
   Future<String?>? _user;
-  String? _userName;
-  int? _userCount;
 
   Future<String?> _findUser() async {
     try {
@@ -247,8 +245,6 @@ class JellyfinClient {
       final admin = users.where((u) =>
           active(u) && (u['Policy'] as Map?)?['IsAdministrator'] == true);
       final user = admin.firstOrNull ?? users.where(active).firstOrNull;
-      _userName = user?['Name'] as String?;
-      _userCount = users.length;
       return user?['Id'] as String?;
     } on DioException {
       return null;
@@ -447,81 +443,6 @@ class JellyfinClient {
     }
     if (!answered && failure != null) throw failure;
     return const [];
-  }
-
-  /// Diagnostic d'une série que la bibliothèque ne reconnaît pas : fiches
-  /// trouvées en cherchant [title] dans Jellyfin, puis [diagnoseSeries].
-  Future<String> diagnoseTitle(String title) async {
-    final out = StringBuffer(
-        'Diagnostic Jellyfin — ${DateTime.now().toIso8601String()}\n'
-        'Serveur : $base\n');
-    final List<Map<String, dynamic>> found;
-    try {
-      // Tous types confondus : une bibliothèque mixte n'a pas de « Series ».
-      found = await _items({
-        'searchTerm': title,
-        'Recursive': true,
-        'Fields': 'ProviderIds,ProductionYear,Path',
-        'Limit': 30,
-      });
-    } on Object catch (e) {
-      out.writeln('Recherche « $title » : erreur — $e');
-      return out.toString();
-    }
-    out.writeln('Recherche « $title », tous types : ${found.length} résultat(s)');
-    for (final j in found.take(15)) {
-      out.writeln('  ${j['Type']} « ${j['Name']} » — Id ${j['Id']}'
-          '${j['Path'] == null ? '' : ' — ${j['Path']}'}');
-    }
-    final folders = [
-      for (final j in found)
-        if (j['Type'] == 'Series' || j['Type'] == 'Folder') JellyfinItem.fromApi(j),
-    ];
-    if (folders.isEmpty) {
-      out.writeln('Aucune série ni dossier à ce nom : la série n’est pas dans '
-          'une bibliothèque Jellyfin (peut-être seulement dans Plex ?).');
-      return out.toString();
-    }
-    out.write((await diagnoseSeries(folders.take(3).toList()))
-        .split('\n')
-        .skip(2) // en-tête déjà écrit
-        .join('\n'));
-    return out.toString();
-  }
-
-  /// Rapport lisible (sans clé) pour comprendre une série sans épisodes :
-  /// utilisateur, fiches de la série, résultat de chaque façon de demander.
-  Future<String> diagnoseSeries(List<JellyfinItem> series) async {
-    final out = StringBuffer('Diagnostic Jellyfin — ${DateTime.now().toIso8601String()}\n');
-    out.writeln('Serveur : $base');
-    final user = await userId();
-    out.writeln(user == null
-        ? 'Utilisateur : aucun (/Users refusé ou vide)'
-        : 'Utilisateur : $_userName ($user) parmi $_userCount');
-    for (final s in series) {
-      out.writeln('\nFiche « ${s.name} » ${s.year ?? ''} — Id ${s.id}, '
-          'Type ${s.type}, TMDB ${s.tmdbId ?? '—'}');
-      for (final (name, query) in _episodeQueries(s.id)) {
-        try {
-          final items = await query();
-          out.writeln('  $name : ${items.length} épisode(s)');
-        } on Object catch (e) {
-          out.writeln('  $name : erreur — $e');
-        }
-      }
-      try {
-        final children = await _items({'ParentId': s.id});
-        final types = <String, int>{};
-        for (final c in children) {
-          final t = c['Type'] as String? ?? '?';
-          types[t] = (types[t] ?? 0) + 1;
-        }
-        out.writeln('  Contenu direct : ${types.isEmpty ? 'rien' : types.entries.map((e) => '${e.value} ${e.key}').join(', ')}');
-      } on Object catch (e) {
-        out.writeln('  Contenu direct : erreur — $e');
-      }
-    }
-    return out.toString();
   }
 
   /// Saisons d'une série, dans l'ordre.

@@ -451,15 +451,6 @@ void main() {
           });
       final c2 = JellyfinClient(url: 'http://jelly.local', apiKey: 'secret', adapter: shows);
       expect((await c2.episodes('mob')).map((e) => e.id), ['s1']);
-
-      // Diagnostic : chaque façon de demander, sans la clé.
-      final report = await client.diagnoseSeries(
-          [JellyfinItem.fromApi(_item('mob', 'MobLand', 2025, type: 'Series', tmdb: '247718'))]);
-      expect(report, contains('Utilisateur : vache (u1)'));
-      expect(report, contains('Fiche « MobLand » 2025 — Id mob, Type Series, TMDB 247718'));
-      expect(report, contains('/Items, épisodes présents : 0 épisode(s)'));
-      expect(report, contains('/Items, sans filtre : 1 épisode(s)'));
-      expect(report, isNot(contains('secret')));
     });
 
     test('bibliothèque mixte : dossiers au nom de la sortie, une saison chacun',
@@ -542,10 +533,6 @@ void main() {
       final show = await container.read(jellyfinShowProvider(folder!).future);
       expect(show.episodes.map((e) => (e.id, e.season, e.episode)),
           [('v2', 1, 1), ('v1', 1, 2)]);
-
-      final report = await client.diagnoseTitle('MobLand');
-      expect(report, contains('Folder « MobLand (2025) » — Id f'));
-      expect(report, contains('/Items, vidéos du dossier : 2 épisode(s)'));
     });
 
     test('série en double : épisodes des deux fiches réunis', () async {
@@ -616,7 +603,7 @@ void main() {
         expect(find.text('Tout voir'), findsWidgets);
       } else {
         expect(find.text('Série pas trouvée dans ta bibliothèque Jellyfin.'), findsOneWidget);
-        expect(find.text('Copier le diagnostic'), findsOneWidget);
+        expect(find.text('Copier le diagnostic'), findsNothing);
       }
       expect(tester.takeException(), isNull);
     });
