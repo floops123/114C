@@ -1,15 +1,17 @@
 import 'dart:convert';
 
+import 'package:c411_remote/build_defaults.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// `SettingsNotifier` de test : le trousseau est une `Map<String, String>`
-/// en mémoire (pas de plugin sécurisé sur l'hôte de test).
+/// `SettingsNotifier` de test : remplace le trousseau système (qui n'existe
+/// pas en environnement de test) par une `Map<String, String>` en mémoire.
+/// Reproduit la même logique que `SettingsNotifier` mais sans dépendre de
+/// `FlutterSecureStorage`.
 class _Memory extends SettingsNotifier {
-  _Memory(this._store, {this.simulateDefaults = false});
+  _Memory(this._store);
   final Map<String, String> _store;
-  final bool simulateDefaults;
   static const _key = 'settings';
 
   @override
@@ -18,15 +20,9 @@ class _Memory extends SettingsNotifier {
     if (raw != null) {
       return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     }
-    if (simulateDefaults) {
-      // Simule ce que ferait `BuildDefaults` si des --dart-define étaient
-      // passés : on construit un `AppSettings` non vide qu'on persiste.
-      final settings = const AppSettings(
-        rpcUrl: 'http://build',
-        rpcUser: 'build-user',
-        rpcPassword: 'build-pwd',
-        tmdbKey: 'build-tmdb',
-      );
+    final defaults = ref.read(buildDefaultsProvider);
+    if (defaults.hasAny) {
+      final settings = defaults.toAppSettings();
       _store[_key] = jsonEncode(settings.toJson());
       return settings;
     }
@@ -39,6 +35,7 @@ void main() {
     final store = <String, String>{};
     final container = ProviderContainer(overrides: [
       settingsProvider.overrideWith(() => _Memory(store)),
+      buildDefaultsProvider.overrideWithValue(BuildDefaults.empty()),
     ]);
     addTearDown(container.dispose);
     final s = await container.read(settingsProvider.future);
@@ -51,8 +48,15 @@ void main() {
   test('trousseau vide + défauts au build : défauts appliqués et persistés',
       () async {
     final store = <String, String>{};
+    final defaults = BuildDefaults.fromMap({
+      'C411_RPC_URL': 'http://build',
+      'C411_RPC_USER': 'build-user',
+      'C411_RPC_PASSWORD': 'build-pwd',
+      'C411_TMDB_KEY': 'build-tmdb',
+    });
     final container = ProviderContainer(overrides: [
-      settingsProvider.overrideWith(() => _Memory(store, simulateDefaults: true)),
+      settingsProvider.overrideWith(() => _Memory(store)),
+      buildDefaultsProvider.overrideWithValue(defaults),
     ]);
     addTearDown(container.dispose);
     final s = await container.read(settingsProvider.future);
@@ -69,8 +73,13 @@ void main() {
         'rpcUser': 'existing',
       }),
     };
+    final defaults = BuildDefaults.fromMap({
+      'C411_RPC_URL': 'http://build',
+      'C411_TMDB_KEY': 'build-tmdb',
+    });
     final container = ProviderContainer(overrides: [
-      settingsProvider.overrideWith(() => _Memory(store, simulateDefaults: true)),
+      settingsProvider.overrideWith(() => _Memory(store)),
+      buildDefaultsProvider.overrideWithValue(defaults),
     ]);
     addTearDown(container.dispose);
     final s = await container.read(settingsProvider.future);

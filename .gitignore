@@ -49,3 +49,7 @@ app.*.map.json
 
 # Script de test personnel (WebSocket C411)
 test/test.js
+
+# Fichier de réglages personnels pour `flutter build --dart-define=C411_DEFAULTS_FILE=…`
+# (l'exemple commité est `personal.json.example`).
+personal.json

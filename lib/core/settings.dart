@@ -109,10 +109,10 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
       return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     }
     // Premier lancement (trousseau vide) : si la variante a été compilée
-    // avec des réglages préenregistrés (--dart-define, voir
+    // avec des réglages préenregistrés (--dart-define, fichier JSON : voir
     // `BuildDefaults`), on les écrit dans le trousseau et on les renvoie.
     // Sinon, l'application ouvre les Réglages vide, comme avant.
-    const defaults = BuildDefaults();
+    final defaults = ref.read(buildDefaultsProvider);
     if (defaults.hasAny) {
       final settings = defaults.toAppSettings();
       await _storage.write(key: _key, value: jsonEncode(settings.toJson()));

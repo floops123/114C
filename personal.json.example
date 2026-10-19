@@ -1,0 +1,21 @@
+{
+  "rpcUrl": "http://seedbox.local:9091/transmission/rpc",
+  "rpcUser": "admin",
+  "rpcPassword": "",
+  "sessionCookie": "",
+  "tmdbKey": "",
+  "jellyfinUrl": "",
+  "jellyfinKey": "",
+  "ftpHost": "",
+  "ftpPort": 21,
+  "ftpUser": "",
+  "ftpPassword": "",
+  "ftpTls": true,
+  "mediaFolders": [],
+  "apiKeys": {
+    "c411": "",
+    "tr4ker": "",
+    "nostradamus": "",
+    "astratorrent": ""
+  }
+}
