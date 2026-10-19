@@ -67,3 +67,26 @@ mêmes données : la sortie morte retrouve un seeder (toi).
 
 La progression de chaque relance est suivie dans la page ; l'analyse peut
 être arrêtée à tout moment.
+
+### Soins palliatif (onglet C411)
+
+C411 maintient sa propre liste des sorties sans seeder depuis un certain
+temps (sorties « palliatives » : à sauver avant qu'elles ne disparaissent).
+L'onglet **Soins palliatif** de la même page les reprend et applique le
+même flux : recherche de la copie (nom + taille) sur les autres trackers,
+téléchargement de la plus seedée, puis réinjection du `.torrent` C411
+une fois terminé.
+
+Le cookie de session C411 (Réglage *Cookies de session*) est requis pour
+lire cette liste : c'est lui qui autorise l'endpoint `/api/torrents` avec
+le filtre `palliative=only`. La catégorie n'est pas filtrée — la liste
+vient du site, classée par *bounty* décroissant.
+
+1. Configure le cookie si ce n'est pas déjà fait (l'onglet affiche alors un
+   message d'erreur).
+2. Choisis les trackers où trouver les palliatifs, et un nombre pour limiter
+   la liste (sinon, la première page entière — les suivantes sont chargées
+   à la demande).
+3. Pour chaque palliative, les copies trouvées sont listées sous le titre
+   (une ligne par tracker, avec le nombre de seeders) ; la copie la plus
+   seedée est téléchargeable par **Télécharger**.

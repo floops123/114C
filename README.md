@@ -22,7 +22,7 @@ tes services.
 | 💾 **Ta vidéothèque** | Ta propre base de films et séries, construite à partir des fichiers de ta seedbox (FTP), reconnue par TMDB, saisons et épisodes compris ; filtre *Sur le disque* dans les deux vues. |
 | ▶️ **Lecteur intégré** | Lecture directe du fichier d'origine, sans transcodage (mpv) : pistes audio, sous-titres, reprise là où tu t'étais arrêté. |
 | ⬇️ **Transferts** | Tout Transmission : suivi en direct, tris, filtres, actions groupées, détail complet, statistiques, configuration du serveur. |
-| 🔁 **Cross-seed** | Repère tes torrents terminés présents sur d'autres trackers et les partage sans rien retélécharger. Relance aussi les sorties **sans seeder**. |
+| 🔁 **Cross-seed** | Repère tes torrents terminés présents sur d'autres trackers et les partage sans rien retélécharger. Relance aussi les sorties **sans seeder** et la liste palliative de C411. |
 | 🔔 **Notifications et Salon** | Les notifications de C411 en direct, ton compte (ratio, crédit) et le salon de discussion du site. |
 
 ## Démarrage rapide

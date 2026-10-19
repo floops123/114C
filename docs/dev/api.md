@@ -24,6 +24,7 @@ Deux API coexistent, avec **deux modes d'authentification** :
 |---|---|---|
 | Sorties (JSON riche : fiche, technique) | `GET /api/torrents` | `Authorization: Bearer <clé>` |
 | Catégories | `GET /api/categories` | Bearer |
+| Sorties « palliatives » (sans seeder depuis un certain temps) | `GET /api/torrents?palliative=only&palliativeAge=recent` | cookie de session |
 | `.torrent` | `GET /api?t=get&id=<infohash>&apikey=<clé>` | paramètre `apikey` (le Bearer y est refusé) |
 
 Paramètres de `/api/torrents` : `page`, `perPage`, `cat`, `subcat`, `name`
@@ -31,6 +32,15 @@ Paramètres de `/api/torrents` : `page`, `perPage`, `cat`, `subcat`, `name`
 `size`, `name`, `comments`), `sortOrder` (`asc` / `desc`). `limit` est
 ignoré. Réponse : `data[]` et `meta` (`page`, `totalPages`, `total`, compteurs
 par catégorie).
+
+Pour la liste palliative, le Bearer ne suffit pas : `c411SiteApiProvider`
+envoie `Cookie: …` + `Origin: https://c411.org` (même authentification que
+le WebSocket des notifications et que `C411ChatApi`). Paramètres :
+`palliative=only` (obligatoire), `palliativeAge=recent` (ou autre valeur
+unknown, non documentée), `sortBy=bounty` / `sortOrder=desc` imposés. La
+réponse renvoie les mêmes champs que `/api/torrents`, plus
+`palliativeSince`, `bountyZen`, `palliativeCountdown` par sortie, et
+`meta.palliativeCount` / `palliativeMatches` / `palliativeFallback`.
 
 - `name` cherche une **sous-chaîne du nom de la release** : noms à points,
   sans accents. On cherche donc `Dune.Part.Two`, pas « Dune : Deuxième

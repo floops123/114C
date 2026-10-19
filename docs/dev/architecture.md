@@ -55,6 +55,7 @@ lib/
 │   ├── speed_history.dart     historique des vitesses
 │   ├── cross_seed.dart        analyse et ajout des cross-seeds, sens choisis
 │   ├── revive.dart            relance des sorties sans seeder
+│   ├── palliative.dart        liste palliative C411, copie sur les autres trackers
 │   ├── wishlist.dart          souhaits, recherche et tri sur les trackers
 │   ├── media_library.dart     notre base (parcours FTP, TMDB, stockage)
 │   ├── playback.dart          positions de reprise

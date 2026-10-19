@@ -27,6 +27,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'availability', // PrefsAvailabilityStore
         'tmdbMatches', // PrefsTmdbMatchStore
         'revive', // PrefsReviveStore
+        'palliative', // PrefsPalliativeStore
       }),
     );
 

@@ -65,6 +65,25 @@ de la série ou de la release) et lit saison et épisode dans le nom des
 fichiers. Si rien n'apparaît, renseigne le [FTP](configuration.md#serveur-de-fichiers-ftp) :
 la série viendra directement de tes fichiers, sans Jellyfin.
 
+## Soins palliatif
+
+**« Configure le cookie de session C411 dans les Réglages »**
+L'onglet *Soins palliatif* lit la liste palliative sur l'API du site
+(`/api/torrents?palliative=only`), qui exige d'être connecté — la clé API
+n'y suffit pas. Renseigne le cookie de session comme pour les notifications
+([Configuration](configuration.md#cookie-de-session-c411)) puis reviens sur
+l'onglet.
+
+**« Cookie de session C411 refusé »**
+La session a expiré : reconnecte-toi sur le site et recolle l'en-tête
+`Cookie` dans les Réglages.
+
+**L'onglet liste les palliatifs mais aucun n'est trouvé ailleurs**
+Vérifie qu'au moins un tracker **autre que C411** est coché dans *Chercher
+les copies sur*, et que sa clé API est valide. Si une palliative est
+introuvable partout, c'est normal : elle n'existe peut-être plus que sur
+C411.
+
 ## Divers
 
 **Les réglages ont disparu après une mise à jour du système**

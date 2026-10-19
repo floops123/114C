@@ -4,6 +4,68 @@ import 'package:dio/dio.dart';
 
 import 'tracker.dart';
 
+/// Client JSON de C411 authentifié par le cookie de session du site
+/// (en plus de l'origine). Utilisé pour les endpoints qui exigent d'être
+/// connecté : liste des sorties « palliatives » (sans seeder depuis un
+/// certain temps), par exemple.
+///
+/// Le format de réponse est le même que [C411Api] (mêmes clés `data` et
+/// `meta`), donc on réutilise [_release] et [parsePage].
+class C411SiteApi {
+  C411SiteApi(this.cookie)
+      : _dio = Dio(BaseOptions(
+          baseUrl: Tracker.c411.baseUrl,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 30),
+          validateStatus: (_) => true,
+          headers: {
+            'Cookie': cookie,
+            'Origin': 'https://c411.org',
+            'Accept': 'application/json',
+          },
+        ));
+
+  final String cookie;
+  final Dio _dio;
+
+  /// Sorties « palliatives » de C411 (sans seeder depuis un certain temps),
+  /// triées par bounty décroissant. `age` est la valeur du paramètre
+  /// `palliativeAge` (`recent`, `old`, etc.). Catégoriser (`cat`, `subcat`)
+  /// n'est pas documenté par l'endpoint : on ne les envoie pas.
+  Future<ReleasePage> palliative({
+    String age = 'recent',
+    int page = 1,
+    int perPage = 25,
+  }) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/api/torrents',
+        queryParameters: {
+          'palliative': 'only',
+          'palliativeAge': age,
+          'sortBy': 'bounty',
+          'sortOrder': 'desc',
+          'page': page,
+          'perPage': perPage,
+        },
+      );
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw TrackerException('Cookie de session C411 refusé');
+      }
+      if (res.statusCode != 200 || res.data == null) {
+        throw TrackerException(
+            'Réponse C411 inattendue (HTTP ${res.statusCode})');
+      }
+      return C411Api.parsePage(res.data!, page);
+    } on DioException catch (e) {
+      throw TrackerException(
+          'C411 injoignable : ${e.message ?? e.type.name}');
+    }
+  }
+
+  void close() => _dio.close();
+}
+
 /// API JSON native de C411 : bien plus riche que son flux Torznab
 /// (métadonnées TMDB, infos techniques, tri, compteurs).
 class C411Api implements TrackerApi {
