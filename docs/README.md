@@ -25,6 +25,7 @@ et faire évoluer le code.
 | [Architecture](dev/architecture.md) | dossiers, couches, état Riverpod, flux de données |
 | [Notes sur les API](dev/api.md) | ce qu'on a appris de chaque service (endpoints, pièges) |
 | [Interface et performances](dev/interface.md) | thème, composants partagés, fluidité |
+| [Compilation personnalisée](dev/build.md) | variante avec réglages préenregistrés via `--dart-define` |
 | [Tests](dev/tests.md) | lancer les tests, ce que couvre chaque fichier |
 
 ## En un coup d'œil

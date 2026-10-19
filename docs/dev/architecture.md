@@ -27,6 +27,7 @@ caches), `cached_network_image` (affiches), `media_kit` (lecteur, mpv),
 ```
 lib/
 ├── main.dart                  préférences, liaison du défilement adouci, ProviderScope
+├── build_defaults.dart        réglages injectés au build via --dart-define
 ├── core/
 │   ├── settings.dart          réglages (identifiants) dans le trousseau
 │   ├── preferences.dart       préférences d'interface + liste des clés stockées

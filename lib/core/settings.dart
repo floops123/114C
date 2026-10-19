@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../build_defaults.dart';
+
 class AppSettings {
   const AppSettings({
     this.rpcUrl = '',
@@ -103,8 +105,20 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
   @override
   Future<AppSettings> build() async {
     final raw = await _storage.read(key: _key);
-    if (raw == null) return const AppSettings();
-    return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    if (raw != null) {
+      return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    }
+    // Premier lancement (trousseau vide) : si la variante a été compilée
+    // avec des réglages préenregistrés (--dart-define, voir
+    // `BuildDefaults`), on les écrit dans le trousseau et on les renvoie.
+    // Sinon, l'application ouvre les Réglages vide, comme avant.
+    const defaults = BuildDefaults();
+    if (defaults.hasAny) {
+      final settings = defaults.toAppSettings();
+      await _storage.write(key: _key, value: jsonEncode(settings.toJson()));
+      return settings;
+    }
+    return const AppSettings();
   }
 
   Future<void> save(AppSettings settings) async {
