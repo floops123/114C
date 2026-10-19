@@ -144,6 +144,12 @@ class _WishlistPageState extends ConsumerState<WishlistPage> {
         DiskFilterChips(provider: tmdbDiskFilterProvider),
         const SizedBox(height: 8),
         Divider(height: 1, color: c.border),
+        // Filtre « Sur le disque » : on affiche le statut et le bouton
+        // « Actualiser » dans les deux modes (Découvrir et Ma liste),
+        // pour que l'utilisateur voie l'état de la base et puisse la
+        // reparcourir manuellement.
+        if (ref.watch(tmdbDiskFilterProvider) == DiskFilter.onDisk)
+          const LibraryStatus(),
         Expanded(child: body),
       ]),
     );
@@ -355,9 +361,10 @@ class _Discover extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        // Filtre « Sur le disque » : tout ce qu'on possède d'abord, rangées
-        // TMDB ensuite.
-        if (onDisk) ...[const LibraryStatus(), const _LibraryRow()],
+        // Filtre « Sur le disque » : on remet la vidéothèque devant les
+        // rangées TMDB. (Le statut et le bouton « Actualiser » sont gérés
+        // par le parent, pour rester visibles en mode « Ma liste » aussi.)
+        if (onDisk) const _LibraryRow(),
         for (final feed in TmdbFeed.discover()) _FeedRow(feed: feed),
         for (final type in TmdbType.values) _GenreRow(type: type),
       ],
