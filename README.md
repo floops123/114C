@@ -40,6 +40,19 @@ Au premier lancement, l'application ouvre les **Réglages** : renseigne au
 minimum l'adresse de Transmission et une clé de tracker. Tout le reste est
 facultatif et se branche quand tu veux.
 
+### Variante personnelle (réglages préenregistrés)
+
+Pour une image familiale ou un poste personnel, copie
+[`personal.json.example`](personal.json.example) en `personal.json`,
+remplis-le, puis :
+
+```sh
+dart run tool/build_personal.dart personal.json --build apk
+```
+
+Les valeurs sont compilées dans le binaire au moment du build (le JSON
+n'est pas embarqué dans l'APK). Détails : [Compilation personnalisée](docs/dev/build.md).
+
 ## Documentation
 
 La documentation complète est dans [`docs/`](docs/README.md).
@@ -61,6 +74,7 @@ La documentation complète est dans [`docs/`](docs/README.md).
 - [Architecture](docs/dev/architecture.md) — organisation du code, état, flux de données
 - [Notes sur les API](docs/dev/api.md) — C411, Torznab, AstraTorrent, TMDB, Jellyfin, Transmission, FTP
 - [Interface et performances](docs/dev/interface.md) — thème, composants, choix pour rester fluide
+- [Compilation personnalisée](docs/dev/build.md) — variante avec identifiants préenregistrés via JSON
 - [Tests](docs/dev/tests.md) — ce qui est vérifié et comment
 
 ## Plateformes
