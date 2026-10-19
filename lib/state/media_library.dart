@@ -403,8 +403,6 @@ class MediaLibraryState {
 }
 
 class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
-  static const staleAfter = Duration(hours: 1);
-
   /// Réglages qui changent le contenu de la base.
   static String _signature(AppSettings s) => [
         s.ftpHost, s.ftpPort, s.ftpUser, s.ftpTls, ...s.mediaFolders,
@@ -413,17 +411,18 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   @override
   MediaLibraryState build() {
     final library = ref.watch(mediaLibraryStoreProvider).load();
-    final stale = library.scannedAt == null ||
-        DateTime.now().difference(library.scannedAt!) > staleAfter;
-    // Parcours au lancement si la base date, et dès que l'accès FTP ou les
-    // dossiers changent.
+    // Le parcours du FTP est manuel : il ne démarre pas automatiquement quand
+    // le provider est lu (sinon, ouvrir la page « Sur le disque » de Films &
+    // séries déclenche un scan que l'utilisateur n'a pas demandé). L'utilisateur
+    // lance le parcours depuis le bouton « Actualiser » de `LibraryStatus`.
+    // Le listener ci-dessous re-scane automatiquement quand l'accès FTP ou
+    // les dossiers changent — l'utilisateur s'attend à ce que la base
+    // reflète ses réglages, mais à rien d'autre.
     ref.listen(settingsProvider, (previous, next) {
       final before = previous?.value, now = next.value;
-      if (now == null || !now.hasFtp) return;
-      if (before == null ? stale : _signature(before) != _signature(now)) {
-        Future(scan);
-      }
-    }, fireImmediately: true);
+      if (now == null || !now.hasFtp || before == null) return;
+      if (_signature(before) != _signature(now)) Future(scan);
+    });
     return MediaLibraryState(library);
   }
 
