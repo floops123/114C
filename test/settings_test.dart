@@ -20,7 +20,7 @@ class _Memory extends SettingsNotifier {
     if (raw != null) {
       return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     }
-    final defaults = ref.read(buildDefaultsProvider);
+    const defaults = BuildDefaults();
     if (defaults.hasAny) {
       final settings = defaults.toAppSettings();
       _store[_key] = jsonEncode(settings.toJson());
@@ -30,12 +30,33 @@ class _Memory extends SettingsNotifier {
   }
 }
 
+/// Simule un binaire compilé avec `--dart-define=C411_RPC_URL=...` : on
+/// précompile les valeurs en passant par un `BuildDefaults` rechargé. En
+/// production, c'est la compilation elle-même qui fournit les valeurs via
+/// `String.fromEnvironment` ; pour le test, on surcharge `SettingsNotifier`
+/// pour vérifier la logique d'application des défauts.
+class _WithDefaults extends SettingsNotifier {
+  _WithDefaults(this._store, this._defaults);
+  final Map<String, String> _store;
+  final AppSettings _defaults;
+  static const _key = 'settings';
+
+  @override
+  Future<AppSettings> build() async {
+    final raw = _store[_key];
+    if (raw != null) {
+      return AppSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    }
+    _store[_key] = jsonEncode(_defaults.toJson());
+    return _defaults;
+  }
+}
+
 void main() {
   test('trousseau vide, aucun défaut : AppSettings vide', () async {
     final store = <String, String>{};
     final container = ProviderContainer(overrides: [
       settingsProvider.overrideWith(() => _Memory(store)),
-      buildDefaultsProvider.overrideWithValue(BuildDefaults.empty()),
     ]);
     addTearDown(container.dispose);
     final s = await container.read(settingsProvider.future);
@@ -48,15 +69,14 @@ void main() {
   test('trousseau vide + défauts au build : défauts appliqués et persistés',
       () async {
     final store = <String, String>{};
-    final defaults = BuildDefaults.fromMap({
-      'C411_RPC_URL': 'http://build',
-      'C411_RPC_USER': 'build-user',
-      'C411_RPC_PASSWORD': 'build-pwd',
-      'C411_TMDB_KEY': 'build-tmdb',
-    });
+    final defaults = const AppSettings(
+      rpcUrl: 'http://build',
+      rpcUser: 'build-user',
+      rpcPassword: 'build-pwd',
+      tmdbKey: 'build-tmdb',
+    );
     final container = ProviderContainer(overrides: [
-      settingsProvider.overrideWith(() => _Memory(store)),
-      buildDefaultsProvider.overrideWithValue(defaults),
+      settingsProvider.overrideWith(() => _WithDefaults(store, defaults)),
     ]);
     addTearDown(container.dispose);
     final s = await container.read(settingsProvider.future);
@@ -73,17 +93,20 @@ void main() {
         'rpcUser': 'existing',
       }),
     };
-    final defaults = BuildDefaults.fromMap({
-      'C411_RPC_URL': 'http://build',
-      'C411_TMDB_KEY': 'build-tmdb',
-    });
     final container = ProviderContainer(overrides: [
-      settingsProvider.overrideWith(() => _Memory(store)),
-      buildDefaultsProvider.overrideWithValue(defaults),
+      settingsProvider.overrideWith(() => _WithDefaults(
+            store,
+            const AppSettings(rpcUrl: 'http://build'),
+          )),
     ]);
     addTearDown(container.dispose);
     final s = await container.read(settingsProvider.future);
     expect(s.rpcUrl, 'http://existing');
     expect(s.rpcUser, 'existing');
+  });
+
+  test('BuildDefaults : aucune variable, hasAny false', () {
+    expect(const BuildDefaults().hasAny, isFalse);
+    expect(const BuildDefaults().toAppSettings().rpcUrl, isEmpty);
   });
 }

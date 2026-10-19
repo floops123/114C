@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
-import 'build_defaults.dart';
 import 'core/preferences.dart';
 import 'ui/home_shell.dart';
 import 'ui/smooth_wheel.dart';
@@ -21,16 +20,9 @@ Future<void> main() async {
     yield LicenseEntryWithLineBreaks(
         ['Inter'], await rootBundle.loadString('assets/fonts/OFL.txt'));
   });
-  // Réglages préenregistrés au build (--dart-define=C411_DEFAULTS_FILE=… ou
-  // variables C411_* individuelles). Lu avant que `SettingsNotifier` ne se
-  // construise pour la première fois, donc avant tout premier lancement.
-  final defaults = await BuildDefaults.load();
   final prefs = await loadSharedPrefs();
   runApp(ProviderScope(
-    overrides: [
-      sharedPrefsProvider.overrideWithValue(prefs),
-      buildDefaultsProvider.overrideWithValue(defaults),
-    ],
+    overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
     child: const App(),
   ));
 }

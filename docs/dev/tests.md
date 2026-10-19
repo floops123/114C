@@ -49,7 +49,8 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | Fichier | Contenu |
 |---|---|
 | `settings_test.dart` | `SettingsNotifier` : trousseau vide → défaut ; défauts au build → appliqués ; trousseau non vide → priorité aux valeurs stockées |
-| `build_defaults_test.dart` | `BuildDefaults` : `hasAny` et `allVariables` |
+| `build_defaults_test.dart` | `BuildDefaults` : `hasAny`, `allVariables`, round-trip JSON |
+| `build_personal_test.dart` | outil `tool/build_personal.dart` : JSON → `--dart-define` (champs scalaires, `mediaFolders` CSV, `apiKeys` par tracker, valeurs vides ignorées, erreurs de lecture) |
 | `wishlist_test.dart` | TMDB, liste, Découvrir, fiche, recherche par tracker, tris et intertitres |
 | `media_name_test.dart` | film ou épisode d'après le chemin, extraits et bonus ignorés |
 | `ftp_test.dart` | client FTP **et FTPS** : liste, taille, lecture à une position, repli sur `LIST`, identifiants refusés |
