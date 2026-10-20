@@ -144,7 +144,7 @@ void main() {
   });
 
   testWidgets('vue Trackers : titres regroupés, versions par tracker', (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1280, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final c411 = _Tracker(Tracker.c411, pages: [
@@ -183,7 +183,7 @@ void main() {
   });
 
   testWidgets('vue Trackers : filtre « Sur le disque »', (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1280, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final c411 = _Tracker(Tracker.c411, pages: [
@@ -220,7 +220,7 @@ void main() {
   });
 
   testWidgets('vue Trackers : filtre par tracker et vue liste', (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1280, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final c411 = _Tracker(Tracker.c411, pages: [
@@ -268,7 +268,7 @@ void main() {
   });
 
   testWidgets('vue Trackers : toutes les catégories, avec leur nombre', (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1280, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final c411 = _Tracker(Tracker.c411, pages: [
@@ -290,10 +290,22 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.byType(GroupCard), findsNWidgets(4));
-    for (final chip in ['Tout (4)', 'Films (1)', 'Séries (1)', 'Musique (1)', 'Livres (1)']) {
-      expect(find.text(chip), findsOneWidget, reason: chip);
+    for (final chip in [
+      'Tout (4)',
+      'Films (1)',
+      'Séries (1)',
+      'Musique (1)',
+      'Livres (1)',
+      'Documentaires (0)',
+      'Animation (0)',
+      'Jeux vidéo (0)',
+      'Logiciels (0)',
+      'Adulte (0)',
+      'Autres (0)',
+    ]) {
+      expect(find.text(chip), findsOneWidget,
+          reason: 'toutes les catégories restent affichées (compteur 0 si absent)');
     }
-    expect(find.text('Jeux vidéo (0)'), findsNothing, reason: 'catégories absentes masquées');
 
     await tester.tap(find.text('Musique (1)'));
     await tester.pumpAndSettle();

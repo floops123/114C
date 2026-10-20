@@ -260,9 +260,10 @@ Widget categoryTag(AppColors c, ContentKind k, {bool solid = false}) => Tag(k.la
       _ => k.colors(c).first,
     });
 
-/// Catégories présentes (avec leur nombre), puis Sur le disque / À
-/// télécharger, sur une seule rangée : la catégorie se choisit parmi elles,
-/// le disque s'active et se désactive.
+/// Toutes les catégories, plus Sur le disque / À télécharger, sur une
+/// seule rangée : la catégorie se choisit toujours (les absentes des
+/// résultats chargés montrent un compteur à 0 et affichent « Aucun
+/// résultat » si on les sélectionne).
 class _FilterBar extends ConsumerWidget {
   const _FilterBar({required this.counts, required this.total});
   final Map<ContentKind, int> counts;
@@ -274,26 +275,26 @@ class _FilterBar extends ConsumerWidget {
     final category = ref.watch(categoryFilterProvider);
     final disk = ref.watch(trackersDiskFilterProvider);
     Widget chip(String label, IconData icon, bool on, VoidCallback onTap) =>
-        Center(
-          child: ChoiceChip(
-            avatar: Icon(icon, size: 16, color: on ? c.onAccent : c.muted),
-            label: Text(label),
-            selected: on,
-            onSelected: (_) => onTap(),
-          ),
+        ChoiceChip(
+          avatar: Icon(icon, size: 16, color: on ? c.onAccent : c.muted),
+          label: Text(label),
+          selected: on,
+          onSelected: (_) => onTap(),
         );
     final categories = ref.read(categoryFilterProvider.notifier);
     final disks = ref.read(trackersDiskFilterProvider.notifier);
-    final items = [
+    final categoryChips = [
       chip('Tout ($total)', Icons.apps_rounded, category == null,
           () => categories.set(null)),
+      // Toutes les catégories, mêmes celles absentes des résultats chargés
+      // (compteur 0) : on peut vouloir cibler « Documentaires » même si
+      // la première page n'en a pas, en cliquant on tombe sur « Aucun
+      // résultat » avec un bouton « Charger plus ».
       for (final k in ContentKind.values)
-        if (counts[k] != null || category == k.name)
-          chip('${categoryLabel(k)} (${counts[k] ?? 0})', k.icon,
-              category == k.name, () => categories.set(k.name)),
-      Center(
-          child: SizedBox(
-              height: 22, child: VerticalDivider(width: 9, color: c.border))),
+        chip('${categoryLabel(k)} (${counts[k] ?? 0})', k.icon,
+            category == k.name, () => categories.set(k.name)),
+    ];
+    final diskChips = [
       for (final f in [DiskFilter.onDisk, DiskFilter.toDownload])
         chip(
             f.label,
@@ -301,17 +302,27 @@ class _FilterBar extends ConsumerWidget {
             disk == f,
             () => disks.set(disk == f ? DiskFilter.all : f)),
     ];
-    return SizedBox(
-      height: 38,
-      child: HorizontalScroller(
-        builder: (controller) => ListView.separated(
-          controller: controller,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: items.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 8),
-          itemBuilder: (_, i) => items[i],
-        ),
+    // Wrap plutôt que ListView pour que tous les chips soient toujours dans
+    // l'arbre (pas de cacheExtent) et atteignables sans défilement.
+    // Sur un téléphone de 360 px de large, ils passent à la ligne
+    // automatiquement ; sur PC, ils tiennent en une ou deux lignes.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          ...categoryChips,
+          if (diskChips.isNotEmpty) ...[
+            SizedBox(
+                height: 22,
+                width: 9,
+                child: VerticalDivider(
+                    thickness: 0, color: c.border, width: 9)),
+            ...diskChips,
+          ],
+        ],
       ),
     );
   }
