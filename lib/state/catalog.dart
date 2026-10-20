@@ -235,16 +235,13 @@ class ReleaseGroup {
       .map((r) => r.createdAt)
       .reduce((a, b) => a.isAfter(b) ? a : b);
 
-  /// Sortie à télécharger en un clic depuis la fiche : la plus seedée
-  /// (téléchargement préférentiel a le plus de chances d'aboutir). À défaut,
-  /// la première sortie (utile quand toutes les seeders sont à 0).
-  Release get bestRelease {
-    Release best = releases.first;
-    for (final r in releases) {
-      if (r.seeders > best.seeders) best = r;
-    }
-    return best;
-  }
+  /// Sortie à télécharger en un clic depuis la fiche : la première du
+  /// groupe. Pour les jeux, livres, albums, etc. le groupe ne contient
+  /// qu'une sortie, c'est donc celle-là. Pour les films et séries, c'est
+  /// la version chargée en premier (typiquement C411, qui sert de pivot
+  /// au regroupement). Pour choisir une autre qualité, il faut passer par
+  /// la page des versions (clic sur la carte).
+  Release get primaryRelease => releases.first;
 
   /// Affiche fournie par un tracker (C411), faute de fiche TMDB.
   String? get posterUrl =>

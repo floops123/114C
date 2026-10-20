@@ -380,7 +380,7 @@ class GroupCard extends ConsumerWidget {
                       tooltip: playable.isSeries ? 'Épisodes' : 'Lire',
                       onTap: () => playable.play(context),
                     )
-                  : SendButton(release: g.bestRelease),
+                  : SendButton(release: g.primaryRelease),
             ),
           ]),
         ),
@@ -533,7 +533,7 @@ class GroupTile extends ConsumerWidget {
                       size: 36,
                       onTap: () => playable.play(context),
                     )
-                  : SendButton(release: g.bestRelease),
+                  : SendButton(release: g.primaryRelease),
             ]),
           ),
         ),
