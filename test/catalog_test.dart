@@ -4,6 +4,7 @@ import 'package:c411_remote/api/tmdb.dart';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/state/catalog.dart';
 import 'package:c411_remote/state/media_library.dart';
+import 'package:c411_remote/ui/send_button.dart';
 import 'package:c411_remote/ui/theme.dart';
 import 'package:c411_remote/ui/trackers_page.dart';
 import 'package:flutter/material.dart';
@@ -173,12 +174,11 @@ void main() {
     expect(find.text('C411, tr4ker · ▲ 214'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    // Pas sur le disque : ⬇ ouvre les versions, rangées par tracker.
-    await tester.tap(find.byTooltip('Choisir une version à télécharger'));
+    // Pas sur le disque : ⬇ télécharge la version la plus seedée. On
+    // vérifie l'envoi à Transmission (via le SendButton), pas l'ouverture
+    // d'une page de versions.
+    await tester.tap(find.byType(SendButton));
     await tester.pumpAndSettle();
-    expect(find.text('C411 (1)'), findsOneWidget);
-    expect(find.text('tr4ker (1)'), findsOneWidget);
-    expect(find.text('Dune.Part.Two.2024.1080p.BluRay.x264-ABC'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

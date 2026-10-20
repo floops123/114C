@@ -13,6 +13,7 @@ import 'content_art.dart';
 import 'disk_page.dart';
 import 'on_disk.dart';
 import 'releases_page.dart';
+import 'send_button.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'wishlist_page.dart';
@@ -379,12 +380,7 @@ class GroupCard extends ConsumerWidget {
                       tooltip: playable.isSeries ? 'Épisodes' : 'Lire',
                       onTap: () => playable.play(context),
                     )
-                  : RoundAction(
-                      icon: Icons.download_rounded,
-                      color: c.download,
-                      tooltip: 'Choisir une version à télécharger',
-                      onTap: () => openGroupVersions(context, g, tmdb),
-                    ),
+                  : SendButton(release: g.bestRelease),
             ),
           ]),
         ),
@@ -537,13 +533,7 @@ class GroupTile extends ConsumerWidget {
                       size: 36,
                       onTap: () => playable.play(context),
                     )
-                  : RoundAction(
-                      icon: Icons.download_rounded,
-                      color: c.download,
-                      tooltip: 'Choisir une version à télécharger',
-                      size: 36,
-                      onTap: () => openGroupVersions(context, g, tmdb),
-                    ),
+                  : SendButton(release: g.bestRelease),
             ]),
           ),
         ),

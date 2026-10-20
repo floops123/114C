@@ -235,6 +235,17 @@ class ReleaseGroup {
       .map((r) => r.createdAt)
       .reduce((a, b) => a.isAfter(b) ? a : b);
 
+  /// Sortie à télécharger en un clic depuis la fiche : la plus seedée
+  /// (téléchargement préférentiel a le plus de chances d'aboutir). À défaut,
+  /// la première sortie (utile quand toutes les seeders sont à 0).
+  Release get bestRelease {
+    Release best = releases.first;
+    for (final r in releases) {
+      if (r.seeders > best.seeders) best = r;
+    }
+    return best;
+  }
+
   /// Affiche fournie par un tracker (C411), faute de fiche TMDB.
   String? get posterUrl =>
       releases.map((r) => r.posterUrl).nonNulls.firstOrNull;
