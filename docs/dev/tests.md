@@ -57,6 +57,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `ftp_test.dart` | client FTP **et FTPS** : liste, taille, lecture à une position, repli sur `LIST`, identifiants refusés |
 | `media_relay_test.dart` | relais HTTP : plages `Range`, 206 / 416, contenu exact via FTPS |
 | `media_library_test.dart` | parcours complet (Transmission + dossiers), correspondance des chemins, TMDB, rattachement aux fiches et aux sorties, cartes de la vidéothèque et épisodes |
+| `media_library_finished_test.dart` | fin de téléchargement : les fichiers du torrent rejoignent la base sans repasser par le FTP ; pas de parcours automatique au lancement |
 | `player_tracks_test.dart` | choix de la piste audio et des sous-titres, appliqué même quand les commandes se masquent |
 | `jellyfin_test.dart` | bibliothèque, versions, épisodes, bibliothèque mixte (dossiers nommés comme la release, une sortie par saison) |
 

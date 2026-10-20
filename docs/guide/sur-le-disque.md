@@ -43,14 +43,21 @@ résumé, titres des épisodes). Deux noms différents pour la même fiche
 
 ## Quand la base se met à jour
 
-- au lancement, si le dernier parcours date de plus d'une heure ;
-- dès que tu changes les réglages FTP ou les dossiers ;
-- avec le bouton **Actualiser** de la vue.
+- **à la fin d'un téléchargement** : le torrent passe à 100 %, ses fichiers
+  vidéo rejoignent la base et sont rattachés à TMDB, sans repasser par le FTP ;
+- **dès que tu changes les réglages FTP ou les dossiers** : un parcours
+  complet est lancé, la base doit refléter les nouveaux dossiers ;
+- **avec le bouton Actualiser** de la vue, quand tu veux reparcourir le
+  serveur (fichiers ajoutés à la main, torrents seedés par une autre
+  application, etc.).
+
+Aucun parcours automatique au lancement : ouvrir la vue *Sur le disque*
+ne déclenche rien, c'est le bouton qui décide.
 
 La base est rangée sur l'appareil : elle s'affiche tout de suite, même hors
 ligne. La ligne d'état indique ce qui se passe (« Dossier /Films… »,
-« Fiches TMDB 3/12 ») ou le nombre de films et séries, et l'heure du dernier
-parcours.
+« Fiches TMDB 3/12 », « Ajout du torrent… ») ou le nombre de films et
+séries, et l'heure du dernier **parcours complet**.
 
 ## Où elle apparaît
 

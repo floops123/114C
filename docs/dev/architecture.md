@@ -64,7 +64,7 @@ lib/
 │   ├── revive.dart            relance des sorties sans seeder
 │   ├── palliative.dart        liste palliative C411, copie sur les autres trackers
 │   ├── wishlist.dart          souhaits, recherche et tri sur les trackers
-│   ├── media_library.dart     notre base (parcours FTP, TMDB, stockage)
+│   ├── media_library.dart     notre base (parcours FTP, TMDB, stockage, ajout à la fin d'un téléchargement)
 │   ├── playback.dart          positions de reprise
 │   ├── notifications.dart     WebSocket, notifications, compteurs
 │   └── draupnirr.dart          compte Draupnirr, missions, badges
@@ -140,6 +140,15 @@ MediaLibraryNotifier.scan()
  ├─ TmdbApi.identify(titre, type, année)        une fois par titre
  └─ MediaLibraryStore.save()                    sur l'appareil
 ```
+
+Un torrent qui termine ne déclenche pas ce parcours : le listener sur
+`torrentsProvider` dans `MediaLibraryNotifier.build()` remarque le passage à
+100 % et appelle `appendFinished(id, hash)`, qui relit juste ce torrent
+(`torrent-get` avec ses `files`), traduit les chemins avec la correspondance
+déjà connue (`pathFrom` / `pathTo`) et n'ajoute que les fichiers absents. Pas
+de FTP, pas de `MLSD` : une requête, et l'identification TMDB des seuls titres
+nouveaux. Le parcours complet reste manuel (bouton *Actualiser*) et automatique
+uniquement quand les réglages FTP ou les dossiers changent.
 
 La lecture passe ensuite par le relais :
 

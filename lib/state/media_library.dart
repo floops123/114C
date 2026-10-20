@@ -14,6 +14,7 @@ import '../core/preferences.dart';
 import '../core/release_name.dart';
 import '../core/settings.dart';
 import '../core/titles.dart';
+import 'torrents.dart';
 
 // Notre propre base de films et séries : les fichiers vidéo des torrents
 // terminés et des dossiers choisis, lus sur le FTP du serveur, reconnus
@@ -408,6 +409,10 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
         s.ftpHost, s.ftpPort, s.ftpUser, s.ftpTls, ...s.mediaFolders,
       ].join('|');
 
+  /// Torrents déjà ajoutés à la base après leur fin de téléchargement, pour
+  /// ne pas les relire à chaque rafraîchissement de Transmission.
+  final _added = <String>{};
+
   @override
   MediaLibraryState build() {
     final library = ref.watch(mediaLibraryStoreProvider).load();
@@ -423,7 +428,79 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       if (now == null || !now.hasFtp || before == null) return;
       if (_signature(before) != _signature(now)) Future(scan);
     });
+    // Fin de téléchargement : les fichiers du torrent rejoignent la base sans
+    // repasser par le FTP. Le premier rafraîchissement complet est ignoré
+    // (c'est le parcours manuel qui fait foi) ; ensuite, tout torrent qui
+    // passe à 100 % est ajouté.
+    ref.listen(torrentsProvider, (previous, next) {
+      if (!next.loaded || previous?.loaded != true) return;
+      for (final t in next.byId.values) {
+        if (!t.isComplete || _added.contains(t.hash)) continue;
+        if (previous!.byId[t.id]?.isComplete != true) {
+          _added.add(t.hash);
+          Future.microtask(() => appendFinished(t.id, t.hash));
+        }
+      }
+    });
     return MediaLibraryState(library);
+  }
+
+  /// Ajoute à la base les fichiers vidéo d'un torrent terminé, sans
+  /// repasser par le FTP : les chemins viennent de Transmission, la
+  /// correspondance avec les chemins FTP est déjà connue du parcours.
+  /// Renvoie le nombre de fichiers ajoutés (0 si rien de neuf).
+  Future<int> appendFinished(int id, String hash) async {
+    if (!ref.mounted || state.scanning) return 0;
+    final client = ref.read(transmissionProvider);
+    final tmdb = ref.read(tmdbProvider);
+    var library = state.library;
+    // Sans correspondance des chemins (jamais parcouru, ou seedbox changée),
+    // on ne peut pas traduire un chemin Transmission en chemin FTP.
+    if (client == null || library.pathFrom == null) return 0;
+    _set(MediaLibraryState(library, scanning: true, status: 'Ajout du torrent…'));
+    try {
+      final result = await client.torrentGet(
+        ['id', 'hashString', 'downloadDir', 'percentDone', 'files'],
+        ids: [id],
+      );
+      if (!ref.mounted) return 0;
+      final videos = completedVideos(result.torrents);
+      final known = {for (final f in library.files) f.path};
+      final now = DateTime.now();
+      final fresh = <MediaFile>[];
+      for (final v in videos) {
+        if (v.hash.toLowerCase() != hash || !v.path.startsWith(library.pathFrom!)) {
+          continue;
+        }
+        final path =
+            '${library.pathTo}${v.path.substring(library.pathFrom!.length)}';
+        if (known.add(path)) {
+          fresh.add(MediaFile(path: path, size: v.size, hash: hash, added: now));
+        }
+      }
+      if (fresh.isEmpty) {
+        _set(MediaLibraryState(library));
+        return 0;
+      }
+      library = library.copyWith(files: [...library.files, ...fresh]);
+      _save(library);
+      if (tmdb != null) library = await _identify(library, tmdb);
+      if (!ref.mounted) return 0;
+      ref.read(mediaLibraryStoreProvider).save(library);
+      _set(MediaLibraryState(library));
+      return fresh.length;
+    } on TransmissionException catch (e) {
+      if (ref.mounted) _set(MediaLibraryState(state.library, error: e.message));
+      return 0;
+    } on TrackerException catch (e) {
+      if (ref.mounted) _set(MediaLibraryState(state.library, error: e.message));
+      return 0;
+    } on TmdbException {
+      // Pas de fiche TMDB : les fichiers sont ajoutés sans elle, rattachés
+      // au prochain parcours.
+      if (ref.mounted) _set(MediaLibraryState(state.library));
+      return 0;
+    }
   }
 
   void _set(MediaLibraryState s) {
