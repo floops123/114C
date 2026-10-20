@@ -125,22 +125,27 @@ compte utilisateur. Authentification par clé API en paramètre `apikey`
 **et** en-tête `X-Api-Key` (le client envoie les deux par sécurité).
 Limite : 120 requêtes / minute par clé (300 / minute par IP).
 
-| Endpoint | Rôle |
-|---|---|
-| `GET /api/me` | compte : pseudo, ratio, upload, download, crédits, seedtime (h), H&R, badges |
-| `GET /api/me/missions` | missions en cours avec progression et récompense |
-| `GET /api/me/badges` | tous les badges (obtenus ou non) |
-| `GET /api/shop` | articles de la boutique (non utilisé par l'application) |
+| Endpoint | Réponse | Champs utiles |
+|---|---|---|
+| `GET /api/me` | objet | `name`, `class` (niveau), `ratio` (null tant qu'il n'y a pas assez de données), `uploaded`, `downloaded`, `credits` (ce que tu as), `buffer` / `bonus_upload` (ce que tu peux gagner via les freeleech), `seedtime_seconds`, `seedtime_cumulative_seconds`, `uploads_count`, `hnr_count`, `invites`, `freeleech_global`, `source_tag`, `site_url`, `badges` |
+| `GET /api/me/missions` | tableau | `code`, `period` (`daily`/`weekly`/`monthly`), `title`, `goal_type`, `goal_value`, `reward_credits`, `progress` (compte d'unités accomplies), `completed` |
+| `GET /api/me/badges` | tableau | `slug`, `name`, `description`, `earned`, `awarded_at` |
+| `GET /api/shop` | (non utilisé) | articles de la boutique |
 
-Le client `DraupnirrApi` (`lib/api/draupnirr.dart`) renvoie des modèles
-avec **tous les champs facultatifs** : on accepte plusieurs alias de noms
-(`username`/`name`/`user`, `uploaded`/`uploaded_bytes`, `credits`/`credit`/
-`buffer`, `hnr_count`/`hit_and_runs`/`warnings`, `progress` décimal ou
-pourcentage, `current`/`target`, etc.). Si le JSON change, l'onglet «
-Draupnirr » n'affichera que les champs reconnus sans crasher.
+Sur les missions, `progress` est un **compte d'unités accomplies**, pas
+une fraction : la barre de progression vaut `progress / goal_value` clampée
+à `1`. Les valeurs « seedtime » sont en secondes : on les convertit en
+heures côté client (division par 3600).
 
-L'onglet n'apparaît dans la barre principale que si une clé API est saisie
-dans *Réglages → Trackers → Draupnirr* (`draupnirrApiProvider`).
+L'onglet « Draupnirr » (icône bouclier) **n'apparaît dans la barre
+principale que si une clé API est saisie** dans *Réglages → Trackers →
+Draupnirr*. Il charge le compte et les missions automatiquement à
+l'ouverture, plus un bouton « Actualiser » manuel (et pull-to-refresh).
+
+Modèles dans `lib/api/draupnirr.dart`. Parsing défensif : si un champ
+est absent ou typé différemment, le modèle l'ignore sans crasher (les
+missions restent un tableau `[{...}]`, jamais `{data:[...]}` chez
+Draupnirr).
 
 ## AstraTorrent
 

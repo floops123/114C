@@ -72,10 +72,10 @@ class DraupnirrPage extends ConsumerWidget {
             if (account == null && !state.loading)
               EmptyState(Icons.shield_outlined,
                   'Aucune donnée. Appuie sur « Actualiser ».'),
-            if (state.badges.isNotEmpty)
-              _BadgesSection(items: state.badges),
             if (state.missions.isNotEmpty)
               _MissionsSection(items: state.missions),
+            if (state.badges.isNotEmpty)
+              _BadgesSection(items: state.badges),
           ],
         ),
       ),
@@ -92,16 +92,30 @@ class _AccountSection extends StatelessWidget {
     final c = context.colors;
     final tiles = <(String, String)>[
       if (account.username != null && account.username!.isNotEmpty)
-        ('Pseudo', account.username!),
+        ('Pseudo',
+            account.userClass == null || account.userClass!.isEmpty
+                ? account.username!
+                : '${account.username!} · ${account.userClass}'),
       if (account.ratio != null) ('Ratio', account.ratio!.toStringAsFixed(2)),
       if (account.uploaded != null) ('Upload', formatBytes(account.uploaded!)),
       if (account.downloaded != null)
         ('Download', formatBytes(account.downloaded!)),
       if (account.credits != null)
         ('Crédits', formatBytes(account.credits!)),
-      if (account.seedtimeHours != null)
+      if (account.buffer != null && account.buffer != account.credits)
+        ('Tampon', formatBytes(account.buffer!)),
+      if (account.invites != null)
+        ('Invitations', '${account.invites}'),
+      if (account.uploadsCount != null)
+        ('Uploads', '${account.uploadsCount}'),
+      if (account.seedtimeCumulativeHours != null)
+        ('Seedtime cumulé', '${account.seedtimeCumulativeHours} h'),
+      if (account.seedtimeCumulativeHours == null &&
+          account.seedtimeHours != null)
         ('Seedtime', '${account.seedtimeHours} h'),
       if (account.hnrCount != null) ('H&R', '${account.hnrCount}'),
+      if (account.freeleechGlobal == true)
+        ('Freeleech', 'Global activé'),
       if (account.badges.isNotEmpty)
         ('Badges', account.badges.join(', ')),
     ];
@@ -182,6 +196,14 @@ class _MissionsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    // Tri : non terminées d'abord, puis par période (quotidien > hebdo >
+    // mensuel) puis par reward décroissant.
+    final sorted = [...items]..sort((a, b) {
+        if (a.completed != b.completed) return a.completed ? 1 : -1;
+        final pa = a.period.index, pb = b.period.index;
+        if (pa != pb) return pa.compareTo(pb);
+        return (b.rewardCredits ?? 0).compareTo(a.rewardCredits ?? 0);
+      });
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -197,10 +219,10 @@ class _MissionsSection extends StatelessWidget {
           radius: 14,
           child: Column(
             children: [
-              for (var i = 0; i < items.length; i++)
+              for (var i = 0; i < sorted.length; i++)
                 _MissionTile(
-                  mission: items[i],
-                  last: i == items.length - 1,
+                  mission: sorted[i],
+                  last: i == sorted.length - 1,
                 ),
             ],
           ),
@@ -227,17 +249,16 @@ class _MissionTile extends StatelessWidget {
             : Border(bottom: BorderSide(color: c.border, width: 0.5)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(mission.title.isEmpty ? '(sans titre)' : mission.title,
-            style: const TextStyle(
-                fontSize: 13.5, fontWeight: FontWeight.w600)),
-        if (mission.description != null && mission.description!.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(mission.description!,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: c.muted, fontSize: 12)),
+        Row(children: [
+          Expanded(
+            child: Text(
+              mission.title.isEmpty ? '(sans titre)' : mission.title,
+              style: const TextStyle(
+                  fontSize: 13.5, fontWeight: FontWeight.w600),
+            ),
           ),
+          _PeriodChip(period: mission.period),
+        ]),
         const SizedBox(height: 8),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
@@ -246,35 +267,63 @@ class _MissionTile extends StatelessWidget {
             minHeight: 6,
             backgroundColor: c.border,
             valueColor: AlwaysStoppedAnimation(
-              fraction >= 1 ? c.success : c.accent,
+              mission.completed || fraction >= 1 ? c.success : c.accent,
             ),
           ),
         ),
         const SizedBox(height: 4),
         Row(children: [
           Text(
-            mission.current != null && mission.target != null
-                ? '${mission.current} / ${mission.target}'
+            mission.progress != null && mission.goalValue != null
+                ? '${mission.progress} / ${_formatGoal(mission.goalValue!)}'
                 : '${(fraction * 100).toStringAsFixed(0)} %',
             style: TextStyle(color: c.muted, fontSize: 11.5),
           ),
-          if (mission.reward != null && mission.reward!.isNotEmpty) ...[
-            const Spacer(),
-            Flexible(
-              child: Text(
-                '→ ${mission.reward!}',
-                textAlign: TextAlign.end,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: c.muted,
-                    fontSize: 11.5,
-                    fontStyle: FontStyle.italic),
-              ),
+          const Spacer(),
+          if (mission.rewardCredits != null)
+            Text(
+              '+${mission.rewardCredits} crédit${mission.rewardCredits! > 1 ? 's' : ''}',
+              style: TextStyle(
+                  color: c.muted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600),
             ),
-          ],
         ]),
       ]),
+    );
+  }
+
+  /// Formate la cible : les durées sont en secondes, on les convertit en
+  /// heures lisibles.
+  String _formatGoal(int n) {
+    if (n >= 3600 && n % 3600 == 0) {
+      final h = n ~/ 3600;
+      return '$h h';
+    }
+    return '$n';
+  }
+}
+
+class _PeriodChip extends StatelessWidget {
+  const _PeriodChip({required this.period});
+  final DraupnirrMissionPeriod period;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: c.border,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        period.label,
+        style: TextStyle(
+            color: c.text,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
@@ -286,14 +335,14 @@ class _BadgesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final earned = items.where((b) => b.earned).toList();
-    if (earned.isEmpty) return const SizedBox.shrink();
+    final earned = items.where((b) => b.earned).length;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-          child: Text('Badges (${earned.length})',
+          child: Text(
+              'Badges ($earned / ${items.length})',
               style: TextStyle(
                   color: c.muted,
                   fontSize: 11.5,
@@ -303,14 +352,65 @@ class _BadgesSection extends StatelessWidget {
           radius: 14,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final b in earned) Chip(label: Text(b.name)),
+                for (var i = 0; i < items.length; i++)
+                  _BadgeTile(
+                    badge: items[i],
+                    last: i == items.length - 1,
+                  ),
               ],
             ),
           ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _BadgeTile extends StatelessWidget {
+  const _BadgeTile({required this.badge, required this.last});
+  final DraupnirrBadge badge;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final color = badge.earned ? c.accent : c.muted;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        border: last
+            ? null
+            : Border(bottom: BorderSide(color: c.border, width: 0.5)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(
+          badge.earned
+              ? Icons.emoji_events_rounded
+              : Icons.emoji_events_outlined,
+          size: 22,
+          color: color,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              badge.name.isEmpty ? badge.slug : badge.name,
+              style: TextStyle(
+                  color: badge.earned ? c.text : c.muted,
+                  fontSize: 13,
+                  fontWeight:
+                      badge.earned ? FontWeight.w600 : FontWeight.w400),
+            ),
+            if (badge.description != null && badge.description!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(badge.description!,
+                    style: TextStyle(color: c.muted, fontSize: 12)),
+              ),
+          ]),
         ),
       ]),
     );
