@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/settings.dart';
+import '../state/draupnirr.dart';
 import '../state/speed_history.dart';
 import '../state/notifications.dart';
 import '../state/revive.dart';
 import 'chat_page.dart';
 import 'downloads_page.dart';
+import 'draupnirr_page.dart';
 import 'notifications_page.dart';
 import 'settings_page.dart';
 import 'trackers_page.dart';
@@ -20,8 +22,9 @@ class HomeShell extends ConsumerStatefulWidget {
   /// renvoie false sinon (l'appelant ouvre alors la page du salon).
   static bool showChat(BuildContext context) {
     final shell = context.findAncestorStateOfType<_HomeShellState>();
-    shell?.select(_HomeShellState._chatTab);
-    return shell != null;
+    if (shell == null) return false;
+    shell.select(shell._chatTab);
+    return true;
   }
 
   @override
@@ -29,7 +32,9 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
-  static const _destinations = [
+  // Onglets fixes, dans l'ordre. L'onglet Draupnirr s'insère entre
+  // Transferts et Notifications quand la clé API est saisie.
+  static const _baseDestinations = <(IconData, IconData, String)>[
     (Icons.movie_outlined, Icons.movie, 'Films & séries'),
     (Icons.hub_outlined, Icons.hub, 'Trackers'),
     (Icons.downloading_outlined, Icons.downloading, 'Transferts'),
@@ -37,7 +42,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     (Icons.forum_outlined, Icons.forum, 'Salon'),
     (Icons.tune_outlined, Icons.tune, 'Réglages'),
   ];
-  static const _pages = [
+  static const _basePages = <Widget>[
     WishlistPage(),
     TrackersPage(),
     DownloadsPage(),
@@ -45,10 +50,41 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ChatPage(),
     SettingsPage(),
   ];
-  static const _notificationsTab = 3, _chatTab = 4, _settingsTab = 5;
+
+  static const _draupnirrLabel = 'Draupnirr';
 
   int _index = 0;
   bool _routed = false;
+
+  /// Construit la liste des onglets : Draupnirr est inséré entre Transferts
+  /// (index 2) et Notifications si la clé API est saisie.
+  List<(IconData, IconData, String)> _destinations() {
+    final hasDraupnirr = ref.watch(draupnirrApiProvider) != null;
+    return [
+      ..._baseDestinations.take(3),
+      if (hasDraupnirr) (Icons.shield_outlined, Icons.shield, _draupnirrLabel),
+      ..._baseDestinations.skip(3),
+    ];
+  }
+
+  List<Widget> _pages() {
+    final hasDraupnirr = ref.watch(draupnirrApiProvider) != null;
+    return [
+      ..._basePages.take(3),
+      if (hasDraupnirr) const DraupnirrPage(),
+      ..._basePages.skip(3),
+    ];
+  }
+
+  /// Index d'un onglet par nom, ou -1 si absent.
+  int _indexOf(List<(IconData, IconData, String)> d, String label) =>
+      d.indexWhere((e) => e.$3 == label);
+
+  /// Index calculés à chaque build (les destinations peuvent changer si
+  /// l'utilisateur saisit/retire sa clé Draupnirr).
+  int get _notificationsTab => _indexOf(_destinations(), 'Notifications');
+  int get _chatTab => _indexOf(_destinations(), 'Salon');
+  int get _settingsTab => _indexOf(_destinations(), 'Réglages');
 
   /// En quittant l'onglet Notifications, celles affichées deviennent lues.
   void select(int i) {
@@ -60,10 +96,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   /// Icône de navigation, avec le nombre de non-lues : notifications, et
   /// messages de salon signalés par le site.
-  static Widget _icon(IconData icon, int index, (int, int) unread) {
+  Widget _icon(IconData icon, int index, (int, int) unread) {
+    final notif = _notificationsTab;
+    final chat = _chatTab;
     final n = switch (index) {
-      _notificationsTab => unread.$1,
-      _chatTab => unread.$2,
+      var i when i == notif => unread.$1,
+      var i when i == chat => unread.$2,
       _ => 0,
     };
     return n > 0 ? Badge.count(count: n, child: Icon(icon)) : Icon(icon);
@@ -71,11 +109,19 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final destinations = _destinations();
+    final pages = _pages();
+
+    // Si l'onglet courant n'existe plus (Draupnirr retiré des Réglages),
+    // on retombe sur « Films & séries ».
+    if (_index >= pages.length) _index = 0;
+
     // Premier lancement : on ouvre directement les réglages.
     final settings = ref.watch(settingsProvider).value;
     if (!_routed && settings != null) {
       _routed = true;
-      if (!settings.hasTracker && !settings.hasTransmission) {
+      if (!settings.hasTracker && !settings.hasTransmission &&
+          _settingsTab >= 0) {
         _index = _settingsTab;
       }
     }
@@ -102,18 +148,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.listen(speedHistoryProvider, (_, _) {});
     // Passage en cross-seed C411 des téléchargements tr4ker terminés.
     ref.listen(reviveProvider, (_, _) {});
+    // Si on ouvre l'onglet Draupnirr, son notifier charge les données
+    // automatiquement (déclenché par `draupnirrProvider`).
+    ref.listen(draupnirrProvider, (_, _) {});
 
     final c = context.colors;
     // Onglets masqués : gardés en mémoire, mais leurs animations à l'arrêt.
     final body = IndexedStack(index: _index, children: [
-      for (final (i, page) in _pages.indexed)
+      for (final (i, page) in pages.indexed)
         TickerMode(enabled: i == _index, child: page),
     ]);
-
-    final destinations = [
-      for (final (i, (icon, selected, label)) in _destinations.indexed)
-        (i, icon, selected, label),
-    ];
 
     return LayoutBuilder(builder: (context, constraints) {
           if (constraints.maxWidth >= 720) {
@@ -151,11 +195,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                         ),
                       ),
                       destinations: [
-                        for (final (i, icon, selected, label) in destinations)
+                        for (var i = 0; i < destinations.length; i++)
                           NavigationRailDestination(
-                            icon: _icon(icon, i, unread),
-                            selectedIcon: _icon(selected, i, unread),
-                            label: Text(label),
+                            icon: _icon(destinations[i].$1, i, unread),
+                            selectedIcon: _icon(destinations[i].$2, i, unread),
+                            label: Text(destinations[i].$3),
                             padding: const EdgeInsets.symmetric(vertical: 4),
                           ),
                       ],
@@ -175,16 +219,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 selectedIndex: _index,
                 onDestinationSelected: select,
                 destinations: [
-                  for (final (i, icon, selected, label) in destinations)
+                  for (var i = 0; i < destinations.length; i++)
                     NavigationDestination(
-                      icon: _icon(icon, i, unread),
-                      selectedIcon: _icon(selected, i, unread),
-                      // Barre du bas : libellés courts (6 onglets sur un
-                      // téléphone), « Notifications » ne tient pas.
-                      label: switch (label) {
+                      icon: _icon(destinations[i].$1, i, unread),
+                      selectedIcon: _icon(destinations[i].$2, i, unread),
+                      // Barre du bas : libellés courts quand ils débordent.
+                      label: switch (destinations[i].$3) {
                         'Notifications' => 'Notifs',
                         'Films & séries' => 'Films',
-                        _ => label,
+                        _ => destinations[i].$3,
                       },
                     ),
                 ],

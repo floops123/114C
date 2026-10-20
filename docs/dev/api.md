@@ -8,6 +8,7 @@ formats, pièges. À lire avant de toucher à un client de `lib/api/`.
 - [C411 (HTTP)](#c411--api-http)
 - [C411 (WebSocket et discussion)](#c411--websocket-et-discussion)
 - [Torznab : tr4ker, Nostradamus, Draupnirr](#torznab--tr4ker-nostradamus-draupnirr)
+- [Draupnirr (compte, missions)](#draupnirr--compte-missions)
 - [AstraTorrent](#astratorrent)
 - [Transmission](#transmission)
 - [TMDB](#tmdb)
@@ -116,6 +117,30 @@ Client générique `TorznabApi` ([spécification](https://torznab.github.io/spec
 - **Pas de tri serveur** : les tris s'appliquent aux résultats chargés.
 - Les erreurs arrivent en HTTP 200 : `<error code="100" description="…"/>`.
 - Dates RFC 822 (`Sat, 17 Oct 2026 01:55:38 +0000`).
+
+## Draupnirr : compte, missions
+
+En plus de Torznab (ci-dessus), Draupnirr expose une API JSON pour le
+compte utilisateur. Authentification par clé API en paramètre `apikey`
+**et** en-tête `X-Api-Key` (le client envoie les deux par sécurité).
+Limite : 120 requêtes / minute par clé (300 / minute par IP).
+
+| Endpoint | Rôle |
+|---|---|
+| `GET /api/me` | compte : pseudo, ratio, upload, download, crédits, seedtime (h), H&R, badges |
+| `GET /api/me/missions` | missions en cours avec progression et récompense |
+| `GET /api/me/badges` | tous les badges (obtenus ou non) |
+| `GET /api/shop` | articles de la boutique (non utilisé par l'application) |
+
+Le client `DraupnirrApi` (`lib/api/draupnirr.dart`) renvoie des modèles
+avec **tous les champs facultatifs** : on accepte plusieurs alias de noms
+(`username`/`name`/`user`, `uploaded`/`uploaded_bytes`, `credits`/`credit`/
+`buffer`, `hnr_count`/`hit_and_runs`/`warnings`, `progress` décimal ou
+pourcentage, `current`/`target`, etc.). Si le JSON change, l'onglet «
+Draupnirr » n'affichera que les champs reconnus sans crasher.
+
+L'onglet n'apparaît dans la barre principale que si une clé API est saisie
+dans *Réglages → Trackers → Draupnirr* (`draupnirrApiProvider`).
 
 ## AstraTorrent
 
