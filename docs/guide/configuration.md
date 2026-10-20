@@ -41,6 +41,7 @@ Un champ par tracker ; laisse vide ceux que tu n'utilises pas.
 | C411 | clé API | profil sur c411.org |
 | tr4ker | clé API | profil sur tr4ker.net |
 | Nostradamus | clé API | profil sur nostradamus.foo |
+| Draupnirr | clé API (passkey) | profil sur draupnirr.xyz |
 | AstraTorrent | **passkey** | profil sur astratorrent.la |
 
 Chaque tracker renseigné rejoint la vue **Trackers** et la vérification de

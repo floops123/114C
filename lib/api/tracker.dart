@@ -16,6 +16,8 @@ enum Tracker {
       apiKeyHeader: 'X-Api-Key', announceHint: 'tr4ker'),
   nostradamus('Nostradamus', 'https://nostradamus.foo/api',
       announceHint: 'nostradamus'),
+  draupnirr('Draupnirr', 'https://draupnirr.xyz/torznab/api',
+      apiKeyHeader: 'X-Api-Key', announceHint: 'draupnirr'),
 
   astra('AstraTorrent', 'https://astratorrent.la',
       announceHint: 'astratorrent', keyLabel: 'Passkey');
@@ -49,7 +51,7 @@ enum Tracker {
 
   TrackerApi client(String apiKey) => switch (this) {
         c411 => C411Api(apiKey),
-        tr4ker || nostradamus => TorznabApi(this, apiKey),
+        tr4ker || nostradamus || draupnirr => TorznabApi(this, apiKey),
         astra => AstraApi(apiKey),
       };
 }

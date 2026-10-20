@@ -38,7 +38,7 @@ et faire évoluer le code.
                  │          │          │          │       │
           Trackers      Transmission   TMDB     FTP(S)  Jellyfin
    C411 · tr4ker ·      (RPC)         (fiches)  seedbox  (facultatif)
-   Nostradamus · Astra
+   Nostradamus · Draupnirr · Astra
 ```
 
 L'application est entièrement cliente : elle parle à chaque service

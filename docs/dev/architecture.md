@@ -45,7 +45,7 @@ lib/
 ├── api/
 │   ├── tracker.dart           enum Tracker, modèle Release, interface TrackerApi
 │   ├── c411.dart              API JSON de C411
-│   ├── torznab.dart           Torznab générique (tr4ker, Nostradamus)
+│   ├── torznab.dart           Torznab générique (tr4ker, Nostradamus, Draupnirr)
 │   ├── astra.dart             AstraTorrent (torrents.php, cross_seed.php)
 │   ├── c411_socket.dart       Socket.IO minimal (WebSocket des notifications)
 │   ├── c411_chat.dart         salons et messages

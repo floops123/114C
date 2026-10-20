@@ -7,7 +7,7 @@ formats, pièges. À lire avant de toucher à un client de `lib/api/`.
 
 - [C411 (HTTP)](#c411--api-http)
 - [C411 (WebSocket et discussion)](#c411--websocket-et-discussion)
-- [Torznab : tr4ker, Nostradamus](#torznab--tr4ker-nostradamus)
+- [Torznab : tr4ker, Nostradamus, Draupnirr](#torznab--tr4ker-nostradamus-draupnirr)
 - [AstraTorrent](#astratorrent)
 - [Transmission](#transmission)
 - [TMDB](#tmdb)
@@ -89,17 +89,27 @@ réponse renvoie les mêmes champs que `/api/torrents`, plus
   `GET /api/messages/channels/{id}?limit=N` (historique, `pinnedMessage`),
   même cookie. Avatars et images `/uploads/…` sont publics.
 
-## Torznab : tr4ker, Nostradamus
+## Torznab : tr4ker, Nostradamus, Draupnirr
 
 Client générique `TorznabApi` ([spécification](https://torznab.github.io/spec-1.3-draft/)).
 
-| | tr4ker | Nostradamus |
-|---|---|---|
-| Endpoint | `https://tr4ker.net/api/` | `https://nostradamus.foo/api` |
-| Clé | en-tête `X-Api-Key` **et** paramètre `apikey` | paramètre `apikey` |
+| | tr4ker | Nostradamus | Draupnirr |
+|---|---|---|---|
+| Endpoint | `https://tr4ker.net/api/` | `https://nostradamus.foo/api` | `https://draupnirr.xyz/torznab/api` |
+| Clé | en-tête `X-Api-Key` **et** paramètre `apikey` | paramètre `apikey` | en-tête `X-Api-Key` **et** paramètre `apikey` |
+| Limite | 120/min clé | 120/min clé | 120/min clé (300/min IP) |
 
 - tr4ker : `/api` redirige vers `/api/` ; `/api/torznab` est déprécié ; la
   clé est exigée même pour `t=caps` (sinon 401).
+- Draupnirr expose aussi un catalogue JSON (`/api/torrents`, avec
+  `q`/`category`/limite/décalage) et un endpoint compte (`/api/me`,
+  missions, badges, boutique). L'application n'utilise que la passerelle
+  Torznab, suffisante pour la recherche et le téléchargement. Les
+  téléchargements passent par `/torznab/download/{id}` (le `.torrent` est
+  personnalisé avec la clé de l'utilisateur). Deux refus côté serveur :
+  ratio sous le plancher (`403 ratio too low`) ou release en quarantaine
+  Ratatosk (`403 awaiting media verification`) — l'un comme l'autre
+  remontent en `Clé API refusée` par notre wrapper.
 - Torznab ne donne ni affiche ni technique : titre, année, résolution, source,
   codec, langues sont lus dans le nom (`ReleaseName`). Freeleech =
   `downloadvolumefactor` à 0.

@@ -3,8 +3,9 @@
 [← Sommaire](../README.md)
 
 L'onglet **Trackers** réunit les dernières sorties de **tous** les trackers
-configurés (C411, tr4ker, Nostradamus, AstraTorrent), toutes catégories
-confondues. Films et séries sont **regroupés par titre** et illustrés par TMDB.
+configurés (C411, tr4ker, Nostradamus, Draupnirr, AstraTorrent), toutes
+catégories confondues. Films et séries sont **regroupés par titre** et
+illustrés par TMDB.
 
 ## Une affiche par titre
 
