@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:c411_remote/api/ftp.dart';
 import 'package:c411_remote/api/transmission.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:c411_remote/state/media_library.dart';
 import 'package:c411_remote/state/torrents.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'fake_ftp.dart';
 
 const _dir = '/APPBOX_DATA/apps/transmission.moi/torrents';
 
@@ -59,6 +62,21 @@ class _Settings extends SettingsNotifier {
         ftpUser: 'moi',
         ftpPassword: 'secret',
         ftpTls: false,
+      );
+}
+
+/// Même chose, mais avec un dossier à parcourir : le FTP devient nécessaire.
+class _FoldersSettings extends SettingsNotifier {
+  _FoldersSettings(this.port);
+  final int port;
+  @override
+  Future<AppSettings> build() async => AppSettings(
+        ftpHost: '127.0.0.1',
+        ftpPort: port,
+        ftpUser: 'moi',
+        ftpPassword: 'secret',
+        ftpTls: false,
+        mediaFolders: const ['/medias/'],
       );
 }
 
@@ -160,5 +178,80 @@ void main() {
     container.read(mediaLibraryProvider);
     // Aucun état « en cours » : le parcours ne part pas tout seul.
     expect(container.read(mediaLibraryProvider).scanning, isFalse);
+  });
+
+  test('sans dossier à parcourir et correspondance connue : aucun FTP', () async {
+    var connects = 0;
+    final store = MemoryMediaLibraryStore(MediaLibrary(
+      files: [MediaFile(path: '/torrents/ancien.mkv', size: 1)],
+      scannedAt: DateTime(2026),
+      pathFrom: _dir,
+      pathTo: '/torrents',
+    ));
+    final transmission = _Transmission(true);
+    final container = ProviderContainer(overrides: [
+      settingsProvider.overrideWith(_Settings.new),
+      transmissionProvider.overrideWithValue(transmission),
+      mediaLibraryStoreProvider.overrideWithValue(store),
+      // Doit rester inutilisé : la correspondance des chemins est déjà connue
+      // et aucun dossier n'est configuré.
+      ftpConnectProvider.overrideWithValue((_) async {
+        connects++;
+        throw StateError('le FTP ne doit pas être ouvert');
+      }),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(settingsProvider.future);
+    await container.read(mediaLibraryProvider.notifier).scan();
+
+    expect(connects, 0, reason: 'les torrents suffisent, pas de promenade FTP');
+    final library = container.read(mediaLibraryProvider).library;
+    // Seul le torrent est pris : sans dossier à parcourir, un fichier qui
+    // n'appartient à aucun torrent n'est visible que si un jour un parcours
+    // l'a trouvé — et ce parcours l'aurait alors relu. Ici, il est abandonné
+    // (comportement inchangé : la base est reconstruite entièrement).
+    expect(library.files.map((f) => f.path), ['/torrents/Alien.1979.VFF.1080p.mkv'],
+        reason: 'les fichiers des torrents sont pris sans FTP');
+    expect(container.read(mediaLibraryProvider).error, isNull);
+  });
+
+  test('des dossiers configurés : le FTP est parcouru', () async {
+    var connects = 0;
+    final server = await FakeFtpServer.start({
+      // Un fichier ajouté à la main, hors torrent : visible par le parcours.
+      '/medias/Films/Amélie (2001)/Amélie (2001).mkv': [1, 2],
+      // Les fichiers du torrent : la correspondance des chemins se vérifie.
+      '/torrents/Alien.1979.VFF.1080p.mkv': [1, 2, 3],
+    });
+    addTearDown(server.close);
+    final store = MemoryMediaLibraryStore(MediaLibrary(
+      files: [MediaFile(path: '/torrents/ancien.mkv', size: 1)],
+      scannedAt: DateTime(2026),
+      pathFrom: _dir,
+      pathTo: '/torrents',
+    ));
+    final container = ProviderContainer(overrides: [
+      settingsProvider.overrideWith(() => _FoldersSettings(server.port)),
+      transmissionProvider.overrideWithValue(_Transmission(true)),
+      mediaLibraryStoreProvider.overrideWithValue(store),
+      ftpConnectProvider.overrideWithValue((config) async {
+        connects++;
+        final ftp = FtpClient(config);
+        await ftp.connect();
+        return ftp;
+      }),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(settingsProvider.future);
+    await container.read(mediaLibraryProvider.notifier).scan();
+
+    expect(connects, 1, reason: 'des dossiers sont configurés : on les parcourt');
+    final paths = container.read(mediaLibraryProvider).library.files
+        .map((f) => f.path)
+        .toList();
+    expect(paths, contains('/medias/Films/Amélie (2001)/Amélie (2001).mkv'),
+        reason: 'le parcours des dossiers apporte les fichiers hors torrent');
+    expect(paths, contains('/torrents/Alien.1979.VFF.1080p.mkv'),
+        reason: 'les torrents apportent les leurs, sans être reparcourus');
   });
 }

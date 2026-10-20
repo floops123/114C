@@ -147,7 +147,23 @@ Un torrent qui termine ne déclenche pas ce parcours : le listener sur
 (`torrent-get` avec ses `files`), traduit les chemins avec la correspondance
 déjà connue (`pathFrom` / `pathTo`) et n'ajoute que les fichiers absents. Pas
 de FTP, pas de `MLSD` : une requête, et l'identification TMDB des seuls titres
-nouveaux. Le parcours complet reste manuel (bouton *Actualiser*) et automatique
+nouveaux.
+
+Le parcours complet, lui, ne touche le FTP que s'il lui sert vraiment :
+
+| Situation | Connexion FTP |
+|---|---|
+| Transmission seul, correspondance des chemins connue | **aucune** — une requête `torrent-get` |
+| Transmission, correspondance à établir (jamais parcouru) | oui, pour `detectPathMap` (quelques `SIZE`) |
+| Des *Dossiers à parcourir* configurés | oui, pour le parcours (`scanFolders`) |
+
+Autrement dit, les torrents sont la source principale : Transmission connaît
+déjà tous les fichiers vidéo et leur chemin en une requête, alors qu'un
+parcours de dossiers fait un `list()` par répertoire. La promenade ne sert
+qu'à ce que Transmission ne connaît pas (les fichiers posés à la main dans
+les dossiers choisis).
+
+Le parcours complet reste manuel (bouton *Actualiser*) et automatique
 uniquement quand les réglages FTP ou les dossiers changent.
 
 La lecture passe ensuite par le relais :

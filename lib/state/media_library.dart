@@ -512,6 +512,67 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     _set(MediaLibraryState(library, scanning: true, status: state.status));
   }
 
+  /// Chemins Transmission → FTP établis (ou à établir) au vu des fichiers
+  /// vidéo des torrents terminés. Renvoie les fichiers ajoutés à [found],
+  /// les préfixes retenus et un avertissement si la correspondance est
+  /// introuvable.
+  ///
+  /// [ftp] n'est nécessaire que pour `detectPathMap` (et la vérification que
+  /// la correspondance connue vaut encore) : quand [pathFrom] est déjà connu
+  /// et que [check] n'est pas demandé, on n'ouvre aucune connexion.
+  Future<(List<MediaFile>, String?, String?, String?)> _fromTorrents(
+    TransmissionClient client,
+    FtpClient? ftp,
+    List<String> roots,
+    MediaLibrary previous, {
+    required bool check,
+    void Function(String)? onStatus,
+  }) async {
+    final torrents = (await client.torrentGet(
+            ['id', 'hashString', 'downloadDir', 'percentDone', 'files']))
+        .torrents;
+    final videos = completedVideos(torrents);
+    if (videos.isEmpty) {
+      return (const <MediaFile>[], previous.pathFrom, previous.pathTo, null);
+    }
+
+    var pathFrom = previous.pathFrom, pathTo = previous.pathTo;
+    final first = videos.first;
+    // Correspondance connue : encore valable ? (dossier déplacé, autre compte
+    // FTP…). La vérification demande le FTP ; sans connexion, on lui fait
+    // confiance — c'est le cas le plus courant, et c'est rapide.
+    if (check && ftp != null && pathFrom != null) {
+      final mapped = '$pathTo${first.path.substring(pathFrom.length)}';
+      if (!first.path.startsWith(pathFrom) || await ftp.size(mapped) == null) {
+        pathFrom = pathTo = null;
+      }
+    }
+    if (pathFrom == null) {
+      if (ftp == null) {
+        return (const <MediaFile>[], null, null,
+            'Correspondance des chemins inconnue : renseigne un dossier dans '
+            'Dossiers à parcourir, ou lance un parcours complet');
+      }
+      onStatus?.call('Correspondance des chemins Transmission…');
+      final map = await detectPathMap(ftp, first.path, first.size, roots);
+      if (map != null) (pathFrom, pathTo) = map;
+    }
+    if (pathFrom == null) {
+      return (const <MediaFile>[], null, null,
+          'Fichiers des torrents introuvables sur le FTP (${first.path})');
+    }
+    final files = <MediaFile>[];
+    for (final v in videos) {
+      if (!v.path.startsWith(pathFrom)) continue;
+      files.add(MediaFile(
+        path: '$pathTo${v.path.substring(pathFrom.length)}',
+        size: v.size,
+        hash: v.hash,
+      ));
+    }
+    return (files, pathFrom, pathTo, null);
+  }
+
   Future<void> scan() async {
     if (!ref.mounted || state.scanning) return;
     final settings = ref.read(settingsProvider).value;
@@ -524,55 +585,56 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     final transmission = ref.read(transmissionProvider);
     final tmdb = ref.read(tmdbProvider);
     final previous = state.library;
+    final roots = [
+      for (final r in settings.mediaFolders)
+        if (r.trim().isNotEmpty) r.trim(),
+    ];
     void status(String s) =>
         _set(MediaLibraryState(state.library, scanning: true, status: s));
-    status('Connexion au FTP…');
 
+    // Le FTP n'est ouvert que lorsqu'il sert vraiment : des dossiers à
+    // parcourir, ou une correspondance des chemins à établir/vérifier. La
+    // plupart du temps, les torrents seuls suffisent (une requête).
+    final needsFtp = roots.isNotEmpty ||
+        transmission == null ||
+        previous.pathFrom == null;
     FtpClient? ftp;
     try {
-      ftp = await connect(ftpConfigOf(settings));
-      final roots = settings.mediaFolders;
-      final found = <String, MediaFile>{
-        for (final f in await scanFolders(ftp, roots,
-            onFolder: (d) => status('Dossier $d')))
-          f.path: f,
-      };
+      if (needsFtp) {
+        status('Connexion au FTP…');
+        ftp = await connect(ftpConfigOf(settings));
+      }
 
       var pathFrom = previous.pathFrom, pathTo = previous.pathTo;
       String? warning;
+      final found = <String, MediaFile>{};
+
+      // D'abord les torrents : source principale, une seule requête.
       if (transmission != null) {
         status('Torrents terminés…');
-        final torrents = (await transmission.torrentGet(
-                ['id', 'hashString', 'downloadDir', 'percentDone', 'files']))
-            .torrents;
-        final videos = completedVideos(torrents);
-        if (videos.isNotEmpty) {
-          // Correspondance connue : encore valable ? (dossier déplacé, autre
-          // compte FTP…)
-          final first = videos.first;
-          if (pathFrom != null &&
-              (!first.path.startsWith(pathFrom) ||
-                  await ftp.size('$pathTo${first.path.substring(pathFrom.length)}') == null)) {
-            pathFrom = pathTo = null;
-          }
-          if (pathFrom == null) {
-            status('Correspondance des chemins Transmission…');
-            final map = await detectPathMap(
-                ftp, videos.first.path, videos.first.size, roots);
-            if (map != null) (pathFrom, pathTo) = map;
-          }
-          if (pathFrom == null) {
-            warning = 'Fichiers des torrents introuvables sur le FTP '
-                '(${videos.first.path})';
-          } else {
-            for (final v in videos) {
-              if (!v.path.startsWith(pathFrom)) continue;
-              final path = '$pathTo${v.path.substring(pathFrom.length)}';
-              found[path] = (found[path] ??
-                      MediaFile(path: path, size: v.size))
-                  .copyWith(hash: v.hash);
-            }
-          }
+        final (files, from, to, problem) = await _fromTorrents(
+          transmission,
+          ftp,
+          roots,
+          previous,
+          check: ftp != null,
+          onStatus: status,
+        );
+        if (from != null) {
+          pathFrom = from;
+          pathTo = to;
+        }
+        if (problem != null) warning = problem;
+        for (final f in files) {
+          found[f.path] = (found[f.path] ?? f).copyWith(hash: f.hash);
+        }
+      }
+
+      // Puis les dossiers choisis, s'il y en a (c'est la partie lente :
+      // un list() par dossier).
+      if (roots.isNotEmpty && ftp != null) {
+        for (final f in await scanFolders(ftp, roots, onFolder: (d) => status('Dossier $d'))) {
+          found.putIfAbsent(f.path, () => f);
         }
       }
 

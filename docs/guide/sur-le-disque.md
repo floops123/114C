@@ -54,6 +54,14 @@ résumé, titres des épisodes). Deux noms différents pour la même fiche
 Aucun parcours automatique au lancement : ouvrir la vue *Sur le disque*
 ne déclenche rien, c'est le bouton qui décide.
 
+Le parcours passe d'abord par **Transmission**, qui connaît déjà tous les
+torrents terminés et le chemin de leurs fichiers : une requête suffit dans le
+cas courant. Le serveur n'est parcouru que s'il apporte quelque chose que
+Transmission ignore — les *Dossiers à parcourir* que tu as configurés, ou la
+correspondance des chemins au tout premier passage. Un dossier avec des
+fichiers ajoutés à la main coûte une-promenade ; sans dossier configuré, le
+parcours ne touche pas au FTP du tout.
+
 La base est rangée sur l'appareil : elle s'affiche tout de suite, même hors
 ligne. La ligne d'état indique ce qui se passe (« Dossier /Films… »,
 « Fiches TMDB 3/12 », « Ajout du torrent… ») ou le nombre de films et
