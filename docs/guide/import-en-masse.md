@@ -22,12 +22,14 @@ une taille max (raccourcis *Toutes*, ≤ 50 Mo … ≤ 4 Go), laisse l'ordre sur
 - **Résultats** : une case en tête coche ou décoche tout ; chaque ligne
   montre le titre, le nom de la release, la catégorie, la taille et les
   pairs (▲ seeders, ▼ leechers). Toucher la ligne la coche ; ⓘ ouvre le
-  détail. Une barre en bas rappelle la sélection, sa taille totale et,
-  pour les sorties C411, le **gain en Zen** : Zen par jour une fois
-  partagées toute la journée, puis après six mois de seed (la note monte
-  avec la durée). Le calcul prend le bonus de ton compte s'il est connu
-  (cookie de session), sinon 25 %. La barre envoie aussi la sélection à
-  Transmission.
+  détail. Une barre en bas rappelle la sélection et sa taille totale, et
+  l'envoie à Transmission.
+- **Gain en Zen** : en tête des résultats, pour les sorties C411 cochées,
+  les Zen **cumulés sur 7 jours, 30 jours, 60 jours, 90 jours et 6 mois**
+  de partage, toute la journée. Le calcul suit la note, qui monte aux
+  paliers de durée (7, 30, 90 et 180 jours), et donne les Zen par jour au
+  départ et après six mois. Il prend le bonus de ton compte s'il est connu
+  (cookie de session), sinon 25 %, en te comptant parmi les seeders.
 
 ## Les filtres
 

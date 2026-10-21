@@ -66,18 +66,41 @@ enum BulkOrder {
       : estimateZen(bytes: r.size, seeders: r.seeders, seedDays: seedDays, bonus: bonus, joining: true).perDay;
 }
 
-/// Ce que rapporterait une sélection une fois partagée toute la journée :
-/// tout de suite, et après six mois de seed (note +0,50) ; [counted] : les
-/// sorties C411, les seules qui rapportent du Zen.
-({double now, double later, int counted}) selectionZen(Iterable<Release> releases, {double bonus = 0.25}) {
-  var now = 0.0, later = 0.0, counted = 0;
+/// Horizons des gains cumulés, en jours de seed.
+const zenHorizons = [7, 30, 60, 90, 180];
+
+/// Zen cumulés par [r] pendant ses [days] premiers jours de seed, partagée
+/// toute la journée : la note monte aux paliers de durée (7, 30, 90, 180 j).
+double zenOver(Release r, int days, {double bonus = 0.25}) {
+  final starts = [0, for (final (from, _) in seedDurationSteps) from];
+  var total = 0.0;
+  for (final (i, from) in starts.indexed) {
+    if (from >= days) break;
+    final to = i + 1 < starts.length && starts[i + 1] < days ? starts[i + 1] : days;
+    total += BulkOrder.zenOf(r, bonus: bonus, seedDays: from.toDouble()) * (to - from);
+  }
+  return total;
+}
+
+/// Ce que rapporterait une sélection une fois partagée : Zen par jour tout
+/// de suite et après six mois, et cumulés sur chaque horizon de
+/// [zenHorizons] ; [counted] : les sorties C411, les seules qui rapportent.
+({int counted, double perDay, double perDayLater, Map<int, double> over}) selectionZen(
+    Iterable<Release> releases,
+    {double bonus = 0.25}) {
+  var counted = 0;
+  var perDay = 0.0, later = 0.0;
+  final over = {for (final d in zenHorizons) d: 0.0};
   for (final r in releases) {
     if (r.tracker != Tracker.c411) continue;
     counted++;
-    now += BulkOrder.zenOf(r, bonus: bonus);
+    perDay += BulkOrder.zenOf(r, bonus: bonus);
     later += BulkOrder.zenOf(r, bonus: bonus, seedDays: 180);
+    for (final d in zenHorizons) {
+      over[d] = over[d]! + zenOver(r, d, bonus: bonus);
+    }
   }
-  return (now: now, later: later, counted: counted);
+  return (counted: counted, perDay: perDay, perDayLater: later, over: over);
 }
 
 /// Ce qu'on cherche. Toutes les bornes sont facultatives.

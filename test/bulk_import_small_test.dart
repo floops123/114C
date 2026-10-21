@@ -260,8 +260,14 @@ void main() {
     // Le gain en Zen de la sélection (sorties C411, bonus supposé de 25 %).
     final zen = selectionZen([for (final i in container.read(bulkImportProvider).selected) i.release]);
     expect(zen.counted, 49);
-    expect(find.textContaining('+${frNumber(zen.now, zen.now < 10 ? 2 : 1)} Zen/j'), findsOneWidget);
-    expect(find.textContaining('(${frNumber(zen.later, 1)} après 6 mois)'), findsOneWidget);
+    // Au-dessus de la liste : les cumuls, de 7 jours à 6 mois.
+    expect(find.textContaining('Gain en Zen de la sélection · 49 sorties C411'), findsOneWidget);
+    for (final d in zenHorizons) {
+      final v = zen.over[d]!;
+      expect(find.text('+${frNumber(v, v < 10 ? 1 : 0)}'), findsWidgets, reason: '$d j');
+    }
+    expect(find.text('6 mois'), findsOneWidget);
+    expect(find.textContaining('Zen/j au départ'), findsOneWidget);
     expect(c411.pages, [1]);
     // La page 2 (51 et 52 Mo) reste à prendre.
     expect(find.text('Encore'), findsOneWidget);

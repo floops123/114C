@@ -959,6 +959,7 @@ class _Results extends ConsumerWidget {
         ),
       );
     } else {
+      final head = zen.counted > 0 ? 1 : 0;
       list = NotificationListener<ScrollNotification>(
         onNotification: (n) {
           if (n.metrics.extentAfter < 400 && state.hasMore && !state.loading) {
@@ -968,9 +969,15 @@ class _Results extends ConsumerWidget {
         },
         child: ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-          itemCount:
+          itemCount: head +
               state.items.length + (state.loading || state.hasMore ? 1 : 0),
-          itemBuilder: (_, i) {
+          itemBuilder: (_, index) {
+            // En tête, les gains en Zen de la sélection : ils défilent
+            // avec les résultats (peu de hauteur sur un téléphone).
+            if (index < head) {
+              return _ZenGains(gain: zen, bonus: bonus, accountBonus: siteBonus != null);
+            }
+            final i = index - head;
             if (i >= state.items.length) {
               return Padding(
                 padding: const EdgeInsets.all(16),
@@ -1083,45 +1090,22 @@ class _Results extends ConsumerWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Tooltip(
-                        message: zen.counted == 0
-                            ? 'Seules les sorties C411 rapportent du Zen.'
-                            : 'Zen par jour une fois les ${zen.counted} sorties C411 partagées '
-                                'toute la journée (classe Swarm Keeper, bonus '
-                                '${frNumber(bonus * 100)} %${siteBonus == null ? ' supposé' : ' du compte'}) ; '
-                                'la note monte avec la durée de seed : '
-                                '≈ ${frNumber(zen.later, 1)} Zen/j après 6 mois.',
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text:
-                                    '${selected.length} sélectionné'
-                                    '${selected.length > 1 ? 's' : ''}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text:
+                                  '${selected.length} sélectionné'
+                                  '${selected.length > 1 ? 's' : ''}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
                               ),
-                              TextSpan(
-                                text: '  ·  ${formatBytes(state.selectedSize)}',
-                                style: TextStyle(color: c.muted),
-                              ),
-                              if (zen.counted > 0) ...[
-                                TextSpan(
-                                  text: '  ·  +${frNumber(zen.now, zen.now < 10 ? 2 : 1)} Zen/j',
-                                  style: TextStyle(
-                                    color: c.success,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                if (MediaQuery.sizeOf(context).width >= 600)
-                                  TextSpan(
-                                    text: '  (${frNumber(zen.later, 1)} après 6 mois)',
-                                    style: TextStyle(color: c.muted),
-                                  ),
-                              ],
-                            ],
-                          ),
+                            ),
+                            TextSpan(
+                              text: '  ·  ${formatBytes(state.selectedSize)}',
+                              style: TextStyle(color: c.muted),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1160,6 +1144,79 @@ class _Results extends ConsumerWidget {
 /// État vide plus bavard que le simple « aucune sortie » : il récapitule
 /// les filtres actifs pour aider à comprendre pourquoi la recherche n'a rien
 /// ramené, et propose de chercher plus loin ou de tout effacer.
+/// Gains en Zen de la sélection, cumulés sur 7 jours à 6 mois de seed.
+class _ZenGains extends StatelessWidget {
+  const _ZenGains({required this.gain, required this.bonus, required this.accountBonus});
+
+  final ({int counted, double perDay, double perDayLater, Map<int, double> over}) gain;
+  final double bonus;
+
+  /// Le bonus est celui du compte (sinon supposé).
+  final bool accountBonus;
+
+  static String _horizon(int days) => switch (days) {
+        180 => '6 mois',
+        _ => '$days j',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final small = TextStyle(fontSize: 11.5, color: c.muted);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: c.success.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.success.withValues(alpha: 0.25)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.savings_rounded, size: 16, color: c.success),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Gain en Zen de la sélection · ${gain.counted} sortie${gain.counted > 1 ? 's' : ''} C411',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            for (final d in zenHorizons)
+              Expanded(
+                child: Column(children: [
+                  Text(
+                    '+${frNumber(gain.over[d]!, gain.over[d]! < 10 ? 1 : 0)}',
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: c.success,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  Text(_horizon(d), style: small),
+                ]),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+            'Zen cumulés, partagés toute la journée : '
+            '${frNumber(gain.perDay, 2)} Zen/j au départ, '
+            '${frNumber(gain.perDayLater, 2)} Zen/j après 6 mois (la note monte '
+            'avec la durée de seed). Bonus ${frNumber(bonus * 100)} %'
+            '${accountBonus ? ' du compte' : ' supposé'}, en te comptant parmi les seeders.',
+            style: small,
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 class _EmptyResults extends StatelessWidget {
   const _EmptyResults({
     required this.criteria,

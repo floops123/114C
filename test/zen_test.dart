@@ -250,9 +250,20 @@ void main() {
     expect(gain.counted, 2);
     final b = estimateZen(bytes: 12 * _go, seeders: 3, joining: true, bonus: 0.2);
     final a = estimateZen(bytes: 300 * _mo, seeders: 30, joining: true, bonus: 0.2);
-    expect(gain.now, closeTo(a.perDay + b.perDay, 1e-9));
-    expect(gain.later, closeTo((a.weight * (a.note + 0.5) + b.weight * (b.note + 0.5)) * 1.2 / 7, 1e-9));
+    expect(gain.perDay, closeTo(a.perDay + b.perDay, 1e-9));
+    expect(gain.perDayLater, closeTo((a.weight * (a.note + 0.5) + b.weight * (b.note + 0.5)) * 1.2 / 7, 1e-9));
     expect(selectionZen([list.last]).counted, 0);
+
+    // Cumuls : la note monte à 7, 30 et 90 jours (+0,10, +0,25, +0,35).
+    double day(Release x, double seedDays) =>
+        estimateZen(bytes: x.size, seeders: x.seeders, seedDays: seedDays, bonus: 0.2, joining: true).perDay;
+    final big = list.first; // b : 12 Go, 3 seeders.
+    expect(zenOver(big, 7, bonus: 0.2), closeTo(7 * day(big, 0), 1e-9));
+    expect(zenOver(big, 60, bonus: 0.2), closeTo(7 * day(big, 0) + 23 * day(big, 7) + 30 * day(big, 30), 1e-9));
+    expect(zenOver(big, 180, bonus: 0.2),
+        closeTo(7 * day(big, 0) + 23 * day(big, 7) + 60 * day(big, 30) + 90 * day(big, 90), 1e-9));
+    expect(gain.over.keys, zenHorizons);
+    expect(gain.over[30], closeTo(zenOver(list[0], 30, bonus: 0.2) + zenOver(list[1], 30, bonus: 0.2), 1e-9));
   });
 
   group('opportunités : recherche et ajout', () {
