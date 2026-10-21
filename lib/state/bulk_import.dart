@@ -1,11 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../api/c411.dart';
 import '../api/tracker.dart';
+import '../core/zen.dart';
 import '../api/transmission.dart';
 import 'palliative.dart';
+import 'releases.dart';
 import 'torrents.dart';
 
 // Import en masse : on interroge un tracker, on ne garde que ce qui passe les
@@ -44,7 +43,11 @@ String categoryLabel(List<Category> categories, CategoryRef ref) {
 enum BulkOrder {
   smallest('Plus petits'),
   seeders('Plus de seeders'),
-  newest('Plus récents');
+  newest('Plus récents'),
+
+  /// Zen par jour estimés (C411, classe Swarm Keeper), en se comptant
+  /// parmi les seeders.
+  zen('Plus rentables');
 
   const BulkOrder(this.label);
   final String label;
@@ -53,7 +56,14 @@ enum BulkOrder {
         smallest => a.size.compareTo(b.size),
         seeders => b.seeders.compareTo(a.seeders),
         newest => b.createdAt.compareTo(a.createdAt),
+        zen => zenOf(b).compareTo(zenOf(a)),
       };
+
+  /// Zen par jour que rapporterait la sortie une fois partagée (0 hors
+  /// C411).
+  static double zenOf(Release r) => r.tracker != Tracker.c411
+      ? 0
+      : estimateZen(bytes: r.size, seeders: r.seeders, joining: true).perDay;
 }
 
 /// Ce qu'on cherche. Toutes les bornes sont facultatives.
@@ -651,7 +661,7 @@ class BulkImportNotifier extends Notifier<BulkState> {
         final ok = link != null && link.startsWith('magnet:')
             ? await transmission.addTorrent(filename: link)
             : await transmission.addTorrent(
-                metainfo: await _download(api, site, item.release),
+                metainfo: await fetchTorrentFile(api, site, item.release),
               );
         if (ok) added++;
         _patch(item.key, (i) => i.copyWith(done: true, failed: false, detail: null));
@@ -674,15 +684,6 @@ class BulkImportNotifier extends Notifier<BulkState> {
     return added;
   }
 }
-
-/// C411 : par le site avec le cookie de session s'il est renseigné
-/// (`/api/torrents/<infohash>/download`), sinon par la clé API ; les
-/// autres trackers par leur propre méthode.
-Future<Uint8List> _download(
-        TrackerApi api, C411SiteApi? site, Release release) =>
-    api.tracker == Tracker.c411 && site != null && release.infoHash != null
-        ? site.downloadTorrent(release)
-        : api.downloadTorrent(release);
 
 final bulkImportProvider =
     NotifierProvider<BulkImportNotifier, BulkState>(BulkImportNotifier.new);

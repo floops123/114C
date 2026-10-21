@@ -308,6 +308,7 @@ class C411Api implements TrackerApi {
       languages: strings(tech['languages']),
       mediaKind: media['kind'] as String?,
       qualityProfile: qualityKey(json['quality']),
+      bountyZen: (json['bountyZen'] as num?)?.toInt() ?? 0,
     );
   }
 }

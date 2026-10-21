@@ -24,6 +24,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `parsing_test.dart` | noms de release, dates RFC 822, tri local, tailles d'affiches ; année choisie comme sur C411, éditions et plateforme |
 | `release_profile_test.dart` | profils de qualité C411 sur des sorties réelles ; créneaux de la grille lus dans le nom, bornes de canaux et replis |
 | `c411_overview_test.dart` | compte, niveau et Zen lus sur le site (réponses réelles anonymisées) : les chiffres du site retrouvés (part de la journée, coefficient de poids, contribution, avant bonus, versé, moyennes) ; réanimations et classement ; tous les endpoints avec le cookie, un en panne, cookie refusé |
+| `zen_test.dart` | règles Swarm Keeper (coefficient de poids sur les exemples du site, paliers de durée, taille × seeders, arrivée parmi les seeders, grille, arbre, budget de ratio) ; portefeuille depuis Transmission ; sélection sous contraintes ; recherche (dichotomie sur les sorties sans seeder) et ajout ; ordre « Plus rentables » |
 | `c411_account_test.dart` | blocs de la page C411 : réanimations (bilan, alerte si plus dans Transmission), classement |
 | `release_quality_test.dart` | langues résumées comme sur C411 (listes réelles de l'API, tables exactes du site), descriptions techniques, équipe, BONUS ; profils (libellés du site, champ `quality` prioritaire), DTS:X sans perte |
 | `content_art_test.dart` | type de contenu d'une sortie, pictos des catégories |

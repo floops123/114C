@@ -43,12 +43,16 @@ const _palliativeOrder = [
 /// Page « Sans seeder / Soins palliatif » : retrouve des torrents orphelins
 /// sur d'autres trackers.
 class RevivePage extends StatelessWidget {
-  const RevivePage({super.key});
+  const RevivePage({super.key, this.palliative = false});
+
+  /// Ouvrir directement l'onglet « Soins palliatif ».
+  final bool palliative;
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
+      initialIndex: palliative ? 1 : 0,
       child: Builder(builder: (context) {
         final controller = DefaultTabController.of(context);
         return Scaffold(

@@ -127,6 +127,7 @@ class Release {
     this.languages = const [],
     this.mediaKind,
     this.qualityProfile,
+    this.bountyZen = 0,
   });
 
   final Tracker tracker;
@@ -171,6 +172,9 @@ class Release {
   final String? audioCodec;
   final String? audioChannels;
   final List<String> languages;
+
+  /// Prime en Zen offerte à qui réanime la sortie (C411, liste palliative).
+  final int bountyZen;
 
   /// Profil de qualité annoncé par le tracker (C411 : `pure`,
   /// `hc_optimized`, `optimization`, `compatibility`), s'il le fait.

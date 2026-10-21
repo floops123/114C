@@ -46,7 +46,8 @@ lib/
 │   ├── media_name.dart        film ou épisode d'après un chemin de fichier
 │   ├── titles.dart            comparaison de titres (accents, ponctuation)
 │   ├── bencode.dart           lecture des .torrent
-│   └── format.dart            octets, vitesses, durées, dates en français
+│   ├── format.dart            octets, vitesses, durées, dates en français
+│   └── zen.dart               règles Zen (Swarm Keeper) : note, poids, bonus, budget
 ├── api/
 │   ├── tracker.dart           enum Tracker, modèle Release, interface TrackerApi
 │   ├── quota.dart             quota de requêtes par minute de chaque tracker, 429
@@ -75,7 +76,10 @@ lib/
 │   ├── notifications.dart     WebSocket, notifications, compteurs
 │   ├── draupnirr.dart          compte Draupnirr, missions, badges
 │   ├── bulk_import.dart        import en masse : critères, page par tracker, envoi
-│   └── release_watch.dart      veille : relevés périodiques, nouveautés, notifications système
+│   ├── release_watch.dart      veille : relevés périodiques, nouveautés, notifications système
+│   ├── c411_overview.dart      compte, niveau, Zen, réanimations, classement (cookie)
+│   ├── zen_portfolio.dart      ce que rapporte chaque torrent C411 de Transmission
+│   └── zen_opportunities.dart  sorties C411 rentables à ajouter, sélection, envoi
 └── ui/
     ├── home_shell.dart        navigation : barre en bas, rail latéral ≥ 720 px
     ├── wishlist_page.dart     Films & séries : Découvrir, Ma liste, affiches, rangées

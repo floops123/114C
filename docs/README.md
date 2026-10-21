@@ -18,6 +18,7 @@ et faire évoluer le code.
 | [Transferts](guide/transferts.md) | piloter Transmission |
 | [Cross-seed et sans seeder](guide/cross-seed.md) | partager sur plusieurs trackers, relancer les torrents morts |
 | [C411 et Salon](guide/notifications.md) | suivre C411 en direct : notifications, compte, salon |
+| [Rendement Zen](guide/zen.md) | ce que rapporte chaque torrent, ce qu'il serait rentable d'ajouter |
 | [Dépannage](guide/depannage.md) | quand quelque chose ne marche pas |
 
 ## Notes de développement

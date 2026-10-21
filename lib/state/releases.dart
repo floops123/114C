@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/c411.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import 'torrents.dart';
@@ -42,3 +45,13 @@ Future<void> sendToTransmission(
     say(e.message);
   }
 }
+
+/// Le .torrent d'une sortie. C411 : par le site avec le cookie de session
+/// s'il est renseigné (`/api/torrents/<infohash>/download`, sans attente
+/// entre deux), sinon par la clé API ; les autres trackers par leur propre
+/// méthode.
+Future<Uint8List> fetchTorrentFile(
+        TrackerApi api, C411SiteApi? site, Release release) =>
+    api.tracker == Tracker.c411 && site != null && release.infoHash != null
+        ? site.downloadTorrent(release)
+        : api.downloadTorrent(release);

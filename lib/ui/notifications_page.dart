@@ -12,6 +12,7 @@ import 'chat_page.dart';
 import 'day_label.dart';
 import 'theme.dart';
 import 'torrent_detail_page.dart';
+import 'zen_page.dart';
 import 'widgets.dart';
 
 /// Notifications du site C411 : état de la connexion, compte en direct,
@@ -118,6 +119,8 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
         C411ProfileCard(account: o.account, level: o.level),
       if (state.account != null) _AccountCard(state.account!),
       if (state.counters != null) _Counters(state.counters!),
+      if (o != null && (o.balance != null || o.forecast != null || o.history != null))
+        const ZenPageButton(),
       if (o != null && (o.balance != null || o.forecast != null || o.history != null))
         ZenSection(balance: o.balance, forecast: o.forecast, history: o.history),
       if (o?.revivals case final revivals? when revivals.isNotEmpty)

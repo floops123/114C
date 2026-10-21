@@ -6,6 +6,7 @@ import '../api/tracker.dart';
 import '../core/format.dart';
 import '../state/bulk_import.dart';
 import '../state/palliative.dart';
+import 'c411_account.dart';
 import 'quota_notice.dart';
 import 'release_detail_page.dart';
 import 'theme.dart';
@@ -468,14 +469,17 @@ class _Filters extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               const _Label('Ordre'),
-              SegmentedButton<BulkOrder>(
-                showSelectedIcon: false,
-                segments: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
                   for (final o in BulkOrder.values)
-                    ButtonSegment(value: o, label: Text(o.label)),
+                    ChoiceChip(
+                      label: Text(o.label),
+                      selected: o == criteria.order,
+                      onSelected: (_) => onOrder(o),
+                    ),
                 ],
-                selected: {criteria.order},
-                onSelectionChanged: (s) => onOrder(s.first),
               ),
               const SizedBox(height: 12),
               Theme(
@@ -1354,6 +1358,13 @@ class _BulkRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text('▲ ${r.seeders}  ▼ ${r.leechers}', style: small),
+                if (r.tracker == Tracker.c411)
+                  Tooltip(
+                    message: 'Zen par jour une fois partagé (classe Swarm Keeper, '
+                        'bonus 25 %, en te comptant parmi les seeders)',
+                    child: Text('≈ ${frNumber(BulkOrder.zenOf(r), 2)} Zen/j',
+                        style: small.copyWith(color: c.success)),
+                  ),
                   ],
                 ),
                 IconButton(

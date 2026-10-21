@@ -24,6 +24,7 @@ entre l'application et tes services.
 | ⬇️ **Transferts** | Tout Transmission : suivi en direct, tris, filtres, actions groupées, détail complet, statistiques, configuration du serveur. |
 | 🆕 **Nouveautés** | Relève les trackers de ton choix toutes les *x* minutes, garde la liste des dernières sorties et te notifie de leur arrivée. |
 | 🔁 **Cross-seed** | Repère tes torrents terminés présents sur d'autres trackers et les partage sans rien retélécharger. Relance aussi les sorties **sans seeder** et la liste palliative de C411. |
+| 💰 **Rendement Zen** | Ce que rapporte chaque torrent partagé en Zen, et les sorties qu'il serait rentable d'ajouter, dans tes limites de disque et de ratio. |
 | 🔔 **C411 et Salon** | L'onglet C411 : les notifications du site en direct et ton compte (ratio, crédit) ; le salon de discussion du site. |
 
 ## Démarrage rapide
@@ -80,7 +81,8 @@ La documentation complète est dans [`docs/`](docs/README.md).
 7. [Nouveautés](docs/guide/nouveautes.md) — veille des trackers, notifications
 8. [Cross-seed et sans seeder](docs/guide/cross-seed.md) — partager plus, relancer les morts
 9. [C411 et Salon](docs/guide/notifications.md) — C411 en direct
-10. [Dépannage](docs/guide/depannage.md) — questions fréquentes
+10. [Rendement Zen](docs/guide/zen.md) — portefeuille et opportunités
+11. [Dépannage](docs/guide/depannage.md) — questions fréquentes
 
 **Pour les développeurs**
 
