@@ -22,6 +22,7 @@ entre l'application et tes services.
 | 💾 **Ta vidéothèque** | Ta propre base de films et séries, construite à partir des fichiers de ta seedbox (FTP), reconnue par TMDB, saisons et épisodes compris ; filtre *Sur le disque* dans les deux vues. |
 | ▶️ **Lecteur intégré** | Lecture directe du fichier d'origine, sans transcodage (mpv) : pistes audio, sous-titres, reprise là où tu t'étais arrêté. |
 | ⬇️ **Transferts** | Tout Transmission : suivi en direct, tris, filtres, actions groupées, détail complet, statistiques, configuration du serveur. |
+| 🆕 **Nouveautés** | Relève les trackers de ton choix toutes les *x* minutes, garde la liste des dernières sorties et te notifie de leur arrivée. |
 | 🔁 **Cross-seed** | Repère tes torrents terminés présents sur d'autres trackers et les partage sans rien retélécharger. Relance aussi les sorties **sans seeder** et la liste palliative de C411. |
 | 🔔 **Notifications et Salon** | Les notifications de C411 en direct, ton compte (ratio, crédit) et le salon de discussion du site. |
 
@@ -65,9 +66,10 @@ La documentation complète est dans [`docs/`](docs/README.md).
 4. [Trackers](docs/guide/trackers.md) — toutes les sorties regroupées par titre, versions
 5. [Sur le disque et lecture](docs/guide/sur-le-disque.md) — ta vidéothèque et le lecteur intégré
 6. [Transferts](docs/guide/transferts.md) — Transmission, statistiques, serveur
-7. [Cross-seed et sans seeder](docs/guide/cross-seed.md) — partager plus, relancer les morts
-8. [Notifications et Salon](docs/guide/notifications.md) — C411 en direct
-9. [Dépannage](docs/guide/depannage.md) — questions fréquentes
+7. [Nouveautés](docs/guide/nouveautes.md) — veille des trackers, notifications
+8. [Cross-seed et sans seeder](docs/guide/cross-seed.md) — partager plus, relancer les morts
+9. [Notifications et Salon](docs/guide/notifications.md) — C411 en direct
+10. [Dépannage](docs/guide/depannage.md) — questions fréquentes
 
 **Pour les développeurs**
 

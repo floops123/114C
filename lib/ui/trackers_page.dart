@@ -8,11 +8,13 @@ import '../api/tracker.dart';
 import '../core/format.dart';
 import '../core/preferences.dart';
 import '../state/catalog.dart';
+import '../state/release_watch.dart';
 import '../state/wishlist.dart';
 import 'bulk_import_page.dart';
 import 'content_art.dart';
 import 'disk_page.dart';
 import 'on_disk.dart';
+import 'release_watch_page.dart';
 import 'releases_page.dart';
 import 'send_button.dart';
 import 'theme.dart';
@@ -151,6 +153,7 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
       );
     }
 
+    final unseen = ref.watch(releaseWatchProvider.select((s) => s.unseen));
     return Scaffold(
       body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         PageHeader(
@@ -179,6 +182,16 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
               icon: Icon(grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
               onPressed: () =>
                   ref.read(uiPrefsProvider.notifier).setReleasesGrid(!grid),
+            ),
+            IconButton(
+              tooltip: 'Nouveautés',
+              icon: Badge.count(
+                count: unseen,
+                isLabelVisible: unseen > 0,
+                child: const Icon(Icons.new_releases_outlined),
+              ),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const ReleaseWatchPage())),
             ),
             IconButton(
               tooltip: 'Import en masse',

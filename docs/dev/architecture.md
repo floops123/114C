@@ -68,7 +68,8 @@ lib/
 │   ├── playback.dart          positions de reprise
 │   ├── notifications.dart     WebSocket, notifications, compteurs
 │   ├── draupnirr.dart          compte Draupnirr, missions, badges
-│   └── bulk_import.dart        import en masse : critères, page par tracker, envoi
+│   ├── bulk_import.dart        import en masse : critères, page par tracker, envoi
+│   └── release_watch.dart      veille : relevés périodiques, nouveautés, notifications système
 └── ui/
     ├── home_shell.dart        navigation : barre en bas, rail latéral ≥ 720 px
     ├── wishlist_page.dart     Films & séries : Découvrir, Ma liste, affiches, rangées
@@ -86,6 +87,7 @@ lib/
     ├── notifications_page.dart, chat_page.dart, rich_text.dart
     ├── draupnirr_page.dart       onglet compte Draupnirr (compte + missions)
     ├── bulk_import_page.dart    import en masse : filtres, sélection, envoi
+    ├── release_watch_page.dart  Nouveautés : sorties repérées, réglages de la veille
     ├── settings_page.dart, server_settings_page.dart, bandwidth_groups_page.dart
     ├── theme.dart             palette AppColors, thèmes clair et sombre
     ├── widgets.dart           composants partagés

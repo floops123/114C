@@ -5,6 +5,7 @@ import '../core/settings.dart';
 import '../state/draupnirr.dart';
 import '../state/speed_history.dart';
 import '../state/notifications.dart';
+import '../state/release_watch.dart';
 import '../state/revive.dart';
 import 'chat_page.dart';
 import 'downloads_page.dart';
@@ -148,6 +149,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.listen(speedHistoryProvider, (_, _) {});
     // Passage en cross-seed C411 des téléchargements tr4ker terminés.
     ref.listen(reviveProvider, (_, _) {});
+    // Veille des nouveautés : relevés périodiques dès l'ouverture.
+    ref.listen(releaseWatchProvider, (_, _) {});
     // Si on ouvre l'onglet Draupnirr, son notifier charge les données
     // automatiquement (déclenché par `draupnirrProvider`).
     ref.listen(draupnirrProvider, (_, _) {});

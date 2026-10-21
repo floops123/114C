@@ -53,6 +53,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `build_personal_test.dart` | outil `tool/build_personal.dart` : JSON → `--dart-define` (champs scalaires, `mediaFolders` CSV, `apiKeys` par tracker, valeurs vides ignorées, erreurs de lecture) |
 | `draupnirr_test.dart` | parsing défensif de `DraupnirrAccount` / `Mission` / `Badge` (alias multiples, champs manquants, progress décimal ou pourcentage) |
 | `bulk_import_test.dart` | `BulkCriteria.accepts` : trackers et catégories multi-sélection, min/max taille/seeders/leechers, combinaison des bornes ; `parseBytes` Go/Mo/To |
+| `release_watch_test.dart` | veille : premier relevé sans alerte, nouveautés en tête et notifiées, trackers choisis, échec d'un tracker, vu / vidé, relevé à l'ouverture puis selon l'intervalle, sérialisation ; page Nouveautés |
 | `bulk_import_categories_test.dart` | catégories des sorties (Torznab via le `caps` servi en local, C411, AstraTorrent) et filtre ; catégories rechargées quand les trackers changent ; erreurs cumulées par tracker puis effacées |
 | `wishlist_test.dart` | TMDB, liste, Découvrir, fiche, recherche par tracker, tris et intertitres |
 | `media_name_test.dart` | film ou épisode d'après le chemin, extraits et bonus ignorés |

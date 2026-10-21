@@ -13,6 +13,7 @@ import '../api/transmission.dart';
 import '../core/settings.dart';
 import '../core/preferences.dart';
 import '../state/media_library.dart';
+import 'release_watch_page.dart';
 import 'server_settings_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -388,6 +389,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                     .setThemeMode(s.first),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Section(
+                            title: 'Veille des nouveautés',
+                            children: [WatchSettingsPanel()],
                           ),
                           const SizedBox(height: 12),
                           Section(

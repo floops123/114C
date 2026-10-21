@@ -28,6 +28,8 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'tmdbMatches', // PrefsTmdbMatchStore
         'revive', // PrefsReviveStore
         'palliative', // PrefsPalliativeStore
+        'releaseWatch', // PrefsWatchStore
+        'releaseWatchConfig', // WatchConfigNotifier
       }),
     );
 
