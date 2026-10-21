@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/tracker.dart';
 import '../core/format.dart';
 import '../state/bulk_import.dart';
 import 'release_detail_page.dart';
@@ -171,10 +172,27 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                   textInputAction: TextInputAction.search,
                   onSubmitted: (_) => _search(),
                   decoration: const InputDecoration(
-                    labelText: 'Nom (recherché sur tous les trackers)',
+                    labelText: 'Nom (recherché sur les trackers choisis)',
                     prefixIcon: Icon(Icons.search_rounded, size: 20),
                     isDense: true,
                   ),
+                ),
+                const SizedBox(height: 12),
+                _FilterChips<Tracker>(
+                  label: 'Trackers',
+                  allLabel: 'Tous les trackers',
+                  items: ref.watch(trackersProvider).keys.toList(),
+                  selected: state.criteria.trackers,
+                  onChanged: (next) => notifier.update(
+                      state.criteria.copyWith(trackers: next)),
+                ),
+                const SizedBox(height: 6),
+                _CategoryChips(
+                  selected: state.criteria.categories,
+                  available: state.availableCategories,
+                  loading: state.loadingCategories,
+                  onChanged: (next) => notifier.update(
+                      state.criteria.copyWith(categories: next)),
                 ),
                 const SizedBox(height: 12),
                 Row(children: [
@@ -359,6 +377,127 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
           ),
       ]),
     );
+  }
+}
+
+/// Rangée de chips multi-sélection pour une énumération (ici `Tracker`).
+/// `selected` vide = pas de filtre, l'utilisateur voit alors la chip « Tous »
+/// marquée.
+class _FilterChips<T> extends StatelessWidget {
+  const _FilterChips({
+    required this.label,
+    required this.allLabel,
+    required this.items,
+    required this.selected,
+    required this.onChanged,
+  });
+  final String label;
+  final String allLabel;
+  final List<T> items;
+  final Set<T> selected;
+  final void Function(Set<T> next) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(label,
+          style: TextStyle(
+              color: c.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        _allChip<T>(context, items, selected, onChanged, allLabel),
+        for (final t in items) _itemChip<T>(context, t, selected, onChanged),
+      ]),
+    ]);
+  }
+}
+
+Widget _allChip<T>(BuildContext context, List<T> items, Set<T> selected,
+    void Function(Set<T>) onChanged, String label) {
+  final c = context.colors;
+  final isOn = selected.isEmpty;
+  return ChoiceChip(
+    label: Text(label),
+    selected: isOn,
+    onSelected: (_) => onChanged(<T>{}),
+    avatar: Icon(Icons.all_inclusive_rounded,
+        size: 16, color: isOn ? c.onAccent : c.muted),
+  );
+}
+
+Widget _itemChip<T>(
+    BuildContext context, T item, Set<T> selected, void Function(Set<T>) onChanged) {
+  final isOn = selected.isEmpty || selected.contains(item);
+  // Clic sur un chip coché → on l'enlève. Sur un chip non coché → on le
+  // garde seul (ou on l'ajoute à l'ensemble courant). Logique : on ne garde
+  // que les chips explicitement cochés, vidés = « tout » via la chip « Tous ».
+  return ChoiceChip(
+    label: Text(item.toString().split('.').last),
+    selected: isOn,
+    onSelected: (_) {
+      if (selected.isEmpty) {
+        // Tout est coché, on coche seulement cet item.
+        onChanged({item});
+      } else if (selected.contains(item)) {
+        // On enlève cet item.
+        onChanged({...selected}..remove(item));
+      } else {
+        // On l'ajoute.
+        onChanged({...selected, item});
+      }
+    },
+  );
+}
+
+/// Chips de sous-catégories : chargées en tâche de fond depuis les
+/// `categories()` des trackers configurés. Pendant le chargement, une
+/// « placeholder » est affichée.
+class _CategoryChips extends StatelessWidget {
+  const _CategoryChips({
+    required this.selected,
+    required this.available,
+    required this.loading,
+    required this.onChanged,
+  });
+  final Set<String> selected;
+  final List<String> available;
+  final bool loading;
+  final void Function(Set<String>) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('Catégorie',
+          style: TextStyle(
+              color: c.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      if (loading && available.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(children: [
+            const SizedBox.square(
+                dimension: 14,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 8),
+            Text('Chargement des catégories…',
+                style: TextStyle(color: c.muted, fontSize: 12)),
+          ]),
+        )
+      else
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          _allChip<String>(
+            context,
+            available,
+            selected,
+            onChanged,
+            'Toutes',
+          ),
+          for (final cat in available)
+            _itemChip<String>(context, cat, selected, onChanged),
+        ]),
+    ]);
   }
 }
 

@@ -20,7 +20,8 @@ typedef Bound = ({int? min, int? max});
 class BulkCriteria {
   const BulkCriteria({
     this.name = '',
-    this.category,
+    this.trackers = const {},
+    this.categories = const {},
     this.sizeMin,
     this.sizeMax,
     this.seedersMin,
@@ -32,8 +33,12 @@ class BulkCriteria {
   /// Nom recherché, passé tel quel au tracker.
   final String name;
 
-  /// Sous-catégorie du tracker (« Film », « Série », « FLAC »…) ; null : toutes.
-  final String? category;
+  /// Trackers à interroger (vide = tous les trackers configurés).
+  final Set<Tracker> trackers;
+
+  /// Sous-catégories retenues (vide = tout). Les valeurs correspondent à
+  /// `r.subcategory` (insensible à la casse).
+  final Set<String> categories;
 
   /// Tailles en octets.
   final int? sizeMin;
@@ -45,7 +50,8 @@ class BulkCriteria {
 
   bool get hasFilters =>
       name.isNotEmpty ||
-      category != null ||
+      trackers.isNotEmpty ||
+      categories.isNotEmpty ||
       sizeMin != null ||
       sizeMax != null ||
       seedersMin != null ||
@@ -59,39 +65,37 @@ class BulkCriteria {
 
   BulkCriteria copyWith({
     String? name,
-    String? category,
+    Set<Tracker>? trackers,
+    Set<String>? categories,
     int? sizeMin,
     int? sizeMax,
     int? seedersMin,
     int? seedersMax,
     int? leechersMin,
     int? leechersMax,
-    bool clearCategory = false,
-    bool clearSizeMin = false,
-    bool clearSizeMax = false,
-    bool clearSeedersMin = false,
-    bool clearSeedersMax = false,
-    bool clearLeechersMin = false,
-    bool clearLeechersMax = false,
   }) =>
       BulkCriteria(
         name: name ?? this.name,
-        category: clearCategory ? null : category ?? this.category,
-        sizeMin: clearSizeMin ? null : sizeMin ?? this.sizeMin,
-        sizeMax: clearSizeMax ? null : sizeMax ?? this.sizeMax,
-        seedersMin: clearSeedersMin ? null : seedersMin ?? this.seedersMin,
-        seedersMax: clearSeedersMax ? null : seedersMax ?? this.seedersMax,
-        leechersMin: clearLeechersMin ? null : leechersMin ?? this.leechersMin,
-        leechersMax: clearLeechersMax ? null : leechersMax ?? this.leechersMax,
+        trackers: trackers ?? this.trackers,
+        categories: categories ?? this.categories,
+        sizeMin: sizeMin ?? this.sizeMin,
+        sizeMax: sizeMax ?? this.sizeMax,
+        seedersMin: seedersMin ?? this.seedersMin,
+        seedersMax: seedersMax ?? this.seedersMax,
+        leechersMin: leechersMin ?? this.leechersMin,
+        leechersMax: leechersMax ?? this.leechersMax,
       );
 
-  /// La sortie passe-t-elle les bornes ? Une borne nulle n'exclut rien.
+  /// La sortie passe-t-elle les filtres ? Un ensemble vide = pas de filtre.
   bool accepts(Release r) {
-    final cat = category;
+    if (trackers.isNotEmpty && !trackers.contains(r.tracker)) return false;
+    if (categories.isNotEmpty) {
+      final cs = categories.map((c) => c.toLowerCase()).toSet();
+      if (!cs.contains(r.subcategory.toLowerCase())) return false;
+    }
     return _within(r.size, size) &&
         _within(r.seeders, seeders) &&
-        _within(r.leechers, leechers) &&
-        (cat == null || r.subcategory.toLowerCase() == cat.toLowerCase());
+        _within(r.leechers, leechers);
   }
 
   static bool _within(int value, Bound b) =>
@@ -140,6 +144,8 @@ class BulkState {
     this.searched = false,
     this.sending = false,
     this.error,
+    this.availableCategories = const [],
+    this.loadingCategories = false,
   });
 
   final List<BulkItem> items;
@@ -152,20 +158,15 @@ class BulkState {
   final bool sending;
   final String? error;
 
+  /// Sous-catégories proposées par les `categories()` des trackers configurés,
+  /// pour les proposer en filtre avant même la première recherche. Chargé
+  /// en tâche de fond à l'ouverture de la page.
+  final List<String> availableCategories;
+  final bool loadingCategories;
+
   /// Ce qu'il reste à envoyer (coché, pas encore envoyé).
   List<BulkItem> get pending => items.where((i) => !i.done).toList();
   List<BulkItem> get selected => pending.where((i) => i.selected).toList();
-
-  /// Sous-catégories présentes dans les résultats, pour les proposer en filtre.
-  List<String> get categories {
-    final seen = <String, String>{};
-    for (final i in items) {
-      final s = i.release.subcategory.trim();
-      if (s.isNotEmpty) seen.putIfAbsent(s.toLowerCase(), () => s);
-    }
-    final all = seen.values.toList()..sort();
-    return all;
-  }
 
   int get sentCount => items.where((i) => i.done).length;
 
@@ -176,6 +177,8 @@ class BulkState {
     bool? searched,
     bool? sending,
     String? Function()? error,
+    List<String>? availableCategories,
+    bool? loadingCategories,
   }) =>
       BulkState(
         items: items ?? this.items,
@@ -184,6 +187,8 @@ class BulkState {
         searched: searched ?? this.searched,
         sending: sending ?? this.sending,
         error: error != null ? error() : this.error,
+        availableCategories: availableCategories ?? this.availableCategories,
+        loadingCategories: loadingCategories ?? this.loadingCategories,
       );
 }
 
@@ -203,8 +208,41 @@ class BulkImportNotifier extends Notifier<BulkState> {
   @override
   BulkState build() {
     // Les clients sont recréés quand les réglages changent : on repart de zéro.
-    ref.watch(trackersProvider);
-    return const BulkState();
+    final trackers = ref.watch(trackersProvider);
+    if (trackers.isNotEmpty && !state.loadingCategories && state.availableCategories.isEmpty) {
+      Future.microtask(_loadAvailableCategories);
+    }
+    return state;
+  }
+
+  /// Récupère les sous-catégories de chaque tracker configuré et alimente
+  /// `availableCategories` avec l'union dédupliquée. Une erreur par tracker
+  /// est ignorée : le tracker qui échoue sera de toute façon signalé dans
+  /// les résultats de recherche.
+  Future<void> _loadAvailableCategories() async {
+    final trackers = ref.read(trackersProvider);
+    state = state.copyWith(loadingCategories: true);
+    final names = <String>{};
+    await Future.wait([
+      for (final t in trackers.keys)
+        () async {
+          try {
+            for (final c in await trackers[t]!.categories()) {
+              for (final s in c.subcategories) {
+                final n = s.name.trim();
+                if (n.isNotEmpty) names.add(n);
+              }
+            }
+          } on Object catch (_) {
+            // Ignoré.
+          }
+        }(),
+    ]);
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      availableCategories: (names.toList()..sort()),
+      loadingCategories: false,
+    );
   }
 
   void update(BulkCriteria criteria) => state = state.copyWith(criteria: criteria);
@@ -245,13 +283,17 @@ class BulkImportNotifier extends Notifier<BulkState> {
   }
 
   /// Charge une page de chaque tracker encore à feuilleter, et n'ajoute que
-  /// les sorties qui passent les bornes.
+  /// les sorties qui passent les bornes. Si `criteria.trackers` est non vide,
+  /// on n'interroge que les trackers qu'il contient.
   Future<void> _load(int generation) async {
     final trackers = ref.read(trackersProvider);
     final criteria = state.criteria;
+    final selected = criteria.trackers;
     final todo = [
       for (final t in trackers.keys)
-        if (_pages[t] == null || (_more[t] ?? false)) t,
+        if ((selected.isEmpty || selected.contains(t)) &&
+            (_pages[t] == null || (_more[t] ?? false)))
+          t,
     ];
     if (todo.isEmpty) {
       _busy = false;

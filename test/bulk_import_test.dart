@@ -3,6 +3,7 @@ import 'package:c411_remote/state/bulk_import.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Release _r({
+  Tracker tracker = Tracker.c411,
   int size = 1024,
   int seeders = 0,
   int leechers = 0,
@@ -11,7 +12,7 @@ Release _r({
   String? mediaKind,
 }) =>
     Release(
-      tracker: Tracker.c411,
+      tracker: tracker,
       id: '1',
       name: name ?? 'A.1080p.mkv',
       size: size,
@@ -28,6 +29,43 @@ void main() {
       const c = BulkCriteria();
       expect(c.accepts(_r()), isTrue);
       expect(c.hasFilters, isFalse);
+    });
+
+    test('trackers : seul celui coché passe', () {
+      const c = BulkCriteria(trackers: {Tracker.c411});
+      expect(c.accepts(_r(tracker: Tracker.c411)), isTrue);
+      expect(c.accepts(_r(tracker: Tracker.tr4ker)), isFalse);
+    });
+
+    test('trackers : ensemble vide = pas de filtre', () {
+      const c = BulkCriteria(trackers: {});
+      expect(c.accepts(_r(tracker: Tracker.c411)), isTrue);
+      expect(c.accepts(_r(tracker: Tracker.tr4ker)), isTrue);
+    });
+
+    test('catégories : ensemble insensible à la casse', () {
+      const c = BulkCriteria(categories: {'film'});
+      expect(c.accepts(_r(subcategory: 'Film')), isTrue);
+      expect(c.accepts(_r(subcategory: 'FILM')), isTrue);
+      expect(c.accepts(_r(subcategory: 'Série')), isFalse);
+    });
+
+    test('catégories : ensemble vide = pas de filtre', () {
+      const c = BulkCriteria(categories: {});
+      expect(c.accepts(_r(subcategory: 'Film')), isTrue);
+      expect(c.accepts(_r(subcategory: '')), isTrue);
+    });
+
+    test('catégories : sortie sans sous-catégorie n\'est pas acceptée', () {
+      const c = BulkCriteria(categories: {'Film'});
+      expect(c.accepts(_r(subcategory: '')), isFalse);
+    });
+
+    test('catégories : multi-sélection', () {
+      const c = BulkCriteria(categories: {'Film', 'Série'});
+      expect(c.accepts(_r(subcategory: 'Film')), isTrue);
+      expect(c.accepts(_r(subcategory: 'Série')), isTrue);
+      expect(c.accepts(_r(subcategory: 'Animation')), isFalse);
     });
 
     test('taille : min et max', () {
@@ -54,51 +92,49 @@ void main() {
       expect(c.accepts(_r(leechers: 6)), isFalse);
     });
 
-    test('catégorie : insensible à la casse', () {
-      const c = BulkCriteria(category: 'film');
-      expect(c.accepts(_r(subcategory: 'Film')), isTrue);
-      expect(c.accepts(_r(subcategory: 'FILM')), isTrue);
-      expect(c.accepts(_r(subcategory: 'Série')), isFalse);
-    });
-
-    test('catégorie : sortie sans sous-catégorie n\'est pas acceptée', () {
-      const c = BulkCriteria(category: 'Film');
-      expect(c.accepts(_r(subcategory: '')), isFalse);
-    });
-
     test('combinaison : tous les filtres ensemble', () {
       const c = BulkCriteria(
+        trackers: {Tracker.c411},
+        categories: {'Film'},
         sizeMin: 1024,
         sizeMax: 4096,
         seedersMin: 1,
         leechersMax: 5,
-        category: 'Film',
       );
       final r = _r(size: 2048, seeders: 3, leechers: 2, subcategory: 'Film');
       expect(c.accepts(r), isTrue);
-      // Sortie trop grosse.
+      // Mauvais tracker.
       expect(c.accepts(_r(
-          size: 8192, seeders: 3, leechers: 2, subcategory: 'Film')), isFalse);
+              tracker: Tracker.tr4ker,
+              size: 2048,
+              seeders: 3,
+              leechers: 2,
+              subcategory: 'Film')),
+          isFalse);
+      // Mauvaise catégorie.
+      expect(c.accepts(_r(size: 2048, seeders: 3, leechers: 2, subcategory: 'Série')),
+          isFalse);
+      // Trop gros.
+      expect(c.accepts(_r(
+              size: 8192, seeders: 3, leechers: 2, subcategory: 'Film')),
+          isFalse);
     });
   });
 
-  group('BulkCriteria.copyWith', () {
-    test('clearCategory remet à null', () {
-      const c = BulkCriteria(category: 'Film');
-      expect(c.copyWith(clearCategory: true).category, isNull);
-      // Sans clear, on garde l'ancienne.
-      expect(c.copyWith(sizeMin: 100).category, 'Film');
+  group('BulkCriteria.hasFilters', () {
+    test('tout vide : false', () {
+      const c = BulkCriteria();
+      expect(c.hasFilters, isFalse);
     });
 
-    test('copyWith remplace un champ défini', () {
-      const c = BulkCriteria(sizeMin: 100);
-      expect(c.copyWith(sizeMin: 200).sizeMin, 200);
+    test('trackers non vide : true', () {
+      const c = BulkCriteria(trackers: {Tracker.c411});
+      expect(c.hasFilters, isTrue);
     });
 
-    test('copyWith préserve un champ non touché', () {
-      const c = BulkCriteria(sizeMin: 100, sizeMax: 200);
-      expect(c.copyWith(seedersMin: 5).sizeMin, 100);
-      expect(c.copyWith(seedersMin: 5).sizeMax, 200);
+    test('catégories non vide : true', () {
+      const c = BulkCriteria(categories: {'Film'});
+      expect(c.hasFilters, isTrue);
     });
   });
 }

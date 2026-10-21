@@ -13,6 +13,15 @@ passe, tu coches, et l'envoi part en une fois à Transmission.
   tracker. Vide = « tout ce qui sort en ce moment ». Attention au quota
   C411 (120 requêtes / minute) : un nom trop courant peut vite
   consommer la fenêtre.
+- **Trackers** : multi-sélection des trackers configurés. Par défaut tout
+  est coché ; désélectionne un ou deux trackers pour limiter la
+  recherche (utile pour ne pas payer le quota d'un tracker lent). Si
+  tous les chips sont désélectionnés, la recherche ne renvoie rien —
+  clique sur « Tous les trackers » pour revenir à l'état par défaut.
+- **Catégorie** : multi-sélection des sous-catégories proposées par les
+  trackers configurés (« Film », « Série », « FLAC »…). La liste est
+  chargée à l'ouverture de la page (en tâche de fond) ; en attendant
+  elle est vide. Le filtre est insensible à la casse.
 - **Taille min / max** : « 1,5 Go », « 700 Mo », « 2 To ». Tu peux
   saisir la virgule pour les décimales, omettre l'unité (= octets).
   Les suffixes reconnus : o, ko/k, mo/m, go/g, to/t, po/p. Une saisie
@@ -21,8 +30,6 @@ passe, tu coches, et l'envoi part en une fois à Transmission.
 - **Seeders min / max** : entier, 0 = « inactif toléré ». Vide = pas de
   borne.
 - **Leechers min / max** : idem.
-- **Catégorie** : on filtre sur la sous-catégorie du tracker (« Film »,
-  « Série », « FLAC »…). Laisse vide pour tout.
 
 Les bornes **s'appliquent côté client** : aucun indexer ne sait filtrer
 sur les seeders ou la taille, et l'avantage est qu'elles couvrent tous les
