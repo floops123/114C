@@ -106,6 +106,22 @@ class C411SiteApi {
   void close() => _dio.close();
 }
 
+/// Clé de profil dans le champ `quality` d'une sortie : une chaîne
+/// (`hc_optimized`), ou un objet dont l'une des valeurs en est une. Null
+/// sinon (le champ est souvent vide).
+String? qualityKey(Object? quality) {
+  const keys = {'pure', 'hc_optimized', 'optimization', 'compatibility'};
+  final candidates = switch (quality) {
+    final String s => [s],
+    final Map m => m.values.whereType<String>(),
+    _ => const <String>[],
+  };
+  return candidates
+      .map((s) => s.trim().toLowerCase())
+      .where(keys.contains)
+      .firstOrNull;
+}
+
 /// API JSON native de C411 : bien plus riche que son flux Torznab
 /// (métadonnées TMDB, infos techniques, tri, compteurs).
 class C411Api implements TrackerApi {
@@ -233,6 +249,7 @@ class C411Api implements TrackerApi {
       audioChannels: tech['audioChannels'] as String?,
       languages: strings(tech['languages']),
       mediaKind: media['kind'] as String?,
+      qualityProfile: qualityKey(json['quality']),
     );
   }
 }

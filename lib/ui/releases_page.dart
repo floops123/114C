@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/tracker.dart';
 import '../core/format.dart';
 import '../core/release_profile.dart';
+import '../core/release_quality.dart';
 import 'release_detail_page.dart';
 import 'content_art.dart';
 import 'on_disk.dart';
@@ -227,10 +228,20 @@ class ReleaseTile extends ConsumerWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 child: Row(spacing: 4, children: [
                   if (profile != null)
-                    Tag(profile.short, color: profileColor(c, profile)),
-                  if (r.source != null) Tag(r.source!),
-                  if (hdr != null) Tag(hdr, color: c.info),
-                  if (r.languages.isNotEmpty) Tag(r.languages.take(2).join('/')),
+                    Tooltip(
+                      message: profile.description,
+                      child: Tag(profile.short, color: profileColor(c, profile)),
+                    ),
+                  if (isBonus(r.name)) Tag('BONUS', color: c.warning),
+                  if (r.source != null)
+                    Tooltip(
+                        message: sourceDescription(r.source!),
+                        child: Tag(r.source!)),
+                  if (hdr != null)
+                    Tooltip(
+                        message: hdrDescription(r.hdrFormat!),
+                        child: Tag(hdr, color: c.info)),
+                  if (r.languages.isNotEmpty) LanguageTag(r.languages),
                 ]),
               ),
             ),
@@ -273,6 +284,21 @@ Color profileColor(AppColors c, C411Profile p) => switch (p) {
     };
 
 /// HDR d'une sortie (« DV · HDR10+ »), ou null en SDR / inconnu.
+/// Langues résumées comme sur C411 (« MULTI.VF2 »), détail au survol.
+class LanguageTag extends StatelessWidget {
+  const LanguageTag(this.languages, {super.key});
+  final List<String> languages;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = languageLabel(languages);
+    return Tooltip(
+      message: '${languageDescription(label)}\n${languages.join(', ')}',
+      child: Tag(label),
+    );
+  }
+}
+
 String? hdrLabel(Release r) {
   final f = r.hdrFormat?.trim();
   if (f == null || f.isEmpty || f.toUpperCase() == 'SDR') return null;
@@ -370,13 +396,17 @@ class ReleaseRow extends ConsumerWidget {
                             Tag(playable?.label ?? 'SUR LE DISQUE',
                                 solid: true, color: c.success),
                           if (profileOf(r) case final p?)
-                            Tag(p.short, solid: true, color: profileColor(c, p)),
+                            Tooltip(
+                              message: p.description,
+                              child: Tag(p.short,
+                                  solid: true, color: profileColor(c, p)),
+                            ),
+                          if (isBonus(r.name)) Tag('BONUS', color: c.warning),
                           Tag(r.subcategory, color: c.accent),
                           if (r.resolution != null) Tag(r.resolution!),
                           if (r.source != null) Tag(r.source!),
                           if (hdrLabel(r) case final hdr?) Tag(hdr, color: c.info),
-                          if (r.languages.isNotEmpty)
-                            Tag(r.languages.take(2).join('/')),
+                          if (r.languages.isNotEmpty) LanguageTag(r.languages),
                           if (r.audioCodec != null)
                             Tag([r.audioCodec!, ?r.audioChannels].join(' ')),
                           if (r.isFreeleech) Tag('FREELEECH', color: c.success),

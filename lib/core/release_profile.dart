@@ -2,21 +2,27 @@ import '../api/tracker.dart';
 import 'release_name.dart';
 
 /// Profils de qualité de C411 (système de slots), du plus exigeant au plus
-/// léger.
+/// léger. Libellés courts, descriptions et clés repris du site.
 enum C411Profile {
-  hcPure('Home Cinéma Pure', 'HC Pure',
-      'Source brute, zéro perte (REMUX, BDMV, ISO)'),
-  hcOptimized('Home Cinéma Optimisé', 'HC Opti',
-      'Encodage haute qualité (H.265, AV1), DV / HDR10+, audio lossless si possible'),
-  optimization('Optimisation', 'Optim',
-      'Fichiers légers en H.265, audio lossy, 5.1 maximum'),
-  compatibility('Compatibilité', 'Compat',
-      'Lecture universelle : 1080p H.264, stéréo, SDR');
+  hcPure('pure', 'Home Cinéma Pure', 'Pure',
+      'Qualité cinéma pure : Remux, audio lossless, fidèle au Blu-ray original sans compromis'),
+  hcOptimized('hc_optimized', 'Home Cinéma Optimisé', 'HC Opti',
+      'Home cinéma optimisé : meilleur rapport qualité/taille en HDR et audio multicanal'),
+  optimization('optimization', 'Optimisation', 'Opti',
+      'Poids minimal : encodage poussé pour économiser espace et bande passante'),
+  compatibility('compatibility', 'Compatibilité', 'Compat',
+      'Compatible partout : H.264, audio standard, lisible sur tous les appareils sans conversion');
 
-  const C411Profile(this.label, this.short, this.description);
+  const C411Profile(this.key, this.label, this.short, this.description);
+
+  /// Clé du profil côté C411 (`pure`, `hc_optimized`…).
+  final String key;
   final String label;
   final String short;
   final String description;
+
+  static C411Profile? fromKey(String? key) =>
+      values.where((p) => p.key == key).firstOrNull;
 }
 
 /// Caractéristiques techniques d'une sortie : celles du tracker (C411
@@ -55,7 +61,7 @@ class ReleaseTraits {
   final bool raw;
 
   static final _token = RegExp(r'[.\s_\-\[\]()]+');
-  static const _lossless = {'TRUEHD', 'FLAC', 'LPCM', 'PCM', 'DTSHD', 'DTS-HD', 'DTSX', 'DTS-X'};
+  static const _lossless = {'TRUEHD', 'FLAC', 'LPCM', 'PCM', 'DTSHD', 'DTS-HD', 'DTSX', 'DTS-X', 'DTS:X'};
   static const _lossy = {'AAC', 'EAC3', 'E-AC3', 'DDP', 'DD+', 'AC3', 'DD', 'DTS', 'MP3', 'OPUS'};
 
   factory ReleaseTraits.of(Release r) {
@@ -94,7 +100,7 @@ class ReleaseTraits {
     bool? lossless;
     final audio = r.audioCodec?.toUpperCase();
     if (audio != null && audio.isNotEmpty) {
-      lossless = RegExp(r'TRUEHD|DTS-?HD|DTS-?X|FLAC|PCM').hasMatch(audio);
+      lossless = RegExp(r'TRUEHD|DTS-?HD|DTS[-:]?X|FLAC|PCM').hasMatch(audio);
     } else if (set.any(_lossless.contains) ||
         RegExp(r'DTS[.\s_-]HD').hasMatch(name)) {
       lossless = true;
@@ -159,4 +165,7 @@ class ReleaseTraits {
   }
 }
 
-C411Profile? profileOf(Release r) => ReleaseTraits.of(r).profile;
+/// Profil de la sortie : celui que C411 indique (`quality`) s'il le fait,
+/// sinon déduit des caractéristiques techniques.
+C411Profile? profileOf(Release r) =>
+    C411Profile.fromKey(r.qualityProfile) ?? ReleaseTraits.of(r).profile;

@@ -136,6 +136,7 @@ class WatchedRelease {
       'leechers': r.leechers,
       'created': r.createdAt.toIso8601String(),
       'poster': r.posterUrl,
+      'quality': r.qualityProfile,
       'found': foundAt.toIso8601String(),
       'new': isNew,
     };
@@ -162,6 +163,7 @@ class WatchedRelease {
         createdAt: DateTime.tryParse(j['created'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
         posterUrl: j['poster'] as String?,
+        qualityProfile: j['quality'] as String?,
       ),
       foundAt: DateTime.tryParse(j['found'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),

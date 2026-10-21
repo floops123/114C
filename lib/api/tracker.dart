@@ -126,6 +126,7 @@ class Release {
     this.audioChannels,
     this.languages = const [],
     this.mediaKind,
+    this.qualityProfile,
   });
 
   final Tracker tracker;
@@ -170,6 +171,10 @@ class Release {
   final String? audioCodec;
   final String? audioChannels;
   final List<String> languages;
+
+  /// Profil de qualité annoncé par le tracker (C411 : `pure`,
+  /// `hc_optimized`, `optimization`, `compatibility`), s'il le fait.
+  final String? qualityProfile;
 
   /// Fiche rattachée par le tracker (C411) : `movie`, `tv`, `music`, `game`…
   /// [title], [originalTitle] et [year] viennent alors de TMDB, ce qui

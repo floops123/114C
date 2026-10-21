@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
 import '../core/format.dart';
+import '../core/release_profile.dart';
+import '../core/release_quality.dart';
 import 'content_art.dart';
 import 'on_disk.dart';
 import 'send_button.dart';
@@ -29,17 +31,36 @@ class ReleaseDetailPage extends ConsumerWidget {
       r.subcategory,
     ].join('  ·  ');
 
-    final tech = <(String, String?)>[
-      ('Résolution', r.resolution),
-      ('Source', r.source),
-      ('Vidéo', [r.videoCodec, r.hdrFormat].nonNulls.join(' · ')),
-      ('Audio', [r.audioCodec, r.audioChannels].nonNulls.join(' ')),
-      ('Langues', r.languages.join(', ')),
-      ('Taille', formatBytes(r.size)),
-      ('Seeders / Leechers', '${r.seeders} / ${r.leechers}'),
-      ('Complétés', '${r.completions}'),
-      ('Uploader', r.uploader),
-      ('Publié', formatDate(r.createdAt)),
+    final profile = profileOf(r);
+    final languages = languageLabel(r.languages);
+    // Libellé, valeur, et explication au survol (textes du site C411).
+    final tech = <(String, String?, String?)>[
+      ('Profil C411', profile?.label, profile?.description),
+      ('Résolution', r.resolution,
+          r.resolution == null ? null : resolutionDescription(r.resolution!)),
+      ('Source', r.source,
+          r.source == null ? null : sourceDescription(r.source!)),
+      ('Vidéo', [r.videoCodec, r.hdrFormat].nonNulls.join(' · '),
+          [
+            if (r.videoCodec != null) videoCodecDescription(r.videoCodec!),
+            if (r.hdrFormat != null) hdrDescription(r.hdrFormat!),
+          ].join('\n')),
+      ('Audio', [r.audioCodec, r.audioChannels].nonNulls.join(' '),
+          r.audioCodec == null
+              ? null
+              : audioDescription(r.audioCodec!, r.audioChannels)),
+      ('Langues',
+          r.languages.isEmpty
+              ? null
+              : '$languages  (${r.languages.join(', ')})',
+          r.languages.isEmpty ? null : languageDescription(languages)),
+      ('Équipe', releaseGroup(r.name), null),
+      ('Bonus', isBonus(r.name) ? 'oui : pas le film lui-même' : null, null),
+      ('Taille', formatBytes(r.size), null),
+      ('Seeders / Leechers', '${r.seeders} / ${r.leechers}', null),
+      ('Complétés', '${r.completions}', null),
+      ('Uploader', r.uploader, null),
+      ('Publié', formatDate(r.createdAt), null),
     ];
 
     final header = Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -192,9 +213,12 @@ class ReleaseDetailPage extends ConsumerWidget {
                     ],
                     const SizedBox(height: 20),
                     Section(title: 'Fiche technique', children: [
-                      for (final (label, value) in tech)
+                      for (final (label, value, hint) in tech)
                         if (value != null && value.isNotEmpty)
-                          InfoRow(label, value),
+                          hint == null || hint.isEmpty
+                              ? InfoRow(label, value)
+                              : Tooltip(
+                                  message: hint, child: InfoRow(label, value)),
                     ]),
                     if (r.directors.isNotEmpty || r.cast.isNotEmpty) ...[
                       const SizedBox(height: 12),

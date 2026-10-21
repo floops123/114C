@@ -55,6 +55,26 @@ réponse renvoie les mêmes champs que `/api/torrents`, plus
   recherche des souhaits.
 - Quota : **120 requêtes / minute** par clé, Torznab compris.
 
+### Qualité : profils, langues, descriptions
+
+Repris du bundle JavaScript du site (`lib/core/release_quality.dart`,
+`C411Profile`) :
+
+- **Profils** : clés `pure`, `hc_optimized`, `optimization`,
+  `compatibility` ; libellés courts *Pure*, *HC Opti*, *Opti*, *Compat* et
+  leurs descriptions. Le champ `quality` d'une sortie, s'il porte l'une de
+  ces clés (chaîne, ou objet dont une valeur en est une), fait foi
+  (`Release.qualityProfile`) ; il est vide dans nos échantillons, et le
+  profil est alors déduit de la technique (`ReleaseTraits`).
+- **Langues** résumées comme sur le site (`languageLabel`) : VFF + VFQ →
+  `VF2`, un doublage français plus une autre langue (VO comprise) →
+  `MULTI.<doublage>`, sous-titres seuls → `VOSTFR` / `MULTI.VOSTFR`. Le
+  bundle importe ses tables de langues d'un autre fichier : elles sont
+  reconstituées d'après les codes de `tech.languages`.
+- **Descriptions** de la résolution, de la source, du codec, du HDR et de
+  l'audio (infobulles des étiquettes et de la fiche d'une sortie) ;
+  **équipe** (après le dernier tiret) et **BONUS**.
+
 ## C411 : WebSocket et discussion
 
 - `wss://c411.org/ws/?EIO=4&transport=websocket` : Socket.IO, transport
