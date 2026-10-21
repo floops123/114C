@@ -105,6 +105,7 @@ void main() {
     expect(await notifier.send(), 0);
     final state = container.read(bulkImportProvider);
     expect(state.sending, isFalse);
+    expect(state.toSend, 1);
     expect(state.items.single.failed, isTrue);
     expect(state.items.single.detail, contains('en-tête inattendu'));
   });

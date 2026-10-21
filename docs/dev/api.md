@@ -234,10 +234,14 @@ Draupnirr).
 
 | Tracker | Limite annoncée | Budget de l'application |
 |---|---|---|
-| C411 | 120 / min par clé | 108 / min |
-| tr4ker, Nostradamus | 120 / min par clé | 108 / min |
-| Draupnirr | 120 / min par clé (300 / min par IP) | 108 / min |
-| AstraTorrent | non publiée | 54 / min (60 supposées) |
+| C411 | 120 / min par clé | 80 / min, `.torrent` espacés de 3 s |
+| tr4ker, Nostradamus | 120 / min par clé | 108 / min, `.torrent` espacés de 2 s |
+| Draupnirr | 120 / min par clé (300 / min par IP) | 108 / min, `.torrent` espacés de 2 s |
+| AstraTorrent | non publiée | 54 / min (60 supposées), `.torrent` espacés de 2 s |
+
+C411 a renvoyé des 429 pendant un envoi en masse alors que l'application
+restait sous 108 / min : son budget est abaissé à 80 et ses téléchargements
+plus espacés (`requestBudget`, `downloadSpacing` dans l'enum `Tracker`).
 
 Toute requête HTTP vers un tracker passe par `trackerRequest`
 (`lib/api/quota.dart`) : clé API, cookie de session (palliatif, salon) ou
@@ -246,7 +250,14 @@ veille, disponibilité, cross-seed…). Un `RequestQuota` par tracker compte
 les départs sur une **fenêtre glissante d'une minute** et fait patienter la
 requête de trop au lieu de la laisser se faire refuser ; les rafales restent
 permises sous la limite. Le budget garde 10 % de marge (horloge du serveur,
-autre appareil avec la même clé).
+autre appareil avec la même clé), davantage pour C411.
+
+Les **téléchargements de `.torrent`** (`trackerGet(…, download: true)`,
+quel que soit l'appelant : envoi en masse, bouton ⬇, revive, palliatif,
+cross-seed) sont en plus espacés d'un écart minimal depuis le précédent :
+un envoi de 20 torrents C411 prend ainsi une minute, sans rafale. Cet
+espacement ne déclenche pas le bandeau d'attente ; le bouton d'envoi en
+masse affiche la progression (« Envoi 3 / 20… »).
 
 Sur un **HTTP 429**, le quota du tracker est suspendu le temps donné par
 `Retry-After` (secondes ou date HTTP ; 60 s à défaut) et la requête est
@@ -259,4 +270,4 @@ cross-seed : `crossSeedDelayProvider`) restent en place : ils leur évitent
 de consommer tout le budget au détriment de ce qu'on fait à l'écran.
 
 La limite d'un tracker se règle dans l'enum `Tracker`
-(`requestsPerMinute`).
+(`requestsPerMinute`, et au besoin `requestBudget`, `downloadSpacing`).

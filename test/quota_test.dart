@@ -15,8 +15,9 @@ class _Clock {
     now = now.add(d);
   }
 
-  RequestQuota quota(int limit) =>
-      RequestQuota(limit, clock: () => now, sleep: sleep);
+  RequestQuota quota(int limit, {Duration spacing = Duration.zero}) =>
+      RequestQuota(limit,
+          clock: () => now, sleep: sleep, downloadSpacing: spacing);
 }
 
 void main() {
@@ -65,6 +66,22 @@ void main() {
       ]);
       expect(order, [0, 1, 2, 3]);
       expect(clock.slept, hasLength(3));
+    });
+
+    test('téléchargements espacés, sans bandeau ; le reste n’attend pas',
+        () async {
+      final clock = _Clock();
+      final quota = clock.quota(100, spacing: const Duration(seconds: 3));
+      final waits = <DateTime?>[];
+      quota.waitingUntil.addListener(() => waits.add(quota.waitingUntil.value));
+      await quota.acquire(download: true);
+      await quota.acquire(); // une recherche passe tout de suite
+      await quota.acquire(download: true);
+      expect(clock.slept, [const Duration(seconds: 3)]);
+      clock.now = clock.now.add(const Duration(seconds: 10));
+      await quota.acquire(download: true);
+      expect(clock.slept, hasLength(1), reason: 'écart déjà écoulé');
+      expect(waits.whereType<DateTime>(), isEmpty);
     });
 
     test('pause après un refus : rien ne part avant la fin', () async {
@@ -118,7 +135,8 @@ void main() {
       clock = _Clock();
       doubleRetryAfter = false;
       saved = trackerQuotas[Tracker.tr4ker]!;
-      trackerQuotas[Tracker.tr4ker] = clock.quota(100);
+      trackerQuotas[Tracker.tr4ker] =
+          clock.quota(100, spacing: const Duration(seconds: 2));
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((req) async {
         final status = statuses.removeAt(0);
@@ -155,6 +173,18 @@ void main() {
       expect(clock.slept, [const Duration(seconds: 9)]);
     });
 
+    test('téléchargements de .torrent espacés', () async {
+      statuses = [200, 200, 200];
+      for (var i = 0; i < 2; i++) {
+        await trackerGet<String>(dio(), Tracker.tr4ker, '/',
+            type: ResponseType.plain, download: true);
+      }
+      await trackerGet<String>(dio(), Tracker.tr4ker, '/',
+          type: ResponseType.plain);
+      expect(clock.slept, hasLength(1));
+      expect(clock.slept.single, lessThanOrEqualTo(const Duration(seconds: 2)));
+    });
+
     test('429 deux fois : erreur explicite', () async {
       statuses = [429, 429];
       await expectLater(
@@ -168,7 +198,11 @@ void main() {
   test('budgets : sous la limite annoncée de chaque tracker', () {
     for (final t in Tracker.values) {
       expect(trackerQuotas[t]!.limit, lessThan(t.requestsPerMinute));
+      expect(trackerQuotas[t]!.downloadSpacing, t.downloadSpacing);
     }
-    expect(trackerQuotas[Tracker.c411]!.limit, 108);
+    // C411 refuse déjà sous ses 120 / min : budget et espacement prudents.
+    expect(trackerQuotas[Tracker.c411]!.limit, 80);
+    expect(Tracker.c411.downloadSpacing, const Duration(seconds: 3));
+    expect(trackerQuotas[Tracker.tr4ker]!.limit, 108);
   });
 }

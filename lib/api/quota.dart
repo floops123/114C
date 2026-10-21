@@ -16,6 +16,7 @@ class RequestQuota {
   RequestQuota(
     this.limit, {
     this.window = const Duration(minutes: 1),
+    this.downloadSpacing = Duration.zero,
     DateTime Function()? clock,
     Future<void> Function(Duration)? sleep,
   })  : _clock = clock ?? DateTime.now,
@@ -23,6 +24,10 @@ class RequestQuota {
 
   final int limit;
   final Duration window;
+
+  /// Écart minimal entre deux téléchargements (`acquire(download: true)`).
+  final Duration downloadSpacing;
+  DateTime? _lastDownload;
   final DateTime Function() _clock;
   final Future<void> Function(Duration) _sleep;
 
@@ -35,14 +40,15 @@ class RequestQuota {
   final waitingUntil = ValueNotifier<DateTime?>(null);
 
   /// Attend qu'une requête puisse partir, et la compte. Les demandes sont
-  /// servies dans l'ordre d'arrivée.
-  Future<void> acquire() {
-    final turn = _tail.then((_) => _waitTurn());
+  /// servies dans l'ordre d'arrivée ; un téléchargement attend en plus
+  /// [downloadSpacing] depuis le précédent.
+  Future<void> acquire({bool download = false}) {
+    final turn = _tail.then((_) => _waitTurn(download));
     _tail = turn.catchError((Object _) {});
     return turn;
   }
 
-  Future<void> _waitTurn() async {
+  Future<void> _waitTurn(bool download) async {
     while (true) {
       final now = _clock();
       while (_sent.isNotEmpty && !now.isBefore(_sent.first.add(window))) {
@@ -54,13 +60,22 @@ class RequestQuota {
           : _sent.length >= limit
               ? _sent.first.add(window)
               : null;
-      if (until == null) {
-        _sent.addLast(now);
-        waitingUntil.value = null;
-        return;
+      if (until != null) {
+        // Quota atteint ou tracker qui fait patienter : signalé à l'écran.
+        waitingUntil.value = until;
+        await _sleep(until.difference(now));
+        continue;
       }
-      waitingUntil.value = until;
-      await _sleep(until.difference(now));
+      final last = _lastDownload;
+      if (download && last != null && now.isBefore(last.add(downloadSpacing))) {
+        // Simple espacement, court : pas de bandeau.
+        await _sleep(last.add(downloadSpacing).difference(now));
+        continue;
+      }
+      _sent.addLast(now);
+      if (download) _lastDownload = now;
+      waitingUntil.value = null;
+      return;
     }
   }
 
@@ -73,11 +88,11 @@ class RequestQuota {
   }
 }
 
-/// Un quota par tracker, sous la limite annoncée pour garder une marge (les
-/// requêtes faites ailleurs avec la même clé, l'horloge du serveur).
+/// Un quota par tracker, à son [Tracker.requestBudget] (sous la limite
+/// annoncée), téléchargements espacés de [Tracker.downloadSpacing].
 final trackerQuotas = {
   for (final t in Tracker.values)
-    t: RequestQuota((t.requestsPerMinute * 0.9).floor()),
+    t: RequestQuota(t.requestBudget, downloadSpacing: t.downloadSpacing),
 };
 
 /// Attente après un 429 sans en-tête `Retry-After` exploitable.
@@ -124,10 +139,11 @@ Future<Response<T>> trackerRequest<T>(
   Tracker tracker,
   Future<Response<T>> Function() send, {
   int retries = 1,
+  bool download = false,
 }) async {
   final quota = trackerQuotas[tracker]!;
   for (var attempt = 0;; attempt++) {
-    await quota.acquire();
+    await quota.acquire(download: download);
     final res = await send();
     if (res.statusCode != 429 || attempt >= retries) return res;
     quota.pause(retryAfter(res.headers) ?? defaultRetryAfter);

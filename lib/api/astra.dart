@@ -240,7 +240,8 @@ class AstraApi implements TrackerApi {
             options: Options(
               responseType: ResponseType.bytes,
               headers: {'Accept': 'application/x-bittorrent, */*'},
-            )));
+            )),
+        download: true);
     if (res.statusCode != 200) {
       throw TrackerException(
           'AstraTorrent : téléchargement refusé (HTTP ${res.statusCode})');

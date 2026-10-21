@@ -12,7 +12,12 @@ import 'torznab.dart';
 
 /// Trackers pris en charge. Ajouter un tracker Torznab = une ligne ici.
 enum Tracker {
-  c411('C411', 'https://c411.org', announceHint: 'c411'),
+  // Refuse déjà sous ses 120 / min annoncées, surtout sur les .torrent :
+  // budget et espacement plus prudents.
+  c411('C411', 'https://c411.org',
+      announceHint: 'c411',
+      requestBudget: 80,
+      downloadSpacing: Duration(seconds: 3)),
   tr4ker('tr4ker', 'https://tr4ker.net/api/',
       apiKeyHeader: 'X-Api-Key', announceHint: 'tr4ker'),
   nostradamus('Nostradamus', 'https://nostradamus.foo/api',
@@ -28,13 +33,24 @@ enum Tracker {
       {this.apiKeyHeader,
       required this.announceHint,
       this.keyLabel = 'Clé API',
-      this.requestsPerMinute = 120});
+      this.requestsPerMinute = 120,
+      this._requestBudget,
+      this.downloadSpacing = const Duration(seconds: 2)});
   final String label;
   final String baseUrl;
 
-  /// Requêtes permises par minute (voir docs/dev/api.md) ; l'application en
-  /// garde une marge, voir [trackerQuotas].
+  /// Requêtes permises par minute (voir docs/dev/api.md).
   final int requestsPerMinute;
+  final int? _requestBudget;
+
+  /// Requêtes que l'application s'autorise par minute : 90 % de
+  /// [requestsPerMinute] (marge pour l'horloge du serveur, un autre appareil
+  /// avec la même clé), sauf budget plus prudent. Voir [trackerQuotas].
+  int get requestBudget => _requestBudget ?? (requestsPerMinute * 0.9).floor();
+
+  /// Écart minimal entre deux téléchargements de .torrent : un envoi en
+  /// masse ne les enchaîne pas en rafale.
+  final Duration downloadSpacing;
 
   /// Nom de l'identifiant dans les réglages.
   final String keyLabel;
@@ -252,16 +268,21 @@ Dio trackerDio({String? baseUrl, Map<String, Object>? headers}) => Dio(
       ),
     );
 
+/// GET vers un tracker ; [download] : téléchargement d'un .torrent, espacé
+/// des précédents (voir [Tracker.downloadSpacing]).
 Future<Response<T>> trackerGet<T>(
   Dio dio,
   Tracker tracker,
   String path, {
   Map<String, dynamic>? query,
   ResponseType? type,
+  bool download = false,
 }) =>
-    _trackerSend(tracker,
+    _trackerSend(
+        tracker,
         () => dio.get<T>(path,
-            queryParameters: query, options: Options(responseType: type)));
+            queryParameters: query, options: Options(responseType: type)),
+        download: download);
 
 /// POST d'un corps JSON, mêmes erreurs que [trackerGet].
 Future<Response<T>> trackerPost<T>(
@@ -275,10 +296,11 @@ Future<Response<T>> trackerPost<T>(
         tracker, () => dio.post<T>(path, queryParameters: query, data: data));
 
 Future<Response<T>> _trackerSend<T>(
-    Tracker tracker, Future<Response<T>> Function() send) async {
+    Tracker tracker, Future<Response<T>> Function() send,
+    {bool download = false}) async {
   final Response<T> res;
   try {
-    res = await trackerRequest(tracker, send);
+    res = await trackerRequest(tracker, send, download: download);
   } on DioException catch (e) {
     throw TrackerException(
         '${tracker.label} injoignable : ${e.message ?? e.type.name}');

@@ -467,7 +467,7 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                         )
                       : const Icon(Icons.download_rounded, size: 18),
                   label: Text(state.sending
-                      ? 'Envoi…'
+                      ? 'Envoi ${state.sent + 1} / ${state.toSend}…'
                       : 'Envoyer à Transmission (${selected.length} · '
                           '${formatBytes(state.selectedSize)})'),
                 ),

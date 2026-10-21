@@ -183,6 +183,8 @@ class BulkState {
     this.scanned = 0,
     this.searched = false,
     this.sending = false,
+    this.sent = 0,
+    this.toSend = 0,
     this.error,
     this.categories = const [],
     this.loadingCategories = false,
@@ -204,6 +206,11 @@ class BulkState {
   /// « aucun résultat »).
   final bool searched;
   final bool sending;
+
+  /// Progression de l'envoi en cours : traitées (envoyées ou en échec) sur
+  /// [toSend]. Les téléchargements sont espacés, l'envoi prend du temps.
+  final int sent;
+  final int toSend;
   final String? error;
 
   /// Catégories du tracker choisi, chargées à sa sélection.
@@ -226,6 +233,8 @@ class BulkState {
     int? scanned,
     bool? searched,
     bool? sending,
+    int? sent,
+    int? toSend,
     String? Function()? error,
     List<Category>? categories,
     bool? loadingCategories,
@@ -238,6 +247,8 @@ class BulkState {
         scanned: scanned ?? this.scanned,
         searched: searched ?? this.searched,
         sending: sending ?? this.sending,
+        sent: sent ?? this.sent,
+        toSend: toSend ?? this.toSend,
         error: error != null ? error() : this.error,
         categories: categories ?? this.categories,
         loadingCategories: loadingCategories ?? this.loadingCategories,
@@ -618,10 +629,12 @@ class BulkImportNotifier extends Notifier<BulkState> {
     }
     final todo = state.selected;
     if (todo.isEmpty) return 0;
-    state = state.copyWith(sending: true, error: () => null);
+    state = state.copyWith(
+        sending: true, sent: 0, toSend: todo.length, error: () => null);
     var added = 0;
-    for (final item in todo) {
+    for (final (n, item) in todo.indexed) {
       if (!ref.mounted) return added;
+      if (n > 0) state = state.copyWith(sent: n);
       try {
         final api = trackers[item.release.tracker];
         if (api == null) {

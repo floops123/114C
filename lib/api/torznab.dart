@@ -137,7 +137,8 @@ class TorznabApi implements TrackerApi {
       throw TrackerException('${tracker.label} : pas de lien de téléchargement');
     }
     final res =
-        await trackerGet<List<int>>(_dio, tracker, url, type: ResponseType.bytes);
+        await trackerGet<List<int>>(_dio, tracker, url,
+            type: ResponseType.bytes, download: true);
     return checkTorrent(tracker, res.data);
   }
 

@@ -143,7 +143,8 @@ class C411Api implements TrackerApi {
   Future<Uint8List> downloadTorrent(Release release) async {
     final res = await trackerGet<List<int>>(_dio, tracker, '/api',
         query: {'t': 'get', 'id': release.infoHash, 'apikey': apiKey},
-        type: ResponseType.bytes);
+        type: ResponseType.bytes,
+        download: true);
     return checkTorrent(tracker, res.data);
   }
 
