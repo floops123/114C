@@ -25,6 +25,11 @@ caches), `cached_network_image` (affiches), `media_kit` (lecteur, mpv),
 ## Les dossiers
 
 ```
+packages/c411_core/            Dart pur partagé avec web_player : client FTP,
+                               relais HTTP, lecture des noms de release
+                               (lib/api/ftp.dart… ne font que ré-exporter)
+web_player/                    C411 TV : la vidéothèque dans un navigateur
+                               (voir web_player/README.md)
 tool/
 └── build_personal.dart        convertit un JSON de réglages en --dart-define
                                pour produire une variante avec identifiants

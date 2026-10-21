@@ -1,0 +1,17 @@
+name: c411_web_player
+description: "Diffusion web de la vidéothèque de C411 Remote, à la manière d'un Netflix."
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.5
+
+# Serveur HTTP de dart:io. Le client FTP, le relais HTTP et la reconnaissance
+# des noms sont ceux de l'application (paquet partagé c411_core).
+dependencies:
+  c411_core:
+    path: ../packages/c411_core
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.0

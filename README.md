@@ -54,6 +54,17 @@ dart run tool/build_personal.dart personal.json --build apk
 Les valeurs sont compilées dans le binaire au moment du build (le JSON
 n'est pas embarqué dans l'APK). Détails : [Compilation personnalisée](docs/dev/build.md).
 
+## C411 TV : la vidéothèque dans le navigateur
+
+Le dossier [`web_player/`](web_player/README.md) contient un petit serveur
+qui diffuse ta vidéothèque **à la manière d'un Netflix** : il lit la base de
+l'application et les vidéos sur ton FTP (identifiants du JSON de réglages),
+et convertit à la volée avec ffmpeg ce que le navigateur ne sait pas lire.
+
+```sh
+cd web_player && dart pub get && dart run bin/web_player.dart ../personal.json
+```
+
 ## Documentation
 
 La documentation complète est dans [`docs/`](docs/README.md).
