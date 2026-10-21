@@ -65,7 +65,7 @@ lib/
 │   ├── revive.dart            relance des sorties sans seeder
 │   ├── palliative.dart        liste palliative C411, copie sur les autres trackers
 │   ├── wishlist.dart          souhaits, recherche et tri sur les trackers
-│   ├── media_library.dart     notre base (parcours FTP, TMDB, stockage, ajout à la fin d'un téléchargement)
+│   ├── media_library.dart     notre base (parcours FTP, TMDB, stockage, ajout des torrents terminés absents)
 │   ├── playback.dart          positions de reprise
 │   ├── notifications.dart     WebSocket, notifications, compteurs
 │   ├── draupnirr.dart          compte Draupnirr, missions, badges

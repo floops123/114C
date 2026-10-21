@@ -254,4 +254,160 @@ void main() {
     expect(paths, contains('/torrents/Alien.1979.VFF.1080p.mkv'),
         reason: 'les torrents apportent les leurs, sans être reparcourus');
   });
+
+  group('réconciliation avec Transmission', () {
+    MemoryMediaLibraryStore known() => MemoryMediaLibraryStore(MediaLibrary(
+          files: [
+            MediaFile(path: '/torrents/Dune.2024.1080p.mkv', size: 7, hash: 'old1'),
+          ],
+          tmdb: const {},
+          scannedAt: DateTime(2026),
+          pathFrom: _dir,
+          pathTo: '/torrents',
+        ));
+
+    Future<void> settle() async {
+      for (var i = 0; i < 20; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+
+    ProviderContainer container(
+        _Many transmission, _Steps torrents, MemoryMediaLibraryStore store) {
+      final c = ProviderContainer(overrides: [
+        settingsProvider.overrideWith(_Settings.new),
+        transmissionProvider.overrideWithValue(transmission),
+        torrentsProvider.overrideWith(() => torrents),
+        mediaLibraryStoreProvider.overrideWithValue(store),
+      ]);
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    List<String> paths(ProviderContainer c) =>
+        [for (final f in c.read(mediaLibraryProvider).library.files) f.path];
+
+    test('déjà terminé au lancement : rattrapé', () async {
+      final transmission = _Many();
+      final c = container(
+          transmission, _Steps([_state({3: 1.0, 4: 1.0})]), known());
+      await c.read(settingsProvider.future);
+      c.read(mediaLibraryProvider);
+      await settle();
+      expect(paths(c), containsAll([
+        '/torrents/Show.S01E03.mkv',
+        '/torrents/Show.S01E04.mkv',
+      ]));
+      expect(transmission.calls, 1, reason: 'un seul lot');
+    });
+
+    test('deux fins presque simultanées : aucune perdue', () async {
+      final transmission = _Many()..slow = true;
+      final torrents = _Steps([
+        _state({3: 0.5, 4: 0.5}),
+        _state({3: 0.5, 4: 1.0}),
+        _state({3: 1.0, 4: 1.0}), // E03 finit pendant l'ajout de E04
+        _state({3: 1.0, 4: 1.0}),
+        _state({3: 1.0, 4: 1.0}),
+      ]);
+      final c = container(transmission, torrents, known());
+      await c.read(settingsProvider.future);
+      c.read(mediaLibraryProvider);
+      for (var i = 0; i < 3; i++) {
+        torrents.next();
+        await settle();
+      }
+      transmission.release();
+      await settle();
+      torrents.next();
+      await settle();
+      transmission.release();
+      await settle();
+      expect(paths(c), containsAll([
+        '/torrents/Show.S01E03.mkv',
+        '/torrents/Show.S01E04.mkv',
+      ]));
+    });
+
+    test('torrent sans vidéo : examiné une seule fois', () async {
+      final transmission = _Many();
+      final torrents = _Steps([
+        _state({9: 1.0}),
+        _state({9: 1.0}),
+        _state({9: 1.0}),
+      ]);
+      final c = container(transmission, torrents, known());
+      await c.read(settingsProvider.future);
+      c.read(mediaLibraryProvider);
+      await settle();
+      torrents.next();
+      await settle();
+      torrents.next();
+      await settle();
+      expect(transmission.calls, 1);
+      expect(paths(c), ['/torrents/Dune.2024.1080p.mkv']);
+    });
+  });
+}
+
+/// Épisodes 3 et 4 d'une série, et un livre (torrent 9), selon les ids
+/// demandés. [slow] : chaque réponse attend [release].
+class _Many extends TransmissionClient {
+  _Many() : super(url: 'http://x');
+  var calls = 0;
+  bool slow = false;
+  final _waiting = <Completer<void>>[];
+
+  void release() {
+    for (final w in _waiting) {
+      w.complete();
+    }
+    _waiting.clear();
+  }
+
+  static Map<String, dynamic> _torrent(int id) => {
+        'id': id,
+        'hashString': 'h$id',
+        'downloadDir': _dir,
+        'percentDone': 1.0,
+        'files': [
+          {'name': id == 9 ? 'Livre.epub' : 'Show.S01E0$id.mkv', 'length': 5},
+        ],
+      };
+
+  @override
+  Future<TorrentGetResult> torrentGet(List<String> fields, {Object? ids}) async {
+    calls++;
+    if (slow) {
+      final w = Completer<void>();
+      _waiting.add(w);
+      await w.future;
+    }
+    return (
+      torrents: [for (final id in ids as List) _torrent(id as int)],
+      removed: <int>[],
+    );
+  }
+}
+
+TorrentsState _state(Map<int, double> done) => TorrentsState(loaded: true, byId: {
+      for (final MapEntry(key: id, value: p) in done.entries)
+        id: Torrent({
+          'id': id,
+          'hashString': 'h$id',
+          'downloadDir': _dir,
+          'percentDone': p,
+        }),
+    });
+
+/// États successifs de Transmission, avancés à la main.
+class _Steps extends TorrentsNotifier {
+  _Steps(this.steps);
+  final List<TorrentsState> steps;
+  var _i = 0;
+
+  @override
+  TorrentsState build() => steps.first;
+
+  void next() => state = steps[++_i];
 }

@@ -43,8 +43,11 @@ résumé, titres des épisodes). Deux noms différents pour la même fiche
 
 ## Quand la base se met à jour
 
-- **à la fin d'un téléchargement** : le torrent passe à 100 %, ses fichiers
-  vidéo rejoignent la base et sont rattachés à TMDB, sans repasser par le FTP ;
+- **quand un téléchargement est terminé** : ses fichiers vidéo rejoignent
+  la base et sont rattachés à TMDB, sans repasser par le FTP. Tout torrent
+  terminé absent de la base est ajouté au rafraîchissement suivant de
+  Transmission : y compris s'il s'est terminé application fermée, ou en
+  même temps qu'un autre (les ajouts se font l'un après l'autre) ;
 - **dès que tu changes les réglages FTP ou les dossiers** : un parcours
   complet est lancé, la base doit refléter les nouveaux dossiers ;
 - **avec le bouton Actualiser** de la vue, quand tu veux reparcourir le

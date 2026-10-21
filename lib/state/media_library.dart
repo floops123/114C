@@ -409,9 +409,13 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
         s.ftpHost, s.ftpPort, s.ftpUser, s.ftpTls, ...s.mediaFolders,
       ].join('|');
 
-  /// Torrents déjà ajoutés à la base après leur fin de téléchargement, pour
-  /// ne pas les relire à chaque rafraîchissement de Transmission.
-  final _added = <String>{};
+  /// Torrents terminés déjà examinés pendant la session (ajoutés, ou sans
+  /// vidéo à ajouter), pour ne pas les relire à chaque rafraîchissement.
+  final _checked = <String>{};
+
+  /// Un ajout est en cours : les suivants attendent le prochain
+  /// rafraîchissement de Transmission au lieu d'être perdus.
+  bool _appending = false;
 
   @override
   MediaLibraryState build() {
@@ -428,28 +432,53 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       if (now == null || !now.hasFtp || before == null) return;
       if (_signature(before) != _signature(now)) Future(scan);
     });
-    // Fin de téléchargement : les fichiers du torrent rejoignent la base sans
-    // repasser par le FTP. Le premier rafraîchissement complet est ignoré
-    // (c'est le parcours manuel qui fait foi) ; ensuite, tout torrent qui
-    // passe à 100 % est ajouté.
-    ref.listen(torrentsProvider, (previous, next) {
-      if (!next.loaded || previous?.loaded != true) return;
-      for (final t in next.byId.values) {
-        if (!t.isComplete || _added.contains(t.hash)) continue;
-        if (previous!.byId[t.id]?.isComplete != true) {
-          _added.add(t.hash);
-          Future.microtask(() => appendFinished(t.id, t.hash));
-        }
-      }
+    // Torrents terminés : leurs fichiers rejoignent la base sans repasser par
+    // le FTP. Réconciliation plutôt que détection du passage à 100 % : un
+    // torrent fini pendant que l'application était fermée, ou pendant un
+    // autre ajout, est rattrapé au rafraîchissement suivant.
+    ref.listen(torrentsProvider, (_, next) => _reconcile(next));
+    // Et ce qui est déjà terminé au lancement, une fois l'état en place.
+    Future.microtask(() {
+      if (ref.mounted) _reconcile(ref.read(torrentsProvider));
     });
     return MediaLibraryState(library);
   }
 
-  /// Ajoute à la base les fichiers vidéo d'un torrent terminé, sans
+  /// Ajoute à la base les torrents terminés dont aucun fichier n'y figure
+  /// (repérés par leur infohash), un lot à la fois.
+  void _reconcile(TorrentsState torrents) {
+    if (!torrents.loaded || _appending || !ref.mounted) return;
+    final library = state.library;
+    // Parcours en cours (il les verra), ou correspondance des chemins
+    // inconnue (il faut d'abord un parcours) : rien à faire ici.
+    if (state.scanning || library.pathFrom == null) return;
+    final known = {
+      for (final f in library.files)
+        if (f.hash case final h?) h.toLowerCase(),
+    };
+    final todo = [
+      for (final t in torrents.byId.values)
+        if (t.isComplete &&
+            !known.contains(t.hash.toLowerCase()) &&
+            !_checked.contains(t.hash.toLowerCase()))
+          (id: t.id, hash: t.hash.toLowerCase()),
+    ];
+    if (todo.isEmpty) return;
+    _appending = true;
+    Future(() async {
+      try {
+        await appendFinished(todo);
+      } finally {
+        _appending = false;
+      }
+    });
+  }
+
+  /// Ajoute à la base les fichiers vidéo de torrents terminés, sans
   /// repasser par le FTP : les chemins viennent de Transmission, la
   /// correspondance avec les chemins FTP est déjà connue du parcours.
   /// Renvoie le nombre de fichiers ajoutés (0 si rien de neuf).
-  Future<int> appendFinished(int id, String hash) async {
+  Future<int> appendFinished(List<({int id, String hash})> torrents) async {
     if (!ref.mounted || state.scanning) return 0;
     final client = ref.read(transmissionProvider);
     final tmdb = ref.read(tmdbProvider);
@@ -457,19 +486,27 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     // Sans correspondance des chemins (jamais parcouru, ou seedbox changée),
     // on ne peut pas traduire un chemin Transmission en chemin FTP.
     if (client == null || library.pathFrom == null) return 0;
-    _set(MediaLibraryState(library, scanning: true, status: 'Ajout du torrent…'));
+    final hashes = {for (final t in torrents) t.hash};
+    _set(MediaLibraryState(library,
+        scanning: true,
+        status: torrents.length > 1
+            ? 'Ajout de ${torrents.length} torrents…'
+            : 'Ajout du torrent…'));
     try {
       final result = await client.torrentGet(
         ['id', 'hashString', 'downloadDir', 'percentDone', 'files'],
-        ids: [id],
+        ids: [for (final t in torrents) t.id],
       );
       if (!ref.mounted) return 0;
+      // Examinés, qu'ils apportent des vidéos ou non (livres, jeux…).
+      _checked.addAll(hashes);
       final videos = completedVideos(result.torrents);
       final known = {for (final f in library.files) f.path};
       final now = DateTime.now();
       final fresh = <MediaFile>[];
       for (final v in videos) {
-        if (v.hash.toLowerCase() != hash || !v.path.startsWith(library.pathFrom!)) {
+        final hash = v.hash.toLowerCase();
+        if (!hashes.contains(hash) || !v.path.startsWith(library.pathFrom!)) {
           continue;
         }
         final path =
