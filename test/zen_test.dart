@@ -159,6 +159,12 @@ void main() {
             .key,
         'petit',
         reason: 'par Go, le petit gagne');
+    // Par note : 12 Go et 40 Go à 3 seeders (+0,50) passent devant le petit
+    // (+0,20) ; à note égale, le plus rentable (40 Go) d'abord.
+    expect([
+      for (final i in rankAndSelect(items, ranking: ZenRanking.note, limits: const ZenLimits(useRatio: false)))
+        (i.key, i.estimate.note)
+    ], [('gros', 1.5), ('moyen', 1.5), ('petit', 1.2)]);
   });
 
   test('import en masse : ordre « Plus rentables »', () {

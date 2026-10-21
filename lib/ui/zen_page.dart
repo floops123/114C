@@ -421,8 +421,9 @@ class _OpportunitiesTab extends ConsumerWidget {
       children: [
         Text(
           'Sorties C411 avec 1 à 50 seeders, chacune estimée en te comptant parmi '
-          'les seeders. Classement selon ce qui te limite : le nombre de torrents, '
-          'ou la place disque.',
+          'les seeders. Classement selon ce qui te limite (le nombre de torrents, '
+          'ou la place disque), ou par note : ta note moyenne est ton indicateur '
+          'de contribution, et l’arbre de progression compte les torrents bien notés.',
           style: TextStyle(fontSize: 12, color: c.muted),
         ),
         const SizedBox(height: 10),
@@ -679,13 +680,21 @@ class _OpportunityRow extends StatelessWidget {
               const SizedBox(width: 10),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(
-                  ranking == ZenRanking.perGb
-                      ? frNumber(e.perGb, 3)
-                      : frNumber(e.perDay, 2),
+                  switch (ranking) {
+                    ZenRanking.perGb => frNumber(e.perGb, 3),
+                    ZenRanking.perTorrent => frNumber(e.perDay, 2),
+                    ZenRanking.note => frNumber(e.note, 2),
+                  },
                   style: const TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w800, fontFeatures: [FontFeature.tabularFigures()]),
                 ),
-                Text(ranking == ZenRanking.perGb ? 'Zen/j/Go' : 'Zen/j', style: small),
+                Text(
+                    switch (ranking) {
+                      ZenRanking.perGb => 'Zen/j/Go',
+                      ZenRanking.perTorrent => 'Zen/j',
+                      ZenRanking.note => 'note · ${frNumber(e.perDay, 2)} Zen/j',
+                    },
+                    style: small),
               ]),
             ]),
           ),

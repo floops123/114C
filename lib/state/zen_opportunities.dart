@@ -8,11 +8,14 @@ import 'palliative.dart';
 import 'releases.dart';
 import 'torrents.dart';
 
-/// Classement des opportunités selon la contrainte : le nombre de torrents
-/// (Transmission), ou la place disque.
+/// Classement des opportunités : selon la contrainte (le nombre de torrents
+/// dans Transmission, ou la place disque), ou par note — l'indicateur de
+/// contribution est la moyenne des notes, et l'arbre de progression compte
+/// les torrents bien notés.
 enum ZenRanking {
   perTorrent('Par torrent'),
-  perGb('Par Go');
+  perGb('Par Go'),
+  note('Par note');
 
   const ZenRanking(this.label);
   final String label;
@@ -152,9 +155,15 @@ List<ZenOpportunity> rankAndSelect(
   final sorted = [
     for (final i in items)
       if (!limits.freeleechOnly || i.freeleech || i.done) i,
-  ]..sort((a, b) => ranking == ZenRanking.perGb
-      ? b.estimate.perGb.compareTo(a.estimate.perGb)
-      : b.estimate.perDay.compareTo(a.estimate.perDay));
+  ]..sort((a, b) => switch (ranking) {
+        ZenRanking.perGb => b.estimate.perGb.compareTo(a.estimate.perGb),
+        ZenRanking.perTorrent => b.estimate.perDay.compareTo(a.estimate.perDay),
+        // À note égale, ce qui rapporte le plus.
+        ZenRanking.note => switch (b.estimate.note.compareTo(a.estimate.note)) {
+            0 => b.estimate.perDay.compareTo(a.estimate.perDay),
+            final c => c,
+          },
+      });
   var count = 0, disk = 0, cost = 0;
   final diskMax = limits.diskGb == null ? null : (limits.diskGb! * (1 << 30)).round();
   final costMax = limits.useRatio ? ratioBudget : null;

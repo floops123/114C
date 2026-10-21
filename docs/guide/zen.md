@@ -57,8 +57,10 @@ tracker ne comptent pas forcément au même moment.
 - **À télécharger puis partager** : **Chercher** parcourt les sorties C411
   qui ont 1 à 50 seeders (les sorties sans seeder sont sautées) et estime
   chacune **en te comptant parmi les seeders**. Classement **par torrent**
-  (si c'est le nombre de torrents qui te limite) ou **par Go** (si c'est
-  le disque). La sélection se fait d'elle-même dans tes limites : nombre de
+  (si c'est le nombre de torrents qui te limite), **par Go** (si c'est
+  le disque) ou **par note** (ta note moyenne est ton indicateur de
+  contribution, et l'arbre de progression compte les torrents bien notés ;
+  à note égale, le plus rentable d'abord). La sélection se fait d'elle-même dans tes limites : nombre de
   torrents, place disque, **budget de ratio** — la *marge de
   téléchargement* du site : upload (crédit de téléchargement compris) ÷ 0,8
   − download, ce que tu peux télécharger avant le blocage ; le freeleech ne
