@@ -295,6 +295,7 @@ class C411ChatApi {
     final Response<dynamic> res;
     try {
       res = await trackerRequest(Tracker.c411,
+          quota: c411SessionQuota,
           () => _dio.get<dynamic>(path, queryParameters: query));
     } on DioException catch (e) {
       throw ChatException('C411 injoignable : ${e.message ?? e.type.name}');

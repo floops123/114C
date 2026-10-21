@@ -23,7 +23,7 @@ class _QuotaNoticeState extends State<QuotaNotice> {
 
   List<(Tracker, RequestQuota)> get _quotas => [
         for (final t in widget.trackers)
-          if (trackerQuotas[t] case final q?) (t, q),
+          for (final q in quotasOf(t)) (t, q),
       ];
 
   @override
@@ -39,7 +39,9 @@ class _QuotaNoticeState extends State<QuotaNotice> {
   void didUpdateWidget(QuotaNotice old) {
     super.didUpdateWidget(old);
     for (final t in old.trackers) {
-      trackerQuotas[t]?.waitingUntil.removeListener(_changed);
+      for (final q in quotasOf(t)) {
+        q.waitingUntil.removeListener(_changed);
+      }
     }
     for (final (_, q) in _quotas) {
       q.waitingUntil.addListener(_changed);
@@ -72,10 +74,16 @@ class _QuotaNoticeState extends State<QuotaNotice> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+    // Le plus long délai par tracker (C411 a deux budgets).
+    final longest = <Tracker, int>{};
+    for (final (t, q) in _quotas) {
+      if (q.waitingUntil.value case final until?) {
+        final s = until.difference(now).inSeconds.clamp(1, 3600);
+        if (s > (longest[t] ?? 0)) longest[t] = s;
+      }
+    }
     final waiting = [
-      for (final (t, q) in _quotas)
-        if (q.waitingUntil.value case final until?)
-          (t, until.difference(now).inSeconds.clamp(1, 3600)),
+      for (final MapEntry(:key, :value) in longest.entries) (key, value),
     ];
     if (waiting.isEmpty) return const SizedBox.shrink();
     final c = context.colors;

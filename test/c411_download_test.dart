@@ -98,7 +98,12 @@ void main() {
     server.listen((req) async {
       requests.add(req);
       req.response.statusCode = status;
-      req.response.add(status == 200 ? _torrent : 'refusé'.codeUnits);
+      if (req.uri.path == '/api/torrents') {
+        req.response.headers.contentType = ContentType.json;
+        req.response.write('{"data": [], "meta": {}}');
+      } else {
+        req.response.add(status == 200 ? _torrent : 'refusé'.codeUnits);
+      }
       await req.response.close();
     });
   });
@@ -142,6 +147,21 @@ void main() {
       }
       expect(requests, hasLength(3));
       expect(slept, isEmpty);
+    });
+
+    test('budget du cookie (200 / min), pas celui de la clé API', () async {
+      expect(c411SessionQuota.limit, 200);
+      // Budget de la clé API bloqué : s'il servait, le test échouerait.
+      trackerQuotas[Tracker.c411] = RequestQuota(100,
+          sleep: (_) async => throw StateError('budget de la clé API utilisé'))
+        ..pause(const Duration(hours: 1));
+      final api = site();
+      addTearDown(api.close);
+      for (var i = 0; i < 5; i++) {
+        await api.downloadTorrent(release());
+      }
+      await api.palliative();
+      expect(requests, hasLength(6));
     });
 
     test('cookie refusé : message explicite', () async {

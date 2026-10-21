@@ -41,6 +41,7 @@ class C411SiteApi {
     try {
       final res = await trackerRequest(
           Tracker.c411,
+          quota: c411SessionQuota,
           () => _dio.get<Map<String, dynamic>>(
                 '/api/torrents',
                 queryParameters: {
@@ -69,8 +70,8 @@ class C411SiteApi {
   /// Le .torrent d'une sortie, par le site (`/api/torrents/<infohash>/download`)
   /// : authentifié par le cookie de session plutôt que par la clé API. Pas
   /// d'espacement entre téléchargements sur cette voie (seule la voie par
-  /// clé API se faisait refuser) ; la requête reste comptée dans le quota de
-  /// C411, avec la reprise sur 429.
+  /// clé API se faisait refuser) ; budget du cookie ([c411SessionQuota],
+  /// 200 / min), avec la reprise sur 429.
   Future<Uint8List> downloadTorrent(Release release) async {
     final hash = release.infoHash;
     if (hash == null || hash.isEmpty) {
@@ -80,6 +81,7 @@ class C411SiteApi {
     try {
       res = await trackerRequest(
           Tracker.c411,
+          quota: c411SessionQuota,
           () => _dio.get<List<int>>('/api/torrents/$hash/download',
               options: Options(
                 responseType: ResponseType.bytes,

@@ -235,7 +235,8 @@ Draupnirr).
 
 | Tracker | Limite annoncée | Budget de l'application |
 |---|---|---|
-| C411 | 120 / min par clé | 80 / min, `.torrent` espacés de 3 s (sauf par le cookie) |
+| C411 (clé API) | 120 / min par clé | 80 / min, `.torrent` espacés de 3 s |
+| C411 (cookie de session) | — | 200 / min, sans espacement |
 | tr4ker, Nostradamus | 120 / min par clé | 108 / min, `.torrent` espacés de 2 s |
 | Draupnirr | 120 / min par clé (300 / min par IP) | 108 / min, `.torrent` espacés de 2 s |
 | AstraTorrent | non publiée | 54 / min (60 supposées), `.torrent` espacés de 2 s |
@@ -258,8 +259,12 @@ quel que soit l'appelant : envoi en masse, bouton ⬇, revive, palliatif,
 cross-seed) sont en plus espacés d'un écart minimal depuis le précédent.
 Exception : l'import en masse prend les `.torrent` C411 par le site avec le
 cookie de session (`C411SiteApi.downloadTorrent`) quand il est renseigné ;
-cette voie n'est pas espacée (seule celle par clé API se faisait refuser),
-mais reste comptée dans le quota de C411. Cet
+cette voie n'est pas espacée (seule celle par clé API se faisait refuser).
+
+Les requêtes C411 **authentifiées par le cookie** (ce téléchargement, la
+liste palliative, le salon) ont leur propre budget, `c411SessionQuota` :
+200 / min, distinct des 80 / min de la clé API. Le bandeau d'attente de C411
+tient compte des deux. Cet
 espacement ne déclenche pas le bandeau d'attente ; le bouton d'envoi en
 masse affiche la progression (« Envoi 3 / 20… »).
 

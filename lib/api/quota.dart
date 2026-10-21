@@ -95,6 +95,17 @@ final trackerQuotas = {
     t: RequestQuota(t.requestBudget, downloadSpacing: t.downloadSpacing),
 };
 
+/// Requêtes à C411 authentifiées par le cookie de session (téléchargement de
+/// l'import en masse, palliatif, salon) : budget à part, plus large que
+/// celui de la clé API.
+final c411SessionQuota = RequestQuota(200);
+
+/// Quotas d'un tracker, pour l'affichage des attentes.
+List<RequestQuota> quotasOf(Tracker t) => [
+      ?trackerQuotas[t],
+      if (t == Tracker.c411) c411SessionQuota,
+    ];
+
 /// Attente après un 429 sans en-tête `Retry-After` exploitable.
 const defaultRetryAfter = Duration(seconds: 60);
 
@@ -135,13 +146,17 @@ Duration? _retryDelay(String value, DateTime now) {
 /// 429, le quota est suspendu le temps demandé et la requête refaite
 /// ([retries] fois) ; la réponse est rendue telle quelle, à l'appelant d'en
 /// interpréter le statut.
+///
+/// [quota] : un autre budget que celui du tracker (par exemple
+/// [c411SessionQuota] pour le cookie de session).
 Future<Response<T>> trackerRequest<T>(
   Tracker tracker,
   Future<Response<T>> Function() send, {
   int retries = 1,
   bool download = false,
+  RequestQuota? quota,
 }) async {
-  final quota = trackerQuotas[tracker]!;
+  quota ??= trackerQuotas[tracker]!;
   for (var attempt = 0;; attempt++) {
     await quota.acquire(download: download);
     final res = await send();
