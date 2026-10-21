@@ -64,13 +64,28 @@ Repris du bundle JavaScript du site (`lib/core/release_quality.dart`,
   `compatibility` ; libellés courts *Pure*, *HC Opti*, *Opti*, *Compat* et
   leurs descriptions. Le champ `quality` d'une sortie, s'il porte l'une de
   ces clés (chaîne, ou objet dont une valeur en est une), fait foi
-  (`Release.qualityProfile`) ; il est vide dans nos échantillons, et le
-  profil est alors déduit de la technique (`ReleaseTraits`).
-- **Langues** résumées comme sur le site (`languageLabel`) : VFF + VFQ →
-  `VF2`, un doublage français plus une autre langue (VO comprise) →
-  `MULTI.<doublage>`, sous-titres seuls → `VOSTFR` / `MULTI.VOSTFR`. Le
-  bundle importe ses tables de langues d'un autre fichier : elles sont
-  reconstituées d'après les codes de `tech.languages`.
+  (`Release.qualityProfile`) ; il est vide dans nos échantillons.
+- **Grille des créneaux** (`lib/core/c411_slots.dart`) : les 28 créneaux du
+  site (`COMPAT-01`, `PURE-UHD-REMUX`, `HCOPT-2160-4KL-H265`,
+  `OPTI-1080-SDR-WR`…), chacun avec ses critères (résolution, source, HDR,
+  audio sans perte ou non, canaux, codec) et ses replis acceptés. Sans
+  profil annoncé, une sortie est rattachée au créneau le plus proche : un
+  critère respecté coûte 0, un repli sa position dans la liste des replis,
+  un critère inconnu 0,5 ; les canaux doivent tenir dans les bornes. À
+  écart égal, l'ordre du site tranche. Il faut connaître la résolution, et
+  le codec sauf pour une source brute (Remux, BDMV, ISO) : sinon la grille
+  pencherait toujours vers Compat. **Limite** : sur C411 c'est l'uploader
+  qui choisit le créneau ; ce rattachement n'est qu'une estimation (une
+  WEB-DL H.265 5.1 convient autant à HC Opti qu'à Opti).
+- **Lecture des noms** comme le site : sources normalisées (BDRip →
+  BluRay, WEB → WEB-DL, « BluRay.REMUX » → Remux), HDR (DV.HDR10+…),
+  canaux (« 5.1 », « 6 canaux », « stereo »), codecs (dont VC-1, XviD,
+  MPEG-2), année choisie par score (« Blade.Runner.2049.2017 » : 2017),
+  éditions (IMAX, EXTENDED, REPACK…) et plateformes (NF, AMZN…).
+- **Langues** résumées comme sur le site (`languageLabel`, tables du
+  site) : VFF ou VOF + VFQ → `VF2`, un doublage français plus une autre
+  langue (VO, ANGLAIS…) → `MULTI.<doublage>`, sous-titres seuls →
+  `VOSTFR` / `MULTI.VOSTFR`.
 - **Descriptions** de la résolution, de la source, du codec, du HDR et de
   l'audio (infobulles des étiquettes et de la fiche d'une sortie) ;
   **équipe** (après le dernier tiret) et **BONUS**.

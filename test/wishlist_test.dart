@@ -334,7 +334,7 @@ void main() {
     final items = [
       r('Film.2026.1080p.WEB-DL-GRP', size: 4, seeders: 50),
       r('Film.2026.2160p.BluRay.REMUX-GRP', size: 60, seeders: 3),
-      r('Film.2026.MULTi.1080p.BluRay-GRP', size: 12, seeders: 9),
+      r('Film.2026.MULTi.1080p.BluRay.x265.DTS-HD.MA-GRP', size: 12, seeders: 9),
       r('Film 2026 720p HDLight', size: 2, seeders: 1),
       r('Film.2026.FRENCH-GRP', size: 1, seeders: 20, source: 'WebDL'),
     ];
@@ -353,7 +353,7 @@ void main() {
     test('qualité : groupes par résolution, source puis seeders', () {
       expect(names(WishSort.quality), [
         'Film.2026.2160p.BluRay.REMUX-GRP',
-        'Film.2026.MULTi.1080p.BluRay-GRP', // BluRay avant WEB-DL
+        'Film.2026.MULTi.1080p.BluRay.x265.DTS-HD.MA-GRP', // BluRay avant WEB-DL
         'Film.2026.1080p.WEB-DL-GRP',
         'Film 2026 720p HDLight',
         'Film.2026.FRENCH-GRP',
@@ -364,13 +364,13 @@ void main() {
     });
 
     test('profil C411 : groupes du plus exigeant au plus léger', () {
+      // Sans codec dans le nom, pas de créneau (sauf source brute).
       expect(headers(WishSort.profile),
-          ['Home Cinéma Pure:1', 'Home Cinéma Optimisé:2', 'Non classé:2']);
-      // Dans un groupe : la meilleure résolution d'abord.
+          ['Home Cinéma Pure:1', 'Home Cinéma Optimisé:1', 'Non classé:3']);
       expect(names(WishSort.profile).take(3), [
         'Film.2026.2160p.BluRay.REMUX-GRP',
-        'Film.2026.MULTi.1080p.BluRay-GRP',
-        'Film 2026 720p HDLight',
+        'Film.2026.MULTi.1080p.BluRay.x265.DTS-HD.MA-GRP',
+        'Film.2026.1080p.WEB-DL-GRP', // non classés : meilleure résolution d'abord
       ]);
     });
 
@@ -387,7 +387,7 @@ void main() {
     final api = _Tracker({'Film 1': [
       Release(tracker: Tracker.tr4ker, id: 'a', name: 'Film.1.2099.1080p.WEB-DL-G',
           year: 2099, createdAt: DateTime(2026)),
-      Release(tracker: Tracker.tr4ker, id: 'b', name: 'Film.1.2099.2160p.BluRay-G',
+      Release(tracker: Tracker.tr4ker, id: 'b', name: 'Film.1.2099.2160p.BluRay.x265.DTS-HD.MA-G',
           year: 2099, createdAt: DateTime(2026)),
     ]});
     final container = ProviderContainer(

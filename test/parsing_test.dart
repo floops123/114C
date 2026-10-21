@@ -24,7 +24,23 @@ void main() {
       expect(r.title, 'Outlander Blood of My Blood');
       expect(r.kind, 'Série');
       expect(r.resolution, '2160p');
-      expect(r.source, 'WEB');
+      expect(r.source, 'WEB-DL', reason: 'comme sur C411');
+    });
+
+    test('année choisie comme sur C411', () {
+      final r = ReleaseName.parse('Blade.Runner.2049.2017.MULTi.1080p.BluRay.x264-GRP');
+      expect(r.year, 2017);
+      expect(r.title, 'Blade Runner 2049');
+      expect(ReleaseName.parse('1917.2019.MULTi.2160p.WEB.H265-GRP').title, '1917');
+    });
+
+    test('éditions et plateforme', () {
+      final r = ReleaseName.parse(
+          'Film.2024.IMAX.REPACK.MULTi.1080p.NF.WEB-DL.H264-GRP');
+      expect(r.editions, ['IMAX', 'REPACK']);
+      expect(r.platform, 'NF');
+      expect(ReleaseName.parse('Canal.Street.2024.1080p.WEB-GRP').platform,
+          isNull, reason: 'dans le titre, ce n’est pas une plateforme');
     });
 
     test('nom sans motif reconnu', () {

@@ -31,6 +31,15 @@ void main() {
       expect(languageLabel(['VFF', 'VO']), 'MULTI.VFF');
     });
 
+    test('tables exactes du site', () {
+      expect(languageLabel(['TRUEFRENCH', 'VFQ']), 'VFQ',
+          reason: 'VF2 = VFF ou VOF avec VFQ ; TrueFrench ne compte pas');
+      expect(languageLabel(['VOF', 'VFQ']), 'VF2');
+      expect(languageLabel(['VFF', 'GERMAN']), 'MULTI.VFF');
+      expect(languageLabel(['VFF', 'VFB']), 'VFF', reason: 'VFB : pas une autre langue');
+      expect(languageLabel(['FRENCH']), 'VF');
+    });
+
     test('sous-titres seuls', () {
       expect(languageLabel(['VOSTFR']), 'VOSTFR');
       expect(languageLabel(['MULTI', 'VOSTFR']), 'MULTI.VOSTFR');

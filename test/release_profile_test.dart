@@ -31,20 +31,36 @@ void main() {
         (true, '7.1', true, 'H.265'));
   });
 
-  test('autres trackers : profil lu dans le nom', () {
+  test('autres trackers : profil lu dans le nom, d’après la grille C411', () {
     String? p(String name) => profileOf(_named(name))?.label;
+    String? slot(String name) => ReleaseTraits.of(_named(name)).slot?.slot.id;
     expect(p('Film.2024.MULTi.1080p.WEB.H264.AAC.2.0-GRP'), 'Compatibilité');
-    expect(p('Film.2024.MULTi.1080p.WEB.H264.AAC.5.1-GRP'), 'Optimisation',
-        reason: 'H.264 en repli, 5.1 : pas Compatibilité');
-    expect(p('Film.2024.MULTi.1080p.WEB-DL.DDP.5.1.H265-GRP'), 'Optimisation');
-    expect(p('Film.2024.MULTi.2160p.WEB-DL.DDP.7.1.H265-GRP'), 'Home Cinéma Optimisé',
-        reason: '7.1 refusé par Optimisation');
+    expect(p('Film.2024.MULTi.1080p.WEB.H264.AAC.5.1-GRP'), 'Compatibilité',
+        reason: 'COMPAT-01 n’impose pas de maximum de canaux');
+    expect(slot('Film.2024.MULTi.1080p.BluRay.HDLight.x265.AC3.5.1-GRP'),
+        'HCOPT-1080-WR-H265', reason: 'critères respectés à la lettre');
+    expect(slot('Film.2024.MULTi.2160p.BluRay.4KLight.HDR10.x265.AC3.5.1-GRP'),
+        'OPTI-2160-HDR-4KL');
     expect(p('Film.2024.MULTi.2160p.WEB-DL.DV.HDR.DDP.5.1.H265-GRP'),
-        'Home Cinéma Optimisé', reason: 'Dolby Vision');
-    expect(p('Film.2024.1080p.BluRay.DTS-HD.MA.5.1.x264-GRP'), 'Home Cinéma Optimisé',
-        reason: 'audio sans perte');
+        'Home Cinéma Optimisé');
+    expect(p('Film.2024.1080p.BluRay.DTS-HD.MA.5.1.x264-GRP'), 'Compatibilité',
+        reason: 'aucun créneau HC Opti n’accepte le H.264 ; Compat accepte '
+            'l’audio sans perte en repli');
     expect(p('Film.2024.MULTi.1080p.WEB.AV1.OPUS.5.1-GRP'), 'Home Cinéma Optimisé');
-    expect(p('Film.2024.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-GRP'), 'Home Cinéma Pure');
-    expect(p('Film.2024.FRENCH.720p.HDTV-GRP'), isNull, reason: 'trop peu d’infos');
+    expect(slot('Film.2024.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-GRP'),
+        'PURE-BD-REMUX');
+    expect(p('Film.2024.MULTi.2160p.BluRay.REMUX.HEVC.DV.TrueHD.7.1-GRP'),
+        'Home Cinéma Pure');
+    expect(p('Livre.2024.FRENCH.EPUB-GRP'), isNull, reason: 'pas une vidéo');
+  });
+
+  test('grille : bornes de canaux et replis', () {
+    String? slot(String name) => ReleaseTraits.of(_named(name)).slot?.slot.id;
+    // Opti : 2 à 6 canaux ; un 7.1 lossy en H.265 SDR part en HC Opti.
+    expect(slot('Film.2024.MULTi.2160p.WEB-DL.DDP.7.1.H265-GRP'),
+        'HCOPT-2160-WR-H265');
+    // VC-1 : seul le créneau Remux VC-1 l'accepte.
+    expect(slot('Film.2024.1080p.BluRay.REMUX.VC-1.DTS-HD.MA.5.1-GRP'),
+        'PURE-BD-VC1');
   });
 }

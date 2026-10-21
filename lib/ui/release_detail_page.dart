@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
 import '../core/format.dart';
+import '../core/release_name.dart';
 import '../core/release_profile.dart';
 import '../core/release_quality.dart';
 import 'content_art.dart';
@@ -32,10 +33,16 @@ class ReleaseDetailPage extends ConsumerWidget {
     ].join('  ·  ');
 
     final profile = profileOf(r);
+    final traits = ReleaseTraits.of(r);
+    final slot = traits.slot?.slot;
+    final parsed = ReleaseName.parse(r.name);
     final languages = languageLabel(r.languages);
     // Libellé, valeur, et explication au survol (textes du site C411).
     final tech = <(String, String?, String?)>[
       ('Profil C411', profile?.label, profile?.description),
+      // Estimation d'après la grille de C411 (l'uploader choisit le créneau).
+      ('Créneau', slot == null ? null : '${slot.id} · ${slot.summary}',
+          slot?.label),
       ('Résolution', r.resolution,
           r.resolution == null ? null : resolutionDescription(r.resolution!)),
       ('Source', r.source,
@@ -55,6 +62,8 @@ class ReleaseDetailPage extends ConsumerWidget {
               : '$languages  (${r.languages.join(', ')})',
           r.languages.isEmpty ? null : languageDescription(languages)),
       ('Équipe', releaseGroup(r.name), null),
+      ('Édition', parsed.editions.join(', '), null),
+      ('Plateforme', parsed.platform, null),
       ('Bonus', isBonus(r.name) ? 'oui : pas le film lui-même' : null, null),
       ('Taille', formatBytes(r.size), null),
       ('Seeders / Leechers', '${r.seeders} / ${r.leechers}', null),
