@@ -17,7 +17,9 @@ les 10 minutes, et en tirant la liste vers le bas) :
 
 - **Profil** : pseudo, rang, classe et emblème, ancienneté ; **niveau** (XP
   avant le suivant) et **série de jours** ; téléchargements gratuits
-  restants. Une alerte apparaît en cas d'avertissement, de téléchargement
+  restants ; la **marge de téléchargement** comme sur le site (upload, crédit
+  compris, ÷ 0,8 − download : ce que tu peux encore télécharger avant le
+  blocage). Une alerte apparaît en cas d'avertissement, de téléchargement
   bloqué, ou de ratio proche du minimum.
 - **Zen** : le solde (gagnés, dépensés), **acquis aujourd'hui** et
   l'estimation de ce soir, **versé cette nuit**, la part de la journée

@@ -59,7 +59,7 @@ class ZenLimits {
   /// Torrents à ajouter au plus.
   final int? count;
 
-  /// Place disque à y consacrer, en Go (10⁹ octets).
+  /// Place disque à y consacrer, en Go comme le site (1024³ octets).
   final double? diskGb;
 
   /// Respecter le budget de ratio (téléchargements hors freeleech).
@@ -156,7 +156,7 @@ List<ZenOpportunity> rankAndSelect(
       ? b.estimate.perGb.compareTo(a.estimate.perGb)
       : b.estimate.perDay.compareTo(a.estimate.perDay));
   var count = 0, disk = 0, cost = 0;
-  final diskMax = limits.diskGb == null ? null : (limits.diskGb! * 1e9).round();
+  final diskMax = limits.diskGb == null ? null : (limits.diskGb! * (1 << 30)).round();
   final costMax = limits.useRatio ? ratioBudget : null;
   return [
     for (final i in sorted)

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
+import '../core/format.dart';
 import '../core/zen.dart';
 import '../state/c411_overview.dart';
 import '../state/cross_seed.dart';
@@ -36,7 +37,8 @@ class ZenPage extends StatelessWidget {
       );
 }
 
-String _gb(int bytes) => '${frNumber(bytes / 1e9, bytes < 10e9 ? 1 : 0)} Go';
+/// Taille en Go comme le site (base 1024), sans décimale inutile.
+String _gb(int bytes) => formatBytes(bytes).replaceFirst(RegExp(r',0+ '), ' ');
 String _days(double d) => d < 1 ? '< 1 j' : '${d.floor()} j';
 
 /// Bloc à intitulé.
@@ -483,8 +485,9 @@ class _OpportunitiesTab extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              'Tu peux télécharger ${_gb(state.ratioBudget!)} hors freeleech avant que ton '
-              'ratio passe sous le minimum (sans compter ton envoi à venir).',
+              'Marge de téléchargement : ${_gb(state.ratioBudget!)} hors freeleech avant le '
+              'blocage (upload, crédit compris, ÷ ratio minimum − download ; sans compter '
+              'ton envoi à venir).',
               style: TextStyle(fontSize: 11.5, color: c.muted),
             ),
           ),

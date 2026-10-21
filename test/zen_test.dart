@@ -78,6 +78,15 @@ void main() {
       expect(treeBonus(List.filled(200, 2.0)), 0.03);
     });
 
+    test('marge de téléchargement : l’exemple du site', () {
+      // Upload 1 To (crédit de 180 Go inclus), download 982,8 Go → 276,9 Go,
+      // en Go du site (base 1024).
+      const gio = 1 << 30;
+      final m = downloadBudget(
+          uploaded: (1007.76 * gio).round(), downloaded: (982.8 * gio).round(), minRatio: 0.8);
+      expect(m / gio, closeTo(276.9, 0.05));
+    });
+
     test('budget de ratio : vos chiffres', () {
       final b = downloadBudget(uploaded: 1024897929290, downloaded: 958604757127, minRatio: 0.8);
       expect(b / 1e9, closeTo(322.5, 0.5));

@@ -191,8 +191,10 @@ double treeBonus(Iterable<double> notes) {
   return bonus;
 }
 
-/// Octets qu'on peut encore télécharger (hors freeleech) avant que le ratio
-/// envoyé ÷ reçu passe sous [minRatio] ; 0 si c'est déjà le cas.
+/// Marge de téléchargement, comme le site : octets qu'on peut encore
+/// télécharger (hors freeleech) avant le blocage, soit upload ÷ [minRatio]
+/// − download ; 0 si c'est déjà le cas. [uploaded] inclut le crédit de
+/// téléchargement (le champ `uploaded` de `/api/auth/me` l'inclut déjà).
 int downloadBudget({required int uploaded, required int downloaded, required double minRatio}) {
   if (minRatio <= 0) return 1 << 62;
   return math.max(0, (uploaded / minRatio - downloaded).floor());

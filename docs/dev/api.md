@@ -94,7 +94,7 @@ Repris du bundle JavaScript du site (`lib/core/release_quality.dart`,
 
 | Endpoint | Ce qu'on en tire |
 |---|---|
-| `GET /api/auth/me` | pseudo, rang (`badge.label`), classe (`gamificationClass` : slug, emblème `tier`/`level`/`src`), envoyé, reçu, crédits, ratio, `minRatioForDownload`, `canDownload`, avertissements, freeleech, `activeEffects` (`free_dl_units` : téléchargements gratuits) |
+| `GET /api/auth/me` | (`uploaded` inclut déjà le crédit de téléchargement `uploadCredit` : `ratio` = `uploaded` ÷ `downloaded` ; marge de téléchargement du site = `uploaded` ÷ `minRatioForDownload` − `downloaded`) pseudo, rang (`badge.label`), classe (`gamificationClass` : slug, emblème `tier`/`level`/`src`), envoyé, reçu, crédits, ratio, `minRatioForDownload`, `canDownload`, avertissements, freeleech, `activeEffects` (`free_dl_units` : téléchargements gratuits) |
 | `GET /api/ic/level` | niveau, XP, `xpToNext`, série de jours |
 | `GET /api/tokens/balance` | solde de Zen, total gagné, total dépensé, dernier versement |
 | `GET /api/tokens/daily-stats?days=30` | un calcul par jour versé (`entries`), plafond du bonus |

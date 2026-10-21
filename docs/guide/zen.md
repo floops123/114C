@@ -59,9 +59,11 @@ tracker ne comptent pas forcément au même moment.
   chacune **en te comptant parmi les seeders**. Classement **par torrent**
   (si c'est le nombre de torrents qui te limite) ou **par Go** (si c'est
   le disque). La sélection se fait d'elle-même dans tes limites : nombre de
-  torrents, place disque, **budget de ratio** (ce que tu peux télécharger
-  avant de passer sous le ratio minimum ; le freeleech ne compte pas), et
-  au besoin **freeleech seulement**. **Ajouter** envoie la sélection à
+  torrents, place disque, **budget de ratio** — la *marge de
+  téléchargement* du site : upload (crédit de téléchargement compris) ÷ 0,8
+  − download, ce que tu peux télécharger avant le blocage ; le freeleech ne
+  compte pas — et au besoin **freeleech seulement**. Les tailles et la
+  place disque sont en Go du site (base 1024). **Ajouter** envoie la sélection à
   Transmission.
 
 L'import en masse propose aussi l'ordre **Plus rentables** et affiche

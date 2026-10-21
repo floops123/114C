@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../api/c411_profile.dart';
 import '../core/format.dart';
+import '../core/zen.dart';
 import 'charts.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -196,7 +197,11 @@ class C411ProfileCard extends StatelessWidget {
             ),
           ],
         ),
-        if (a != null && a.warnings > 0) ...[
+        if (a != null && a.minRatio != null && a.downloaded > 0) ...[
+        const SizedBox(height: 12),
+        _Margin(account: a),
+      ],
+      if (a != null && a.warnings > 0) ...[
           const SizedBox(height: 12),
           _Alert(
             c.danger,
@@ -224,6 +229,48 @@ class C411ProfileCard extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+/// Marge de téléchargement, comme le site : ce qu'on peut encore télécharger
+/// avant le blocage (upload, crédit compris, ÷ ratio minimum − download).
+class _Margin extends StatelessWidget {
+  const _Margin({required this.account});
+  final C411Account account;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final a = account;
+    final margin = downloadBudget(
+        uploaded: a.uploaded, downloaded: a.downloaded, minRatio: a.minRatio!);
+    final ratio = a.uploaded / a.downloaded;
+    // Une marge qui fond sous 50 Go mérite d'être vue.
+    final tight = margin < 50 * (1 << 30);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        Icon(Icons.speed_rounded, size: 18, color: tight ? c.warning : c.accent),
+        const SizedBox(width: 6),
+        Text('Marge de téléchargement : ',
+            style: TextStyle(fontSize: 13, color: c.muted)),
+        Text(formatBytes(margin),
+            style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w800, color: tight ? c.warning : null)),
+      ]),
+      const SizedBox(height: 6),
+      // Position du ratio entre le minimum et 2.
+      Meter(
+          value: ((ratio - a.minRatio!) / (2 - a.minRatio!)).clamp(0, 1).toDouble(),
+          color: tight ? c.warning : c.accent),
+      const SizedBox(height: 4),
+      Text(
+        'Upload ${formatBytes(a.uploaded)}'
+        '${a.uploadCredit > 0 ? ' (dont ${formatBytes(a.uploadCredit)} de crédit)' : ''}'
+        ' · download ${formatBytes(a.downloaded)} · ratio ${formatRatio(ratio)}'
+        ' · blocage sous ${formatRatio(a.minRatio!)}',
+        style: TextStyle(fontSize: 11.5, color: c.muted),
+      ),
+    ]);
   }
 }
 

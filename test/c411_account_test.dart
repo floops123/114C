@@ -45,4 +45,23 @@ void main() {
     expect(find.text('Tanker · Bronze IV'), findsOneWidget);
     expect(find.text('Niv. 75'), findsOneWidget);
   });
+
+  testWidgets('profil : marge de téléchargement comme le site', (tester) async {
+    const gio = 1 << 30;
+    final account = C411Account(
+      username: 'moi',
+      uploaded: (1007.76 * gio).round(),
+      downloaded: (982.8 * gio).round(),
+      uploadCredit: 180 * gio,
+      minRatio: 0.8,
+    );
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(Brightness.dark),
+      home: Scaffold(body: SingleChildScrollView(child: C411ProfileCard(account: account))),
+    ));
+    expect(find.text('Marge de téléchargement : '), findsOneWidget);
+    expect(find.text('277 Go'), findsOneWidget);
+    expect(find.textContaining('dont 180 Go de crédit'), findsOneWidget);
+    expect(find.textContaining('ratio 1,03'), findsOneWidget);
+  });
 }
