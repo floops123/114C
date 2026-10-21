@@ -110,8 +110,10 @@ le service auquel ils appartiennent.
 
 ## Licences
 
-Code de l'application : privé. Police [Inter](https://rsms.me/inter/) sous
-licence OFL (`assets/fonts/`). Copie corrigée de `media_kit_video` sous
+Code de l'application (et de `packages/c411_core`, `web_player`) : licence
+[WTFPL](LICENSE) — fais-en ce que tu veux. Police
+[Inter](https://rsms.me/inter/) et polices code et rétro sous licence OFL
+(`assets/fonts/`, `assets/fonts/licenses/`). Copie corrigée de `media_kit_video` sous
 licence MIT ([`third_party/media_kit_video`](third_party/media_kit_video/C411-PATCH.md)).
 Données de films et séries fournies par [TMDB](https://www.themoviedb.org/)
 (l'application n'est ni approuvée ni certifiée par TMDB).
