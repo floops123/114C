@@ -141,10 +141,16 @@ class _PortfolioTabState extends ConsumerState<_PortfolioTab> {
           final latest = overview?.history?.latest;
           final forecast = overview?.forecast;
           final upcoming = p.upcoming();
-          final upcomingGain = upcoming.fold(0.0, (n, h) {
-            final s = h.estimate.nextStep!;
-            return n + h.estimate.weight * s.gain * (1 + p.bonus) / zenScale;
-          });
+          // Les paliers montent la note moyenne, pour le poids de tous.
+          final base = p.base;
+          final upcomingGain = base.count == 0
+              ? 0.0
+              : base.weight *
+                  upcoming.fold(0.0, (n, h) => n + h.estimate.nextStep!.gain) /
+                  base.count *
+                  (1 + p.bonus) /
+                  zenScale;
+          final diluting = p.diluting;
           final header = <Widget>[
             _Card(
               title: 'Estimation pour une journée complète',
@@ -158,6 +164,7 @@ class _PortfolioTabState extends ConsumerState<_PortfolioTab> {
                 Wrap(spacing: 24, runSpacing: 12, children: [
                   _Stat('Zen par jour', frNumber(p.perDay, 1),
                       detail: [
+                        'soit ${p.perDay.round()} une fois arrondi',
                         if (latest != null) 'versé cette nuit : ${latest.paid}',
                         if (forecast?.projected != null) 'site ce soir : ≈ ${forecast!.projected}',
                       ].join(' · ')),
@@ -172,7 +179,8 @@ class _PortfolioTabState extends ConsumerState<_PortfolioTab> {
                 ]),
                 const SizedBox(height: 10),
                 Text(
-                  'Calcul local (taille, seeders et durée de seed de Transmission). '
+                  'Calcul local (taille, seeders et durée de seed de Transmission) : '
+                  'somme des poids × note moyenne × (1 + bonus) ÷ 7. '
                   'L’écart avec le site vient surtout de la part de la journée partagée '
                   'et des seeders, comptés différemment.',
                   style: TextStyle(fontSize: 11.5, color: c.muted),
@@ -199,6 +207,12 @@ class _PortfolioTabState extends ConsumerState<_PortfolioTab> {
                 _Hint(c.success, Icons.trending_up_rounded,
                     '${upcoming.length} torrent${upcoming.length > 1 ? 's' : ''} passent un palier de '
                     'durée cette semaine : ≈ +${frNumber(upcomingGain, 2)} Zen/j.'),
+              if (diluting.isNotEmpty)
+                _Hint(c.warning, Icons.trending_down_rounded,
+                    '${diluting.length} torrent${diluting.length > 1 ? 's' : ''} sous ta note moyenne '
+                    'la font baisser plus qu’il${diluting.length > 1 ? 's' : ''} ne rapporte${diluting.length > 1 ? 'nt' : ''} '
+                    '(${frNumber(diluting.fold(0.0, (n, h) => n + h.contribution), 2)} Zen/j) ; '
+                    'leur note monte avec la durée de seed.'),
               if (p.crowded.isNotEmpty)
                 _Hint(c.warning, Icons.groups_rounded,
                     '${p.crowded.length} torrent${p.crowded.length > 1 ? 's' : ''} à la note de base : '
@@ -331,11 +345,13 @@ class _HoldingRow extends StatelessWidget {
               ].join(' · '),
               style: small,
             ),
-            if (step != null || e.crowded || !holding.seeding)
+            if (step != null || e.crowded || !holding.seeding || holding.contribution < 0)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Wrap(spacing: 6, runSpacing: 4, children: [
                   if (!holding.seeding) Tag('À L’ARRÊT', color: c.danger),
+                  if (holding.seeding && holding.contribution < 0)
+                    Tag('BAISSE LA NOTE MOYENNE', color: c.warning),
                   if (e.crowded) Tag('TROP SEEDÉ', color: c.warning),
                   if (step != null)
                     Tag('+${frNumber(step.gain, 2)} DANS ${step.inDays.ceil()} J', color: c.success),
@@ -345,10 +361,13 @@ class _HoldingRow extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(frNumber(holding.perDay, 3),
-              style: const TextStyle(
-                  fontSize: 15, fontWeight: FontWeight.w800, fontFeatures: [FontFeature.tabularFigures()])),
-          Text('Zen/j', style: small),
+          Text(frNumber(holding.contribution, 3),
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: holding.contribution < 0 ? c.danger : (holding.seeding ? null : c.muted),
+                  fontFeatures: const [FontFeature.tabularFigures()])),
+          Text(holding.seeding ? 'Zen/j' : 'Zen/j relancé', style: small),
         ]),
       ]),
     );
@@ -369,6 +388,12 @@ class _OpportunitiesTab extends ConsumerWidget {
     final overview = ref.watch(c411OverviewProvider).value;
     final bonusBp = overview?.forecast?.today.bonusBp ?? overview?.history?.latest?.bonusBp;
     final bonus = bonusBp == null ? 0.25 : bonusBp / 10000;
+    final base = overview?.history?.latest?.base ??
+        ref.watch(zenPortfolioProvider).value?.base ??
+        ZenBase.empty;
+    // Ce que des ajouts rapportent ensemble, note moyenne comprise.
+    double together(Iterable<ZenEstimate> added) =>
+        added.fold(base, (b, e) => b.add(e)).perDay(bonus) - base.perDay(bonus);
 
     // Sans téléchargement : cross-seed vers C411 et réanimations à prime.
     final crossSeed = [
@@ -390,7 +415,7 @@ class _OpportunitiesTab extends ConsumerWidget {
               : '${crossSeed.length} sortie${crossSeed.length > 1 ? 's' : ''} déjà sur ton disque',
           gain: crossSeed.isEmpty
               ? null
-              : '+${frNumber(crossSeed.fold(0.0, (n, e) => n + e.$2.perDay), 2)} Zen/j',
+              : '${_signed(together([for (final e in crossSeed) e.$2]))} Zen/j',
           action: 'Cross-seed',
           onTap: () => Navigator.of(context)
               .push(MaterialPageRoute(builder: (_) => const CrossSeedPage())),
@@ -402,10 +427,11 @@ class _OpportunitiesTab extends ConsumerWidget {
               ? 'Lance « Soins palliatif » : les sorties C411 sans seeder disponibles ailleurs.'
               : '${revivals.length} réanimation${revivals.length > 1 ? 's' : ''} possible${revivals.length > 1 ? 's' : ''} '
                   '· prime totale ${revivals.fold(0, (n, e) => n + e.$1.release.bountyZen)} Zen '
-                  '(+ bonus du gardien) après 72 h de partage',
+                  '(partagée entre 3 réanimateurs au plus, +50 % sur ta part de '
+                  'gardien) après 72 h de partage',
           gain: revivals.isEmpty
               ? null
-              : '+${frNumber(revivals.fold(0.0, (n, e) => n + e.$2.perDay), 2)} Zen/j',
+              : '${_signed(together([for (final e in revivals) e.$2]))} Zen/j',
           action: 'Soins palliatif',
           onTap: () => Navigator.of(context)
               .push(MaterialPageRoute(builder: (_) => const RevivePage(palliative: true))),
@@ -421,9 +447,11 @@ class _OpportunitiesTab extends ConsumerWidget {
       children: [
         Text(
           'Sorties C411 avec 1 à 50 seeders, chacune estimée en te comptant parmi '
-          'les seeders. Classement selon ce qui te limite (le nombre de torrents, '
-          'ou la place disque), ou par note : ta note moyenne est ton indicateur '
-          'de contribution, et l’arbre de progression compte les torrents bien notés.',
+          'les seeders et en l’ajoutant à ton portefeuille : ta note moyenne '
+          'multiplie le poids de tous tes torrents, une sortie moins bien notée '
+          'la fait baisser, et peut coûter plus qu’elle ne rapporte. Classement '
+          'selon ce qui te limite (le nombre de torrents, ou la place disque), '
+          'ou par note.',
           style: TextStyle(fontSize: 12, color: c.muted),
         ),
         const SizedBox(height: 10),
@@ -668,6 +696,7 @@ class _OpportunityRow extends StatelessWidget {
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     if (item.done) Tag('AJOUTÉ', color: c.success),
                     if (item.freeleech) Tag('FREELEECH', color: c.success),
+                    if (!item.done && item.gain <= 0) Tag('BAISSERAIT LA NOTE MOYENNE', color: c.danger),
                     if (r.subcategory.isNotEmpty) Tag(r.subcategory),
                     Text('${_gb(r.size)} · ${r.seeders} seeder${r.seeders > 1 ? 's' : ''} (+ toi) · '
                         'note ${frNumber(e.note, 2)} · poids ${frNumber(e.weight, 2)}',
@@ -681,18 +710,21 @@ class _OpportunityRow extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(
                   switch (ranking) {
-                    ZenRanking.perGb => frNumber(e.perGb, 3),
-                    ZenRanking.perTorrent => frNumber(e.perDay, 2),
+                    ZenRanking.perGb => frNumber(item.gain / (r.size / 1e9), 3),
+                    ZenRanking.perTorrent => _signed(item.gain),
                     ZenRanking.note => frNumber(e.note, 2),
                   },
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w800, fontFeatures: [FontFeature.tabularFigures()]),
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: item.gain <= 0 ? c.danger : null,
+                      fontFeatures: const [FontFeature.tabularFigures()]),
                 ),
                 Text(
                     switch (ranking) {
                       ZenRanking.perGb => 'Zen/j/Go',
                       ZenRanking.perTorrent => 'Zen/j',
-                      ZenRanking.note => 'note · ${frNumber(e.perDay, 2)} Zen/j',
+                      ZenRanking.note => 'note · ${_signed(item.gain)} Zen/j',
                     },
                     style: small),
               ]),
@@ -718,3 +750,6 @@ class ZenPageButton extends StatelessWidget {
         ),
       );
 }
+
+/// Zen par jour avec leur signe : un ajout peut en coûter.
+String _signed(double v) => '${v > 0 ? '+' : v < 0 ? '−' : ''}${frNumber(v.abs(), 2)}';

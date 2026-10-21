@@ -9,11 +9,19 @@ le seed »), telles que le site les publie.
 
 ## Les règles
 
-Chaque torrent partagé toute la journée rapporte :
+Chaque nuit, pour la veille :
 
 ```
-Zen par jour = coefficient de poids × note × (1 + bonus) ÷ 7
+Zen par jour = Σ coefficients de poids × note moyenne × (1 + bonus) ÷ 7
 ```
+
+arrondi au Zen près, chaque torrent compté au prorata de la part de la
+journée où il a été partagé (30 minutes au moins). La **note moyenne** est
+l'indicateur de contribution : elle multiplie le poids de **tous** tes
+torrents. Un torrent noté sous ta moyenne la fait baisser pour les autres,
+et peut coûter plus qu'il ne rapporte (un petit torrent à 1,20 dans un
+portefeuille à 1,50 de moyenne, par exemple) ; un torrent bien noté la fait
+monter.
 
 - **Note** = catégorie (1,00) + durée de seed + taille × seeders, 2,00 au
   plus :
@@ -30,16 +38,24 @@ Zen par jour = coefficient de poids × note × (1 + bonus) ÷ 7
   jusqu'à +5 % pour 300 torrents à 2,00).
 
 Conséquences : les torrents **peu seedés** rapportent, **10 à 50 Go** est
-le meilleur rapport par torrent, les **petits** torrents le meilleur par Go
-stocké, et **garder** ses torrents fait monter leur note.
+le meilleur rapport par torrent, et **garder** ses torrents fait monter
+leur note. Les **petits** torrents (moins de 1 Go : +0,20 au plus) tirent la
+note moyenne vers le bas : ils ne paient que si ta moyenne est basse.
+
+Le Zen vient aussi des **niveaux d'XP** : chaque niveau terminé verse de 1 à
+27 Zen selon le niveau (la carte du compte affiche ce que paiera le niveau
+en cours).
 
 ## Portefeuille
 
 Pour chaque torrent C411 de Transmission (reconnu à son tracker) : taille,
 seeders (donnés par le tracker), durée de seed, note, coefficient de poids
-et Zen par jour, avec le **prochain palier** (« +0,10 dans 3 j ») et les
-torrents **trop seedés**. En tête : le total estimé pour une journée
-complète, à comparer au versement de la nuit et à l'estimation du site, la
+et **contribution** : ce que le versement perdrait sans lui, effet sur la
+note moyenne compris (pour un torrent à l'arrêt, ce qu'il rapporterait
+relancé). Sont signalés le **prochain palier** (« +0,10 dans 3 j »), les
+torrents **trop seedés** et ceux qui **baissent la note moyenne** (leur
+contribution est négative ; leur note monte avec la durée de seed). En
+tête : le total estimé pour une journée complète, à comparer au versement de la nuit et à l'estimation du site, la
 note et le coefficient moyens (et ceux du site), le bonus, l'avancement de
 l'arbre de progression, et les paliers de la semaine.
 
@@ -51,12 +67,16 @@ tracker ne comptent pas forcément au même moment.
 
 - **Sans rien télécharger de plus** : les sorties C411 dont tu as déjà les
   fichiers (**cross-seed**) et les **réanimations à prime** (soins
-  palliatif : prime en Zen après 72 h de partage, et le torrent est noté
-  comme peu seedé). Les gains s'affichent une fois l'analyse lancée depuis
+  palliatif : prime de 5 à 40 Zen partagée entre les 3 premiers
+  réanimateurs, +50 % sur la part d'un Swarm Keeper, après 72 h de partage ;
+  et le torrent est noté comme peu seedé). Les gains s'affichent une fois l'analyse lancée depuis
   ces pages.
 - **À télécharger puis partager** : **Chercher** parcourt les sorties C411
   qui ont 1 à 50 seeders (les sorties sans seeder sont sautées) et estime
-  chacune **en te comptant parmi les seeders**. Classement **par torrent**
+  chacune **en te comptant parmi les seeders** et **en l'ajoutant à ton
+  portefeuille** (celui du dernier versement du site) : le gain affiché
+  tient compte de l'effet sur ta note moyenne, et une sortie qui la ferait
+  trop baisser est signalée et n'est pas cochée. Classement **par torrent**
   (si c'est le nombre de torrents qui te limite), **par Go** (si c'est
   le disque) ou **par note** (ta note moyenne est ton indicateur de
   contribution, et l'arbre de progression compte les torrents bien notés ;

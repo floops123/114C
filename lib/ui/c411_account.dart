@@ -174,7 +174,8 @@ class C411ProfileCard extends StatelessWidget {
                           Icons.military_tech_rounded,
                           c.accent,
                           'Niveau ${l.level}',
-                          '${frNumber(l.xpToNext)} XP avant le ${l.level + 1}',
+                          '${frNumber(l.xpToNext)} XP avant le ${l.level + 1} · '
+                              '+${zenForLevel(l.level)} Zen à la clé',
                         ),
                         _Pair(
                           Icons.local_fire_department_rounded,
