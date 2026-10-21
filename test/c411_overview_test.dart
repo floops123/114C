@@ -58,6 +58,29 @@ void main() {
       expect(h.perDay / 24, closeTo(0.892, 0.0005));
     });
 
+    test('réanimations : payée, en cours', () {
+      final list = C411Revival.parseList(_fixture('c411_revivals'));
+      expect(list.map((r) => r.id), [1950, 1920], reason: 'plus récente d’abord');
+      final paid = list.last;
+      expect(paid.paid, isTrue);
+      expect(paid.zen, 3, reason: 'prime 2 + bonus du gardien 1');
+      expect(paid.infoHash, '25e597ea1516ad054dcc8c49f60e681c9f83ed57');
+      final running = list.first;
+      expect(running.inProgress, isTrue);
+      expect(running.progress, closeTo(1 / 3, 0.001), reason: '24 h sur 72 h');
+      expect(running.deadline, DateTime.utc(2026, 11, 3, 10));
+    });
+
+    test('classement', () {
+      final b = C411Leaderboard.parse(_fixture('c411_leaderboard'));
+      expect(b.top.map((e) => e.rank), [1, 2]);
+      expect(b.top.first.className, 'Tanker');
+      expect(b.top.first.grade, 'Bronze IV');
+      expect(b.top.first.avatarUrl, 'https://c411.org/uploads/avatars/1-md.webp');
+      expect(b.top.last.avatarUrl, isNull);
+      expect((b.rank, b.total, b.xp, b.dailyXp), (121567, 399543, 5081, 95));
+    });
+
     test('journée en cours', () {
       final f = ZenForecast.parse(_fixture('c411_forecast'))!;
       expect(f.today.paid, 22);
@@ -70,7 +93,7 @@ void main() {
     });
   });
 
-  group('overview : les cinq endpoints avec le cookie', () {
+  group('overview : tous les endpoints avec le cookie', () {
     late HttpServer server;
     late Map<String, int> statuses;
     late List<String> cookies;
@@ -87,6 +110,8 @@ void main() {
           '/api/tokens/balance' => 'c411_balance',
           '/api/tokens/daily-stats' => 'c411_daily_stats',
           '/api/tokens/forecast' => 'c411_forecast',
+          '/api/profile/revivals' => 'c411_revivals',
+          '/api/ic/leaderboard/all_time' => 'c411_leaderboard',
           _ => null,
         };
         req.response.statusCode = statuses[req.uri.path] ?? (name == null ? 404 : 200);
@@ -109,8 +134,10 @@ void main() {
       expect(o.balance?.balance, 1091);
       expect(o.history?.entries, hasLength(5));
       expect(o.forecast?.projected, 33);
+      expect(o.revivals, hasLength(2));
+      expect(o.leaderboard?.rank, 121567);
       expect(cookies, everyElement('session=abc'));
-      expect(cookies, hasLength(5));
+      expect(cookies, hasLength(7));
     });
 
     test('un endpoint en panne : le reste s’affiche', () async {

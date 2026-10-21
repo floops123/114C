@@ -1,0 +1,48 @@
+{
+ "data": [
+  {
+   "id": 1920,
+   "torrent": {
+    "id": 173494,
+    "infoHash": "25E597EA1516AD054DCC8C49F60E681C9F83ED57",
+    "name": "[Android] DUPLO BLUEY v4.0.0 MULTI [APK]",
+    "sizeBytes": 259371088
+   },
+   "revivedAt": "2026-10-18T13:39:01Z",
+   "bountyZen": 2,
+   "keeperBonusZen": 1,
+   "status": "paid",
+   "ineligibleReason": null,
+   "seedProgressSecs": 260975,
+   "requiredSeedSecs": 259200,
+   "qualifyDeadline": "2026-11-01T13:39:01Z",
+   "qualifiedAt": "2026-10-21T14:00:54Z",
+   "paidAt": "2026-10-21T14:00:54Z"
+  },
+  {
+   "id": 1950,
+   "torrent": {
+    "id": 180001,
+    "infoHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "name": "Film.En.Cours.2001.FRENCH.1080p.mkv",
+    "sizeBytes": 2147483648
+   },
+   "revivedAt": "2026-10-20T10:00:00Z",
+   "bountyZen": 5,
+   "keeperBonusZen": 0,
+   "status": "seeding",
+   "ineligibleReason": null,
+   "seedProgressSecs": 86400,
+   "requiredSeedSecs": 259200,
+   "qualifyDeadline": "2026-11-03T10:00:00Z",
+   "qualifiedAt": null,
+   "paidAt": null
+  }
+ ],
+ "meta": {
+  "total": 2,
+  "page": 1,
+  "perPage": 100,
+  "totalPages": 1
+ }
+}

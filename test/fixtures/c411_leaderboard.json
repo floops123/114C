@@ -1,0 +1,34 @@
+{
+ "success": true,
+ "period": "all_time",
+ "entries": [
+  {
+   "rank": 2,
+   "username": "Deuxième",
+   "avatarUrl": null,
+   "effectiveSlug": "seeder",
+   "className": "Seeder",
+   "gradeLabel": "Argent II",
+   "xp": 39000,
+   "level": 74
+  },
+  {
+   "rank": 1,
+   "username": "Premier",
+   "avatarUrl": "/uploads/avatars/1-md.webp",
+   "effectiveSlug": "tanker",
+   "className": "Tanker",
+   "gradeLabel": "Bronze IV",
+   "xp": 40723,
+   "level": 75
+  }
+ ],
+ "nextCursor": 1,
+ "self": {
+  "rank": 121567,
+  "total": 399543,
+  "xp": 5081,
+  "lifetimeXp": 5081,
+  "dailyXpAverage": 95
+ }
+}

@@ -25,6 +25,12 @@ les 10 minutes, et en tirant la liste vers le bas) :
   % du maximum de la classe) et le **bonus** (sur son plafond).
 - **Sur 30 jours** : moyennes par minute, heure, jour et mois, et les
   versements jour par jour (valeur au survol).
+- **Réanimations** : Zen versés et réanimations payées ; celles en cours
+  avec leur temps de partage (sur 72 h) et leur date limite, et une alerte
+  si le torrent n'est plus dans Transmission (sans partage, elle ne sera pas
+  payée).
+- **Classement** : ta place sur l'ensemble des membres, tes XP par jour, et
+  le haut du tableau.
 - **Le calcul en cours** et le **détail par jour**, avec la formule du
   site : versement = arrondi( T × P × S × I ÷ 7 × (1 + B) ) — torrents
   comptés, part de la journée partagée, coefficient de poids, indicateur de

@@ -124,7 +124,7 @@ class C411SiteApi {
   }
 
   /// Compte, niveau, Zen (solde, versements des [days] derniers jours,
-  /// journée en cours), en parallèle. Une partie en échec manque ; un cookie
+  /// journée en cours), réanimations et classement, en parallèle. Une partie en échec manque ; un cookie
   /// refusé est une erreur.
   Future<C411Overview> overview({int days = 30}) async {
     Future<T?> part<T>(Future<T?> Function() load) async {
@@ -145,6 +145,10 @@ class C411SiteApi {
       part(() async => ZenHistory.parse(
           await _json('/api/tokens/daily-stats', {'days': days}))),
       part(() async => ZenForecast.parse(await _json('/api/tokens/forecast'))),
+      part(() async => C411Revival.parseList(await _json(
+          '/api/profile/revivals', {'status': 'all', 'perPage': 100}))),
+      part(() async => C411Leaderboard.parse(
+          await _json('/api/ic/leaderboard/all_time', {'limit': 10}))),
     ]);
     return C411Overview(
       account: results[0] as C411Account?,
@@ -152,6 +156,8 @@ class C411SiteApi {
       balance: results[2] as ZenBalance?,
       history: results[3] as ZenHistory?,
       forecast: results[4] as ZenForecast?,
+      revivals: results[5] as List<C411Revival>?,
+      leaderboard: results[6] as C411Leaderboard?,
     );
   }
 

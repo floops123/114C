@@ -99,6 +99,8 @@ Repris du bundle JavaScript du site (`lib/core/release_quality.dart`,
 | `GET /api/tokens/balance` | solde de Zen, total gagné, total dépensé, dernier versement |
 | `GET /api/tokens/daily-stats?days=30` | un calcul par jour versé (`entries`), plafond du bonus |
 | `GET /api/tokens/forecast` | la journée en cours (`rq` acquis jusqu'ici, `projected.rq` estimé ce soir) |
+| `GET /api/profile/revivals?status=all&perPage=100` | réanimations : torrent (nom, `infoHash`, taille), `bountyZen` + `keeperBonusZen`, `status` (`paid`…), `seedProgressSecs` / `requiredSeedSecs` (72 h), `qualifyDeadline`, `qualifiedAt`, `paidAt` |
+| `GET /api/ic/leaderboard/all_time?limit=10` | haut du classement (rang, pseudo, avatar, `className`, `gradeLabel`, XP, niveau) et `self` (rang, total, XP, XP par jour en moyenne) |
 
 Versement d'une journée : `arrondi( T × P × S × I ÷ 7 × (1 + B) )`. Les
 champs : T = `releasesConcerned` ; Σ P = `releasesShareBp` et Σ P × S =

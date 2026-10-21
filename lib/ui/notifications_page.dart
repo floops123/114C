@@ -120,6 +120,13 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
       if (state.counters != null) _Counters(state.counters!),
       if (o != null && (o.balance != null || o.forecast != null || o.history != null))
         ZenSection(balance: o.balance, forecast: o.forecast, history: o.history),
+      if (o?.revivals case final revivals? when revivals.isNotEmpty)
+        RevivalsCard(
+          revivals: revivals,
+          inTransmission: ref.watch(torrentsProvider.select((t) => t.loaded ? t.hashes : null)),
+        ),
+      if (o?.leaderboard case final board?)
+        LeaderboardCard(board: board, me: o?.account?.username),
       if (overview.hasError)
         ErrorBanner('Compte C411 : ${overview.error}'),
     ];

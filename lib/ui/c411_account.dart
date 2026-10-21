@@ -898,3 +898,201 @@ class _History extends StatelessWidget {
     );
   }
 }
+
+/// Réanimations : bilan, celles en cours (temps de partage, date limite,
+/// présence dans Transmission) et les dernières terminées.
+class RevivalsCard extends StatelessWidget {
+  const RevivalsCard({super.key, required this.revivals, this.inTransmission});
+  final List<C411Revival> revivals;
+
+  /// Infohash des torrents de Transmission ; null : inconnu.
+  final Set<String>? inTransmission;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final paid = revivals.where((r) => r.paid).toList();
+    final zen = paid.fold(0, (n, r) => n + r.zen);
+    final running = revivals.where((r) => r.inProgress).toList();
+    final done = revivals.where((r) => !r.inProgress).take(5).toList();
+    final small = TextStyle(fontSize: 12, color: c.muted);
+
+    Widget row(C411Revival r) {
+      final here = r.infoHash == null || inTransmission == null
+          ? null
+          : inTransmission!.contains(r.infoHash);
+      String hours(Duration d) => (d.inMinutes / 60).toStringAsFixed(0);
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Expanded(
+              child: Text(r.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(width: 8),
+            if (r.paid)
+              Tag('PAYÉE · ${r.zen} ZEN', color: c.success)
+            else if (r.ineligible)
+              Tag('NON ÉLIGIBLE', color: c.danger)
+            else if (r.qualifiedAt != null)
+              Tag('QUALIFIÉE', color: c.info)
+            else
+              Tag('EN COURS', color: c.accent),
+          ]),
+          const SizedBox(height: 3),
+          Text(
+            [
+              formatBytes(r.size),
+              if (r.revivedAt case final d?) 'réanimée le ${shortDay(d)}',
+              if (r.inProgress && r.required > Duration.zero)
+                '${hours(r.seeded)} h partagées sur ${hours(r.required)} h',
+              if (r.inProgress && r.deadline != null) 'avant le ${shortDay(r.deadline!)}',
+              ?r.ineligibleReason,
+            ].join(' · '),
+            style: small,
+          ),
+          if (r.inProgress) ...[
+            const SizedBox(height: 6),
+            Meter(value: r.progress, color: c.accent),
+            if (here == false)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: _Alert(c.warning, Icons.warning_amber_rounded,
+                    'Plus dans Transmission : sans partage, elle ne sera pas payée'),
+              ),
+          ],
+        ]),
+      );
+    }
+
+    return _Block(children: [
+      const _Caption(Icons.healing_rounded, 'Réanimations',
+          help: 'Un torrent sans seeder relancé : payé en Zen une fois partagé '
+              'assez longtemps avant la date limite.'),
+      const SizedBox(height: 8),
+      Text.rich(TextSpan(children: [
+        TextSpan(text: '$zen', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+        TextSpan(
+            text: ' Zen versés sur ${paid.length} réanimation${paid.length > 1 ? 's' : ''} '
+                'payée${paid.length > 1 ? 's' : ''}',
+            style: TextStyle(fontSize: 13, color: c.muted)),
+      ])),
+      if (running.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text('Aucune réanimation en cours.', style: small),
+        )
+      else ...[
+        const SizedBox(height: 4),
+        for (final r in running) row(r),
+      ],
+      if (done.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Text('Dernières', style: small.copyWith(fontWeight: FontWeight.w700)),
+        for (final r in done) row(r),
+      ],
+    ]);
+  }
+}
+
+/// Classement : sa place, puis le haut du tableau.
+class LeaderboardCard extends StatelessWidget {
+  const LeaderboardCard({super.key, required this.board, this.me});
+  final C411Leaderboard board;
+
+  /// Son pseudo, pour se repérer dans le haut du tableau.
+  final String? me;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final small = TextStyle(fontSize: 12, color: c.muted);
+    return _Block(children: [
+      const _Caption(Icons.leaderboard_rounded, 'Classement'),
+      const SizedBox(height: 8),
+      if (board.rank != null)
+        Text.rich(TextSpan(children: [
+          TextSpan(
+              text: '${frNumber(board.rank!)}ᵉ',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+          TextSpan(
+              text: [
+                if (board.total != null) ' sur ${frNumber(board.total!)}',
+                if (board.xp != null) ' · ${frNumber(board.xp!)} XP',
+                if (board.dailyXp != null) ' · ${board.dailyXp} XP par jour en moyenne',
+              ].join(),
+              style: TextStyle(fontSize: 13, color: c.muted)),
+        ])),
+      if (board.top.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        for (final e in board.top)
+          Container(
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: e.username == me ? Color.lerp(c.accent, c.surface, 0.85) : null,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              SizedBox(
+                width: 28,
+                child: Text('${e.rank}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: e.rank <= 3 ? c.warning : c.muted,
+                        fontFeatures: const [FontFeature.tabularFigures()])),
+              ),
+              _Avatar(url: e.avatarUrl, name: e.username),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(e.username,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                  Text([?e.className, ?e.grade].join(' · '), style: small),
+                ]),
+              ),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('Niv. ${e.level}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                Text('${frNumber(e.xp)} XP', style: small),
+              ]),
+            ]),
+          ),
+      ],
+    ]);
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.url, required this.name});
+  final String? url;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final fallback = CircleAvatar(
+      radius: 15,
+      backgroundColor: c.surfaceAlt,
+      child: Text(name.isEmpty ? '?' : name[0].toUpperCase(),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.muted)),
+    );
+    if (url == null) return fallback;
+    return ClipOval(
+      child: CachedNetworkImage(
+        imageUrl: url!,
+        width: 30,
+        height: 30,
+        fit: BoxFit.cover,
+        memCacheWidth: 60,
+        placeholder: (_, _) => fallback,
+        errorWidget: (_, _, _) => fallback,
+      ),
+    );
+  }
+}

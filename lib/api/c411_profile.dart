@@ -273,16 +273,183 @@ class ZenForecast {
   }
 }
 
+/// Une réanimation (`/api/profile/revivals`) : un torrent sans seeder
+/// relancé, payé en Zen une fois partagé assez longtemps.
+class C411Revival {
+  const C411Revival({
+    required this.id,
+    required this.name,
+    this.infoHash,
+    this.size = 0,
+    this.revivedAt,
+    this.bounty = 0,
+    this.keeperBonus = 0,
+    this.status = '',
+    this.ineligibleReason,
+    this.seeded = Duration.zero,
+    this.required = Duration.zero,
+    this.deadline,
+    this.qualifiedAt,
+    this.paidAt,
+  });
+
+  final int id;
+  final String name;
+
+  /// En minuscules.
+  final String? infoHash;
+  final int size;
+  final DateTime? revivedAt;
+
+  /// Prime de la réanimation et bonus du gardien, en Zen.
+  final int bounty;
+  final int keeperBonus;
+
+  /// `paid`, ou un autre état du site (en cours, non éligible…).
+  final String status;
+  final String? ineligibleReason;
+
+  /// Temps de partage accumulé, et celui exigé.
+  final Duration seeded;
+  final Duration required;
+
+  /// Date limite pour atteindre [required].
+  final DateTime? deadline;
+  final DateTime? qualifiedAt;
+  final DateTime? paidAt;
+
+  int get zen => bounty + keeperBonus;
+  bool get paid => status == 'paid' || paidAt != null;
+  bool get ineligible => status.contains('ineligible') || ineligibleReason != null;
+
+  /// En cours : ni payée, ni qualifiée, ni écartée.
+  bool get inProgress => !paid && qualifiedAt == null && !ineligible;
+
+  double get progress => required == Duration.zero
+      ? 0
+      : (seeded.inSeconds / required.inSeconds).clamp(0, 1).toDouble();
+
+  static C411Revival parse(Map<String, dynamic> j) {
+    final t = (j['torrent'] as Map?)?.cast<String, dynamic>() ?? const {};
+    DateTime? date(String k) => DateTime.tryParse(j[k] as String? ?? '');
+    return C411Revival(
+      id: _int(j['id']),
+      name: t['name'] as String? ?? '',
+      infoHash: (t['infoHash'] as String?)?.toLowerCase(),
+      size: _int(t['sizeBytes']),
+      revivedAt: date('revivedAt'),
+      bounty: _int(j['bountyZen']),
+      keeperBonus: _int(j['keeperBonusZen']),
+      status: j['status'] as String? ?? '',
+      ineligibleReason: j['ineligibleReason'] as String?,
+      seeded: Duration(seconds: _int(j['seedProgressSecs'])),
+      required: Duration(seconds: _int(j['requiredSeedSecs'])),
+      deadline: date('qualifyDeadline'),
+      qualifiedAt: date('qualifiedAt'),
+      paidAt: date('paidAt'),
+    );
+  }
+
+  static List<C411Revival> parseList(Map<String, dynamic> j) => [
+        for (final r in (j['data'] as List? ?? const []).whereType<Map>())
+          parse(r.cast<String, dynamic>()),
+      ]..sort((a, b) => (b.revivedAt ?? DateTime(0)).compareTo(a.revivedAt ?? DateTime(0)));
+}
+
+/// Une ligne du classement (`/api/ic/leaderboard`).
+class C411Rank {
+  const C411Rank({
+    required this.rank,
+    required this.username,
+    this.avatarUrl,
+    this.className,
+    this.grade,
+    this.xp = 0,
+    this.level = 0,
+  });
+
+  final int rank;
+  final String username;
+  final String? avatarUrl;
+
+  /// Classe et grade tels que le site les affiche (« Tanker », « Bronze IV »).
+  final String? className;
+  final String? grade;
+  final int xp;
+  final int level;
+}
+
+/// Le classement : le haut du tableau, et sa propre place.
+class C411Leaderboard {
+  const C411Leaderboard({
+    this.top = const [],
+    this.rank,
+    this.total,
+    this.xp,
+    this.dailyXp,
+  });
+
+  final List<C411Rank> top;
+  final int? rank;
+  final int? total;
+  final int? xp;
+
+  /// XP gagnés par jour en moyenne.
+  final int? dailyXp;
+
+  static C411Leaderboard parse(Map<String, dynamic> j, {String site = 'https://c411.org'}) {
+    final self = (j['self'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return C411Leaderboard(
+      top: [
+        for (final e in (j['entries'] as List? ?? const []).whereType<Map>())
+          C411Rank(
+            rank: _int(e['rank']),
+            username: e['username'] as String? ?? '',
+            avatarUrl: switch (e['avatarUrl']) {
+              final String u when u.startsWith('http') => u,
+              final String u => '$site$u',
+              _ => null,
+            },
+            className: e['className'] as String?,
+            grade: e['gradeLabel'] as String?,
+            xp: _int(e['xp']),
+            level: _int(e['level']),
+          ),
+      ]..sort((a, b) => a.rank.compareTo(b.rank)),
+      rank: (self['rank'] as num?)?.toInt(),
+      total: (self['total'] as num?)?.toInt(),
+      xp: (self['xp'] as num?)?.toInt(),
+      dailyXp: (self['dailyXpAverage'] as num?)?.toInt(),
+    );
+  }
+}
+
 /// Tout ce que la page C411 montre du compte ; chaque partie peut manquer
 /// (endpoint en échec ou absent).
 class C411Overview {
-  const C411Overview({this.account, this.level, this.balance, this.history, this.forecast});
+  const C411Overview({
+    this.account,
+    this.level,
+    this.balance,
+    this.history,
+    this.forecast,
+    this.revivals,
+    this.leaderboard,
+  });
   final C411Account? account;
   final C411Level? level;
   final ZenBalance? balance;
   final ZenHistory? history;
   final ZenForecast? forecast;
+  final List<C411Revival>? revivals;
+  final C411Leaderboard? leaderboard;
 
   bool get isEmpty =>
-      account == null && level == null && balance == null && history == null && forecast == null;
+      account == null &&
+      level == null &&
+      balance == null &&
+      history == null &&
+      forecast == null &&
+      revivals == null &&
+      leaderboard == null;
 }
