@@ -88,8 +88,8 @@ bornes aux résultats déjà affichés, sans réinterroger le tracker ; pour
 ## L'envoi
 
 Chaque ligne a une case cochée par défaut, sauf les torrents **déjà dans
-Transmission** (signalés « DANS TRANSMISSION »). **Tout cocher / Tout
-décocher** en tête, et un bouton **Envoyer à Transmission (n · taille)**
+Transmission** (signalés « DANS TRANSMISSION »). La case en tête de liste coche ou décoche tout, et un bouton
+**Envoyer à Transmission (n · taille)**
 qui envoie d'un coup toutes les lignes cochées et rappelle leur taille
 totale. Avant l'envoi, une boîte de dialogue
 récapitule le nombre de torrents qui vont partir. Les envois sont
