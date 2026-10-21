@@ -12,6 +12,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
       cacheOptions: const SharedPreferencesWithCacheOptions(
           allowList: {
         UiPrefsNotifier._themeKey,
+        UiPrefsNotifier._fontKey,
         UiPrefsNotifier._gridKey,
         UiPrefsNotifier._releaseSortKey,
         UiPrefsNotifier._releaseAscKey,
@@ -36,6 +37,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
 class UiPrefs {
   const UiPrefs({
     this.themeMode = ThemeMode.system,
+    this.font,
     this.releasesGrid = true,
     this.releaseSort,
     this.releaseAscending = false,
@@ -44,6 +46,9 @@ class UiPrefs {
   });
 
   final ThemeMode themeMode;
+
+  /// Police de l'interface (nom d'`AppFont`) ; null : Inter.
+  final String? font;
   final bool releasesGrid;
 
   /// Noms des critères de tri (enums définis côté interface).
@@ -54,6 +59,7 @@ class UiPrefs {
 
   UiPrefs copyWith({
     ThemeMode? themeMode,
+    String? font,
     bool? releasesGrid,
     String? releaseSort,
     bool? releaseAscending,
@@ -62,6 +68,7 @@ class UiPrefs {
   }) =>
       UiPrefs(
         themeMode: themeMode ?? this.themeMode,
+        font: font ?? this.font,
         releasesGrid: releasesGrid ?? this.releasesGrid,
         releaseSort: releaseSort ?? this.releaseSort,
         releaseAscending: releaseAscending ?? this.releaseAscending,
@@ -72,6 +79,7 @@ class UiPrefs {
 
 class UiPrefsNotifier extends Notifier<UiPrefs> {
   static const _themeKey = 'themeMode';
+  static const _fontKey = 'font';
   static const _gridKey = 'releasesGrid';
   static const _releaseSortKey = 'releaseSort';
   static const _releaseAscKey = 'releaseAscending';
@@ -91,6 +99,7 @@ class UiPrefsNotifier extends Notifier<UiPrefs> {
     return UiPrefs(
       themeMode: ThemeMode.values.asNameMap()[prefs.getString(_themeKey)] ??
           ThemeMode.system,
+      font: prefs.getString(_fontKey),
       releasesGrid: prefs.getBool(_gridKey) ?? true,
       releaseSort: prefs.getString(_releaseSortKey),
       releaseAscending: prefs.getBool(_releaseAscKey) ?? false,
@@ -102,6 +111,15 @@ class UiPrefsNotifier extends Notifier<UiPrefs> {
   void setThemeMode(ThemeMode mode) {
     _prefs.setString(_themeKey, mode.name);
     state = state.copyWith(themeMode: mode);
+  }
+
+  void setFont(String font) {
+    try {
+      _prefs.setString(_fontKey, font);
+    } on Object {
+      // Préférences non initialisées (tests) : en mémoire seulement.
+    }
+    state = state.copyWith(font: font);
   }
 
   void setReleasesGrid(bool grid) {

@@ -76,10 +76,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Police Inter intégrée (licence OFL : assets/fonts/OFL.txt) : aucun
-  # téléchargement au démarrage, fonctionne hors ligne.
+  # Polices intégrées (licence OFL : assets/fonts/OFL.txt pour Inter,
+  # assets/fonts/licenses/ pour les autres) : aucun téléchargement au
+  # démarrage, fonctionne hors ligne. Les polices code et rétro, au choix
+  # dans les Réglages, sont le sous-ensemble latin de Fontsource.
   assets:
     - assets/fonts/OFL.txt
+    - assets/fonts/licenses/
   fonts:
     - family: Inter
       fonts:
@@ -93,6 +96,60 @@ flutter:
           weight: 700
         - asset: assets/fonts/Inter-ExtraBold.ttf
           weight: 800
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
+    - family: FiraCode
+      fonts:
+        - asset: assets/fonts/FiraCode-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/FiraCode-Bold.ttf
+          weight: 700
+    - family: IBMPlexMono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexMono-Bold.ttf
+          weight: 700
+    - family: SpaceMono
+      fonts:
+        - asset: assets/fonts/SpaceMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/SpaceMono-Bold.ttf
+          weight: 700
+    - family: VictorMono
+      fonts:
+        - asset: assets/fonts/VictorMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/VictorMono-Bold.ttf
+          weight: 700
+    - family: MartianMono
+      fonts:
+        - asset: assets/fonts/MartianMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/MartianMono-Bold.ttf
+          weight: 700
+    - family: ShareTechMono
+      fonts:
+        - asset: assets/fonts/ShareTechMono-Regular.ttf
+          weight: 400
+    - family: VT323
+      fonts:
+        - asset: assets/fonts/VT323-Regular.ttf
+          weight: 400
+    - family: PixelifySans
+      fonts:
+        - asset: assets/fonts/PixelifySans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PixelifySans-Bold.ttf
+          weight: 700
+    - family: PressStart2P
+      fonts:
+        - asset: assets/fonts/PressStart2P-Regular.ttf
+          weight: 400
 
   # To add assets to your application, add an assets section, like this:
   # assets:

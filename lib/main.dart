@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/preferences.dart';
+import 'ui/app_fonts.dart';
 import 'ui/home_shell.dart';
 import 'ui/smooth_wheel.dart';
 import 'ui/theme.dart';
@@ -19,10 +20,12 @@ Future<void> main() async {
     ..maximumSizeBytes = 50 << 20
     ..maximumSize = 400;
   // Le lecteur (libmpv, ~40 Mo) n'est chargé qu'à la première lecture :
-  // voir PlayerPage.  // Licence de la police Inter, visible dans l'écran des licences.
+  // voir PlayerPage.
+  // Licences des polices, visibles dans l'écran des licences.
   LicenseRegistry.addLicense(() async* {
-    yield LicenseEntryWithLineBreaks(
-        ['Inter'], await rootBundle.loadString('assets/fonts/OFL.txt'));
+    for (final f in AppFont.values) {
+      yield LicenseEntryWithLineBreaks([f.label], await rootBundle.loadString(f.license));
+    }
   });
   final prefs = await loadSharedPrefs();
   runApp(ProviderScope(
@@ -34,19 +37,35 @@ Future<void> main() async {
 class App extends ConsumerWidget {
   const App({super.key});
 
-  static final _light = buildTheme(Brightness.light);
-  static final _dark = buildTheme(Brightness.dark);
+  /// Thèmes clair et sombre par police, construits à la demande.
+  static final _themes = <(AppFont, Brightness), ThemeData>{};
+
+  static ThemeData _theme(AppFont font, Brightness brightness) =>
+      _themes[(font, brightness)] ??= buildTheme(brightness, font: font.family);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
+    final font = AppFont.byName(ref.watch(uiPrefsProvider.select((p) => p.font)));
     return MaterialApp(
       title: 'C411 Remote',
       debugShowCheckedModeBanner: false,
-      theme: _light,
-      darkTheme: _dark,
+      theme: _theme(font, Brightness.light),
+      darkTheme: _theme(font, Brightness.dark),
       themeMode: themeMode,
       scrollBehavior: const AppScrollBehavior(),
+      // Les polices n'ont pas la même taille apparente : on la corrige,
+      // par-dessus le réglage du système.
+      builder: font.scale == 1
+          ? null
+          : (context, child) {
+              final media = MediaQuery.of(context);
+              return MediaQuery(
+                data: media.copyWith(
+                    textScaler: TextScaler.linear(media.textScaler.scale(1) * font.scale)),
+                child: child!,
+              );
+            },
       home: const HomeShell(),
     );
   }

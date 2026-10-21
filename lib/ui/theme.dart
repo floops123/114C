@@ -148,7 +148,9 @@ extension AppColorsContext on BuildContext {
 
 const _radius = 10.0;
 
-ThemeData buildTheme(Brightness brightness) {
+/// Thème de l'application, avec la police [font] (une famille de
+/// pubspec.yaml).
+ThemeData buildTheme(Brightness brightness, {String font = 'Inter'}) {
   final c = brightness == Brightness.dark ? AppColors.dark : AppColors.light;
   final radius = BorderRadius.circular(_radius);
 
@@ -180,8 +182,6 @@ ThemeData buildTheme(Brightness brightness) {
     shadow: Colors.black,
   );
 
-  // Police intégrée à l'application (voir pubspec.yaml).
-  const font = 'Inter';
   final text = ThemeData(brightness: brightness).textTheme
       .apply(fontFamily: font, bodyColor: c.text, displayColor: c.text)
       .copyWith(
@@ -287,7 +287,7 @@ ThemeData buildTheme(Brightness brightness) {
         elevation: 0,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: radius),
-        textStyle: const TextStyle(fontFamily: font, fontWeight: FontWeight.w600),
+        textStyle: TextStyle(fontFamily: font, fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -296,7 +296,7 @@ ThemeData buildTheme(Brightness brightness) {
         side: BorderSide(color: c.border),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: radius),
-        textStyle: const TextStyle(fontFamily: font, fontWeight: FontWeight.w600),
+        textStyle: TextStyle(fontFamily: font, fontWeight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(

@@ -13,6 +13,7 @@ import '../api/transmission.dart';
 import '../core/settings.dart';
 import '../core/preferences.dart';
 import '../state/media_library.dart';
+import 'font_picker.dart';
 import 'release_watch_page.dart';
 import 'server_settings_page.dart';
 import 'theme.dart';
@@ -388,6 +389,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                     .read(uiPrefsProvider.notifier)
                                     .setThemeMode(s.first),
                               ),
+                              const SizedBox(height: 14),
+                              Text(
+                                'Police',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 8),
+                              const FontPicker(),
                             ],
                           ),
                           const SizedBox(height: 12),
