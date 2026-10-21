@@ -61,6 +61,18 @@ class _Transmission extends TransmissionClient {
             'files': [
               {'name': 'Jeu/data.pak', 'length': 4 << 30},
               {'name': 'Jeu/OST/01.ogg', 'length': 5 << 20},
+              // Sa notice : pas un livre.
+              {'name': 'Jeu/Manuel.pdf', 'length': 3 << 20},
+            ],
+          },
+          {
+            'id': 6,
+            'hashString': 'fff',
+            'downloadDir': _dir,
+            'percentDone': 1.0,
+            'files': [
+              {'name': 'Presse/Le Point N°2650 - Juin 2025.pdf', 'length': 60 << 20},
+              {'name': 'Presse/lisez-moi.txt', 'length': 1 << 10},
             ],
           },
           {
@@ -133,7 +145,14 @@ void main() {
       '/medias/Musique/Justice - Cross/CD2/01 - Stress.mp3': [1],
       '/medias/Jeux/sfx/s1.wav': [1],
       '/medias/Jeux/sfx/s2.wav': [1],
+      // Livres des dossiers (pour C411 Books), sans les fichiers minuscules.
+      '/medias/Livres/Victor Hugo - Les Misérables.epub': [1],
+      '/medias/BD/Astérix - T01.cbz': [1],
+      '/medias/Livres/facture.pdf': [1],
     }, sizes: {
+      '/medias/Livres/Victor Hugo - Les Misérables.epub': 900 << 10,
+      '/medias/BD/Astérix - T01.cbz': 40 << 20,
+      '/medias/Livres/facture.pdf': 60 << 10,
       '/medias/Musique/Justice - Cross/CD1/01 - Genesis.mp3': 8 << 20,
       '/medias/Musique/Justice - Cross/CD2/01 - Stress.mp3': 9 << 20,
       '/medias/Jeux/sfx/s1.wav': 400 << 10,
@@ -174,6 +193,11 @@ void main() {
       '/medias/Musique/Justice - Cross/CD1/01 - Genesis.mp3': null,
       '/medias/Musique/Justice - Cross/CD2/01 - Stress.mp3': null,
     });
+    expect({for (final f in library.books) f.path: f.hash}, {
+      '/torrents/Presse/Le Point N°2650 - Juin 2025.pdf': 'fff',
+      '/medias/Livres/Victor Hugo - Les Misérables.epub': null,
+      '/medias/BD/Astérix - T01.cbz': null,
+    });
     expect(tmdb.asked.toSet(), {
       'movie:Dune Part Two:2024', 'tv:The Bear:', 'movie:Amélie:2001', 'tv:MobLand:',
     });
@@ -209,6 +233,7 @@ void main() {
     expect(reloaded.titles.length, 4);
     expect(reloaded.files.every((f) => f.added != null), isTrue);
     expect(reloaded.music.length, 4);
+    expect(reloaded.books.length, 3);
     expect(reloaded.music.every((f) => f.added != null), isTrue);
   });
 

@@ -32,6 +32,7 @@ et faire évoluer le code.
 | [Tests](dev/tests.md) | lancer les tests, ce que couvre chaque fichier |
 | [C411 TV (web)](../web_player/README.md) | diffuser la vidéothèque dans un navigateur |
 | [C411 Music (web)](../web_music/README.md) | diffuser la musique dans un navigateur, fiches MusicBrainz |
+| [C411 Books (web)](../web_books/README.md) | livres, BD, mangas et magazines dans un navigateur, avec liseuses |
 
 ## En un coup d'œil
 

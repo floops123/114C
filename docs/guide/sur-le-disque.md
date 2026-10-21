@@ -41,6 +41,14 @@ Les règles :
   moyenne. Les bruitages de jeux sont donc écartés ;
 - une piste de moins de 300 Ko est ignorée.
 
+Et **les livres numériques** (EPUB, PDF, CBZ, CBR, MOBI…), pour
+[C411 Books](../../web_books/README.md) :
+
+- un torrent terminé ne compte que si les livres font au moins la moitié de
+  ses octets. La notice PDF d'un jeu n'en fait pas partie ;
+- un fichier de moins de 20 Ko (150 Ko pour un PDF : factures, notices) est
+  ignoré.
+
 ## Comment un fichier est reconnu
 
 Le nom du fichier **et** celui de ses dossiers sont analysés :
