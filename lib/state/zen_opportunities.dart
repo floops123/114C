@@ -7,7 +7,6 @@ import 'c411_overview.dart';
 import 'palliative.dart';
 import 'releases.dart';
 import 'torrents.dart';
-import 'zen_portfolio.dart';
 
 /// Classement des opportunités : selon la contrainte (le nombre de torrents
 /// dans Transmission, ou la place disque), ou par note — l'indicateur de
@@ -27,21 +26,13 @@ class ZenOpportunity {
   const ZenOpportunity({
     required this.release,
     required this.estimate,
-    double? gain,
     this.selected = false,
     this.done = false,
     this.detail,
-    // Par défaut : son gain seul (portefeuille vide).
-    // ignore: prefer_initializing_formals
-  }) : _gain = gain;
+  });
 
   final Release release;
   final ZenEstimate estimate;
-
-  /// Zen par jour gagnés en l'ajoutant au portefeuille actuel : moins que
-  /// [ZenEstimate.perDay], voire négatif, si sa note est sous la moyenne.
-  double get gain => _gain ?? estimate.perDay;
-  final double? _gain;
   final bool selected;
   final bool done;
 
@@ -58,7 +49,6 @@ class ZenOpportunity {
       ZenOpportunity(
         release: release,
         estimate: estimate,
-        gain: _gain,
         selected: selected ?? this.selected,
         done: done ?? this.done,
         detail: detail != null ? detail() : this.detail,
@@ -97,8 +87,6 @@ class ZenOpportunitiesState {
     this.scanned = 0,
     this.searched = false,
     this.ratioBudget,
-    this.base = ZenBase.empty,
-    this.bonus = 0.25,
     this.sending = false,
     this.sent = 0,
     this.toSend = 0,
@@ -117,21 +105,13 @@ class ZenOpportunitiesState {
 
   /// Octets téléchargeables avant le ratio minimum ; null : inconnu.
   final int? ratioBudget;
-
-  /// Le portefeuille actuel (dernier versement du site) et le bonus.
-  final ZenBase base;
-  final double bonus;
   final bool sending;
   final int sent;
   final int toSend;
   final String? error;
 
   List<ZenOpportunity> get selected => [for (final i in items) if (i.selected && !i.done) i];
-  /// Ce que la sélection ajoute au versement, toutes ensemble.
-  double get selectedPerDay {
-    final after = selected.fold(base, (b, i) => b.add(i.estimate));
-    return after.perDay(bonus) - base.perDay(bonus);
-  }
+  double get selectedPerDay => selected.fold(0, (n, i) => n + i.estimate.perDay);
   int get selectedSize => selected.fold(0, (n, i) => n + i.release.size);
   int get selectedRatioCost => selected.fold(0, (n, i) => n + i.ratioCost);
 
@@ -143,8 +123,6 @@ class ZenOpportunitiesState {
     int? scanned,
     bool? searched,
     int? Function()? ratioBudget,
-    ZenBase? base,
-    double? bonus,
     bool? sending,
     int? sent,
     int? toSend,
@@ -158,8 +136,6 @@ class ZenOpportunitiesState {
         scanned: scanned ?? this.scanned,
         searched: searched ?? this.searched,
         ratioBudget: ratioBudget != null ? ratioBudget() : this.ratioBudget,
-        base: base ?? this.base,
-        bonus: bonus ?? this.bonus,
         sending: sending ?? this.sending,
         sent: sent ?? this.sent,
         toSend: toSend ?? this.toSend,
@@ -168,31 +144,27 @@ class ZenOpportunitiesState {
 }
 
 /// Classe les sorties selon [ranking] et coche, dans l'ordre, celles qui
-/// tiennent dans les [limits] (nombre, disque, ratio) et font monter le
-/// versement du portefeuille [base] grossi des précédentes : une sélection
+/// tiennent dans les [limits] (nombre, disque, ratio) : une sélection
 /// gloutonne, pas forcément optimale, mais lisible.
 List<ZenOpportunity> rankAndSelect(
   List<ZenOpportunity> items, {
   required ZenRanking ranking,
   required ZenLimits limits,
   int? ratioBudget,
-  ZenBase base = ZenBase.empty,
-  double bonus = 0.25,
 }) {
   final sorted = [
     for (final i in items)
       if (!limits.freeleechOnly || i.freeleech || i.done) i,
   ]..sort((a, b) => switch (ranking) {
-        ZenRanking.perGb => (b.gain / b.release.size).compareTo(a.gain / a.release.size),
-        ZenRanking.perTorrent => b.gain.compareTo(a.gain),
+        ZenRanking.perGb => b.estimate.perGb.compareTo(a.estimate.perGb),
+        ZenRanking.perTorrent => b.estimate.perDay.compareTo(a.estimate.perDay),
         // À note égale, ce qui rapporte le plus.
         ZenRanking.note => switch (b.estimate.note.compareTo(a.estimate.note)) {
-            0 => b.gain.compareTo(a.gain),
+            0 => b.estimate.perDay.compareTo(a.estimate.perDay),
             final c => c,
           },
       });
   var count = 0, disk = 0, cost = 0;
-  var grown = base;
   final diskMax = limits.diskGb == null ? null : (limits.diskGb! * (1 << 30)).round();
   final costMax = limits.useRatio ? ratioBudget : null;
   return [
@@ -204,9 +176,8 @@ List<ZenOpportunity> rankAndSelect(
           final fits = (limits.count == null || count < limits.count!) &&
               (diskMax == null || disk + i.release.size <= diskMax) &&
               (costMax == null || cost + i.ratioCost <= costMax) &&
-              grown.gain(i.estimate, bonus) > 0;
+              i.estimate.perDay > 0;
           if (fits) {
-            grown = grown.add(i.estimate);
             count++;
             disk += i.release.size;
             cost += i.ratioCost;
@@ -233,11 +204,7 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
 
   void _reselect() => state = state.copyWith(
         items: rankAndSelect(state.items,
-            ranking: state.ranking,
-            limits: state.limits,
-            ratioBudget: state.ratioBudget,
-            base: state.base,
-            bonus: state.bonus),
+            ranking: state.ranking, limits: state.limits, ratioBudget: state.ratioBudget),
       );
 
   void setRanking(ZenRanking ranking) {
@@ -273,11 +240,6 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
     final bonusBp = overview?.forecast?.today.bonusBp ?? overview?.history?.latest?.bonusBp;
     final bonus = bonusBp == null ? 0.25 : bonusBp / 10000;
     final present = ref.read(torrentsProvider).hashes;
-    // Le portefeuille du dernier versement, sinon celui de Transmission s'il
-    // est déjà lu : la note moyenne qu'un ajout fera monter ou baisser.
-    final base = overview?.history?.latest?.base ??
-        (ref.exists(zenPortfolioProvider) ? ref.read(zenPortfolioProvider).value?.base : null) ??
-        ZenBase.empty;
     final budget = account == null || account.minRatio == null
         ? null
         : downloadBudget(
@@ -290,8 +252,6 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
       scanned: 0,
       searched: true,
       ratioBudget: () => budget,
-      base: base,
-      bonus: bonus,
       error: () => null,
     );
 
@@ -327,21 +287,15 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
         for (final r in current.items) {
           if (r.seeders < 1 || r.seeders > maxSeeders || r.size <= 0) continue;
           if (r.infoHash != null && present.contains(r.infoHash)) continue;
-          final estimate = estimateZen(bytes: r.size, seeders: r.seeders, bonus: bonus, joining: true);
           found[r.id] = ZenOpportunity(
             release: r,
-            estimate: estimate,
-            gain: base.gain(estimate, bonus),
+            estimate: estimateZen(bytes: r.size, seeders: r.seeders, bonus: bonus, joining: true),
           );
         }
         state = state.copyWith(
           scanned: scanned,
           items: rankAndSelect(found.values.toList(),
-              ranking: state.ranking,
-              limits: state.limits,
-              ratioBudget: budget,
-              base: base,
-              bonus: bonus),
+              ranking: state.ranking, limits: state.limits, ratioBudget: budget),
         );
         final more = page < current.totalPages &&
             current.items.isNotEmpty &&

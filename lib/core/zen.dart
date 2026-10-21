@@ -3,17 +3,17 @@ import 'dart:math' as math;
 // Ce que rapportent les torrents en Zen, pour la classe Swarm Keeper de C411
 // (« payée sur le seed »), d'après les règles publiées sur le site :
 //
-//   Zen par jour = Σ S × note moyenne × (1 + bonus) ÷ 7, arrondi au Zen,
-//   chaque torrent au prorata du temps partagé (30 minutes au moins)
+//   Zen par jour = Σ S × note × (1 + bonus) ÷ 7, arrondi au Zen, chaque
+//   torrent au prorata du temps partagé (30 minutes au moins)
 //   note = catégorie (1,00) + durée de seed + taille × seeders, 2,00 au plus
 //   S (coefficient de poids) = (0,25 + taille) ÷ 4,25 jusqu'à 4 Go, puis
 //   monte lentement : 1,24 à 25 Go, 1,38 à 60 Go — (taille ÷ 4)^0,118,
 //   ajusté sur ces deux valeurs, les redonne.
 //
-// La note moyenne (l'indicateur de contribution) multiplie le poids de tous
-// les torrents : un torrent moins bien noté que la moyenne la fait baisser
-// pour tous les autres. Ce qu'un torrent rapporte vraiment dépend donc du
-// portefeuille : voir [ZenBase].
+// Le site l'écrit Σ S × I × (1 + bonus) ÷ 7, où I, l'indicateur de
+// contribution, est la moyenne des notes pondérée par le poids (« un gros
+// torrent y compte plus qu'un petit ») : c'est la même somme. Chaque torrent
+// rapporte donc selon sa propre note, sans rien changer aux autres.
 //
 // Tailles en milliards d'octets (1 Go = 10⁹ o, soit 0,93 Go affiché en base
 // 1024). Toutes les règles sont ici : une autre classe, d'autres tables.
@@ -120,9 +120,7 @@ class ZenEstimate {
   final double note;
   final double weight;
 
-  /// Zen par jour, partagé toute la journée, bonus compris, seul dans le
-  /// portefeuille (sa note pour moyenne) ; dans un portefeuille, voir
-  /// [ZenBase.gain].
+  /// Zen par jour, partagé toute la journée, bonus compris.
   final double perDay;
 
   /// Zen par jour et par Go occupé.
@@ -157,47 +155,6 @@ ZenEstimate estimateZen({
     weight: weight,
     perDay: weight * note * (1 + bonus) / zenScale,
   );
-}
-
-/// Le portefeuille vu par le versement : torrents comptés, somme des poids
-/// (Σ P × S) et note moyenne. Ce qu'un torrent rapporte, c'est l'écart de
-/// versement entre le portefeuille avec et sans lui.
-class ZenBase {
-  const ZenBase({required this.count, required this.weight, required this.note});
-
-  static const empty = ZenBase(count: 0, weight: 0, note: 0);
-
-  final int count;
-  final double weight;
-
-  /// Note moyenne : l'indicateur de contribution.
-  final double note;
-
-  static ZenBase of(Iterable<ZenEstimate> estimates) =>
-      estimates.fold(empty, (b, e) => b.add(e));
-
-  /// Zen par jour, avant arrondi.
-  double perDay(double bonus) => weight * note * (1 + bonus) / zenScale;
-
-  ZenBase add(ZenEstimate e) => ZenBase(
-        count: count + 1,
-        weight: weight + e.weight,
-        note: (note * count + e.note) / (count + 1),
-      );
-
-  ZenBase remove(ZenEstimate e) => count <= 1
-      ? empty
-      : ZenBase(
-          count: count - 1,
-          weight: math.max(0, weight - e.weight),
-          note: (note * count - e.note) / (count - 1),
-        );
-
-  /// Zen par jour gagnés en ajoutant [e] (négatif : il dilue la note).
-  double gain(ZenEstimate e, double bonus) => add(e).perDay(bonus) - perDay(bonus);
-
-  /// Zen par jour perdus en retirant [e], qui en fait partie.
-  double contribution(ZenEstimate e, double bonus) => perDay(bonus) - remove(e).perDay(bonus);
 }
 
 /// Zen versés en terminant le niveau d'XP [level] (le niveau en cours, qui

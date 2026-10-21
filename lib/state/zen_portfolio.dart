@@ -16,7 +16,6 @@ class ZenHolding {
     required this.seeding,
     required this.estimate,
     this.seedersKnown = true,
-    this.contribution = 0,
     this.site,
   });
 
@@ -37,32 +36,15 @@ class ZenHolding {
 
   bool get crowded => site?.crowded ?? estimate.crowded;
 
-  /// Ce que le portefeuille perdrait sans lui, en Zen par jour : son poids,
-  /// mais aussi l'effet de sa note sur la moyenne. Négatif : il fait baisser
-  /// la note moyenne plus qu'il ne rapporte. À l'arrêt : ce qu'il
-  /// rapporterait relancé.
-  final double contribution;
-
   /// Zen par jour, s'il reste en partage toute la journée.
-  double get perDay => seeding ? contribution : 0;
-
-  ZenHolding withContribution(double contribution) => ZenHolding(
-        id: id,
-        hash: hash,
-        name: name,
-        seeding: seeding,
-        estimate: estimate,
-        seedersKnown: seedersKnown,
-        contribution: contribution,
-        site: site,
-      );
+  double get perDay => seeding ? estimate.perDay : 0;
 }
 
 /// Le portefeuille C411 : chaque torrent, et les totaux.
 class ZenPortfolio {
   const ZenPortfolio({required this.holdings, required this.bonus});
 
-  /// Par contribution décroissante.
+  /// Par Zen par jour décroissant.
   final List<ZenHolding> holdings;
 
   /// Bonus appliqué (celui que le site annonce, sinon la grille).
@@ -70,18 +52,17 @@ class ZenPortfolio {
 
   List<ZenHolding> get seeding => [for (final h in holdings) if (h.seeding) h];
 
-  ZenBase get base => ZenBase.of([for (final h in seeding) h.estimate]);
+  /// Versement d'une journée complète : Σ poids × note × (1 + bonus) ÷ 7 ;
+  /// le site l'arrondit au Zen.
+  double get perDay => holdings.fold(0, (n, h) => n + h.perDay);
 
-  /// Versement d'une journée complète : Σ poids × note moyenne × (1 + bonus)
-  /// ÷ 7 ; le site l'arrondit au Zen.
-  double get perDay => base.perDay(bonus);
-
-  /// Note moyenne des torrents en partage : l'indicateur de contribution.
-  double get averageNote => base.note;
-
-  /// Torrents en partage qui coûtent plus à la note moyenne qu'ils ne
-  /// rapportent.
-  List<ZenHolding> get diluting => [for (final h in seeding) if (h.contribution < 0) h];
+  /// L'indicateur de contribution : la moyenne des notes des torrents en
+  /// partage, pondérée par leur poids (un gros torrent y compte plus).
+  double get averageNote {
+    final s = seeding;
+    final weight = s.fold(0.0, (n, h) => n + h.estimate.weight);
+    return weight == 0 ? 0 : s.fold(0.0, (n, h) => n + h.estimate.weight * h.estimate.note) / weight;
+  }
 
   /// Coefficient de poids moyen, pondéré comme le site (Σ P × S ÷ Σ P).
   double get averageWeight {
@@ -134,7 +115,7 @@ class ZenPortfolio {
     }
     final seedingCount = mine.where((m) => m.$1['status'] == 6).length;
     final applied = bonus ?? gridBonus(seedingCount);
-    final raw = [
+    final holdings = [
       for (final (t, seeders) in mine)
         if ((t['hashString'] as String? ?? '').toLowerCase() case final hash)
         ZenHolding(
@@ -155,13 +136,7 @@ class ZenPortfolio {
           ),
         ),
     ];
-    final base = ZenBase.of([for (final h in raw) if (h.seeding) h.estimate]);
-    final holdings = [
-      for (final h in raw)
-        h.withContribution(h.seeding
-            ? base.contribution(h.estimate, applied)
-            : base.gain(h.estimate, applied)),
-    ]..sort((a, b) => b.perDay.compareTo(a.perDay));
+    holdings.sort((a, b) => b.perDay.compareTo(a.perDay));
     return ZenPortfolio(holdings: holdings, bonus: applied);
   }
 

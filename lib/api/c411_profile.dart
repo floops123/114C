@@ -8,8 +8,6 @@
 // B : bonus de pondération. L'API donne T, et en points de base (1/10 000)
 // la somme des parts (Σ P) et des poids (Σ P × S) : P = ΣP ÷ T, S = ΣPS ÷ ΣP.
 
-import '../core/zen.dart';
-
 /// Valeur entière ou décimale d'un JSON.
 double _num(Object? v) => (v as num?)?.toDouble() ?? 0;
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -196,9 +194,6 @@ class ZenDay {
 
   /// Zen avant bonus : T × P × S × I ÷ 7.
   double get beforeBonus => weightBp / 10000 * contribution / 7;
-
-  /// Le portefeuille de ce versement, pour estimer un ajout.
-  ZenBase get base => ZenBase(count: torrents, weight: weightBp / 10000, note: contribution);
 
   static ZenDay parse(Map<String, dynamic> j) => ZenDay(
         date: DateTime.tryParse(j['date'] as String? ?? ''),

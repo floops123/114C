@@ -127,22 +127,14 @@ void main() {
     expect(p.crowded.map((h) => h.id), [6]);
     expect(p.upcoming(days: 7).map((h) => h.id), unorderedEquals([5, 6]),
         reason: 'paliers de 7 jours dans 4 et 2 jours');
-    // Σ poids × note moyenne × (1 + bonus) ÷ 7.
+    // Σ poids × note × (1 + bonus) ÷ 7 : chaque torrent selon sa note.
     final seeding = [for (final h in p.seeding) h.estimate];
-    expect(
-        p.perDay,
-        closeTo(
-            seeding.fold(0.0, (n, e) => n + e.weight) *
-                seeding.fold(0.0, (n, e) => n + e.note) /
-                3 *
-                1.25 /
-                7,
-            1e-9));
-    final stopped = p.holdings.firstWhere((h) => h.id == 4);
-    expect(stopped.contribution, greaterThan(0), reason: 'ce qu’il rapporterait relancé');
-    expect(p.holdings.where((h) => h.seeding).fold(0.0, (n, h) => n + h.perDay),
-        isNot(closeTo(p.perDay, 1e-6)),
-        reason: 'chaque torrent pèse aussi sur la note moyenne');
+    final weight = seeding.fold(0.0, (n, e) => n + e.weight);
+    expect(p.perDay, closeTo(seeding.fold(0.0, (n, e) => n + e.weight * e.note) * 1.25 / 7, 1e-9));
+    // L'indicateur de contribution : la moyenne des notes pondérée par le
+    // poids, comme le site (« un gros torrent y compte plus »).
+    expect(p.averageNote, closeTo(seeding.fold(0.0, (n, e) => n + e.weight * e.note) / weight, 1e-9));
+    expect(p.perDay, closeTo(weight * p.averageNote * 1.25 / 7, 1e-9), reason: 'Σ S × I × (1 + B) ÷ 7');
     expect(ZenPortfolio.fromTorrents([t(1)]).bonus, 0, reason: 'grille : moins de 5');
   });
 
@@ -162,18 +154,12 @@ void main() {
           for (final i in rankAndSelect(items, ranking: ranking, limits: limits, ratioBudget: budget))
             if (i.selected) i.key,
         ];
-    expect(pick(const ZenLimits(count: null, useRatio: false)), ['gros', 'moyen'],
-        reason: 'le petit (note 1,20) ferait baisser la moyenne (1,50) plus qu’il ne rapporte');
+    expect(pick(const ZenLimits(count: null, useRatio: false)), ['gros', 'moyen', 'petit']);
     expect(pick(const ZenLimits(count: 1, useRatio: false)), ['gros']);
     expect(pick(const ZenLimits(count: null, diskGb: 20, useRatio: false)), ['moyen', 'petit']);
     expect(pick(const ZenLimits(count: null), budget: 1 * _go), ['moyen', 'petit'],
         reason: 'le freeleech ne coûte rien au ratio');
     expect(pick(const ZenLimits(count: null, useRatio: false, freeleechOnly: true)), ['moyen']);
-    // Un portefeuille de 100 torrents à 1,50 de moyenne.
-    const big = ZenBase(count: 100, weight: 100, note: 1.5);
-    final withBase = rankAndSelect(items,
-        ranking: ZenRanking.perGb, limits: const ZenLimits(count: null, useRatio: false), base: big);
-    expect([for (final i in withBase) if (i.selected) i.key], unorderedEquals(['gros', 'moyen']));
     expect(
         rankAndSelect(items, ranking: ZenRanking.perGb, limits: const ZenLimits(useRatio: false))
             .first
@@ -186,21 +172,6 @@ void main() {
       for (final i in rankAndSelect(items, ranking: ZenRanking.note, limits: const ZenLimits(useRatio: false)))
         (i.key, i.estimate.note)
     ], [('gros', 1.5), ('moyen', 1.5), ('petit', 1.2)]);
-  });
-
-  test('note moyenne : un ajout la fait monter ou baisser pour tous', () {
-    const base = ZenBase(count: 100, weight: 100, note: 1.5);
-    final low = estimateZen(bytes: 500 * _mo, seeders: 3, joining: true); // 1,20
-    final even = estimateZen(bytes: 40 * _go, seeders: 3, joining: true); // 1,50
-    final high = estimateZen(bytes: 40 * _go, seeders: 3, seedDays: 200, joining: true); // 2,00
-    expect(low.perDay, greaterThan(0));
-    expect(base.gain(low, 0.25), lessThan(0), reason: 'il dilue la note des 100 autres');
-    expect(base.gain(even, 0.25), closeTo(even.perDay, 1e-9), reason: 'à la moyenne : son poids seul');
-    expect(base.gain(high, 0.25), greaterThan(base.gain(even, 0.25) * 1.25),
-        reason: 'il fait monter la note des 100 autres');
-    expect(base.add(low).contribution(low, 0.25), closeTo(base.gain(low, 0.25), 1e-9));
-    expect(ZenBase.empty.gain(low, 0.25), closeTo(low.perDay, 1e-9));
-    expect(ZenBase.of([even, low]).note, closeTo(1.35, 1e-9));
   });
 
   test('notes du site : forecast-torrents', () {
@@ -301,7 +272,7 @@ void main() {
       expect(c411.asked.length, lessThan(20), reason: 'dichotomie, pas toutes les pages');
       expect(state.selected, hasLength(3));
       // Classement par Zen/j décroissant.
-      final perDay = [for (final i in state.items) i.gain];
+      final perDay = [for (final i in state.items) i.estimate.perDay];
       expect(perDay, [...perDay]..sort((a, b) => b.compareTo(a)));
 
       expect(await notifier.send(), 3);
