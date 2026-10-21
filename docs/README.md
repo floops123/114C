@@ -12,6 +12,7 @@ et faire évoluer le code.
 | [Configuration](guide/configuration.md) | brancher Transmission, les trackers, TMDB, le FTP, Jellyfin |
 | [Films & séries](guide/films-et-series.md) | les tops TMDB et ta liste : lire ce que tu as, télécharger ce qui manque |
 | [Trackers](guide/trackers.md) | les sorties de tous les trackers, regroupées par titre |
+| [Import en masse](guide/import-en-masse.md) | filtrer, cocher, envoyer d'un coup |
 | [Sur le disque et lecture](guide/sur-le-disque.md) | ta vidéothèque, le lecteur intégré |
 | [Transferts](guide/transferts.md) | piloter Transmission |
 | [Cross-seed et sans seeder](guide/cross-seed.md) | partager sur plusieurs trackers, relancer les torrents morts |

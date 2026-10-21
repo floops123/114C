@@ -52,6 +52,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `build_defaults_test.dart` | `BuildDefaults` : `hasAny`, `allVariables`, round-trip JSON |
 | `build_personal_test.dart` | outil `tool/build_personal.dart` : JSON → `--dart-define` (champs scalaires, `mediaFolders` CSV, `apiKeys` par tracker, valeurs vides ignorées, erreurs de lecture) |
 | `draupnirr_test.dart` | parsing défensif de `DraupnirrAccount` / `Mission` / `Badge` (alias multiples, champs manquants, progress décimal ou pourcentage) |
+| `bulk_import_test.dart` | `BulkCriteria.accepts` : min/max taille/seeders/leechers, catégorie insensible à la casse, combinaison des bornes ; `parseBytes` Go/Mo/To |
 | `wishlist_test.dart` | TMDB, liste, Découvrir, fiche, recherche par tracker, tris et intertitres |
 | `media_name_test.dart` | film ou épisode d'après le chemin, extraits et bonus ignorés |
 | `ftp_test.dart` | client FTP **et FTPS** : liste, taille, lecture à une position, repli sur `LIST`, identifiants refusés |

@@ -9,6 +9,7 @@ import '../core/format.dart';
 import '../core/preferences.dart';
 import '../state/catalog.dart';
 import '../state/wishlist.dart';
+import 'bulk_import_page.dart';
 import 'content_art.dart';
 import 'disk_page.dart';
 import 'on_disk.dart';
@@ -178,6 +179,14 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
               icon: Icon(grid ? Icons.view_list_rounded : Icons.grid_view_rounded),
               onPressed: () =>
                   ref.read(uiPrefsProvider.notifier).setReleasesGrid(!grid),
+            ),
+            IconButton(
+              tooltip: 'Import en masse',
+              icon: const Icon(Icons.playlist_add_rounded),
+              onPressed: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const BulkImportPage()));
+              },
             ),
             IconButton(
               tooltip: 'Actualiser',

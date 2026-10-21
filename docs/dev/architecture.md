@@ -67,7 +67,8 @@ lib/
 │   ├── media_library.dart     notre base (parcours FTP, TMDB, stockage, ajout à la fin d'un téléchargement)
 │   ├── playback.dart          positions de reprise
 │   ├── notifications.dart     WebSocket, notifications, compteurs
-│   └── draupnirr.dart          compte Draupnirr, missions, badges
+│   ├── draupnirr.dart          compte Draupnirr, missions, badges
+│   └── bulk_import.dart        import en masse : critères, page par tracker, envoi
 └── ui/
     ├── home_shell.dart        navigation : barre en bas, rail latéral ≥ 720 px
     ├── wishlist_page.dart     Films & séries : Découvrir, Ma liste, fiche, recherche par tracker
@@ -82,6 +83,7 @@ lib/
     ├── cross_seed_page.dart, revive_page.dart
     ├── notifications_page.dart, chat_page.dart, rich_text.dart
     ├── draupnirr_page.dart       onglet compte Draupnirr (compte + missions)
+    ├── bulk_import_page.dart    import en masse : filtres, sélection, envoi
     ├── settings_page.dart, server_settings_page.dart, bandwidth_groups_page.dart
     ├── theme.dart             palette AppColors, thèmes clair et sombre
     ├── widgets.dart           composants partagés
@@ -127,6 +129,12 @@ Bouton ⬇ ─► TrackerApi.downloadTorrent(release) ─► .torrent (avec la p
 
 Le `.torrent` est envoyé en `metainfo` (base64) plutôt qu'en magnet : sur un
 tracker privé, c'est lui qui porte la passkey.
+
+L'import en masse (`lib/ui/bulk_import_page.dart`) suit le même chemin,
+sortie par sortie, après filtrage côté client. Les bornes (taille, seeders,
+leechers, catégorie) ne sont pas transmises aux trackers — aucun indexer ne
+les supporte de manière homogène — mais elles rognent les résultats avant
+l'envoi. Voir [Import en masse](../guide/import-en-masse.md).
 
 ## Flux : notre base
 

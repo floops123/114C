@@ -54,3 +54,32 @@ DateTime fromEpoch(int seconds) =>
 /// Note TMDB sur 10, à la française : 7.83 → « 7,8 ».
 String formatRating(double rating) =>
     rating.toStringAsFixed(1).replaceAll('.', ',');
+
+const _suffixes = {
+  'o': 1,
+  'ko': 1 << 10,
+  'k': 1 << 10,
+  'mo': 1 << 20,
+  'm': 1 << 20,
+  'go': 1 << 30,
+  'g': 1 << 30,
+  'to': 1 << 40,
+  't': 1 << 40,
+  'po': 1 << 50,
+  'p': 1 << 50,
+};
+
+/// Taille saisie par l'utilisateur : « 1,5 Go », « 700M », « 2 go » → 1610612736.
+/// Accepte la virgule et les suffixes d'unité ; sans suffixe, l'unité est
+/// l'octet. Renvoie null si le texte n'est pas une taille.
+int? parseBytes(String input) {
+  final text = input.trim().toLowerCase().replaceAll(' ', '');
+  final m = RegExp(r'^([\d.,]+)\s*([a-z]*)$').firstMatch(text);
+  if (m == null) return null;
+  final number = double.tryParse(m.group(1)!.replaceAll(',', '.'));
+  if (number == null) return null;
+  final suffix = m.group(2)!;
+  final unit = suffix.isEmpty ? 1 : _suffixes[suffix];
+  if (unit == null) return null;
+  return (number * unit).round();
+}

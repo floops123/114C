@@ -81,6 +81,8 @@ pause.
   rangée, **Sur le disque** ou **À télécharger** (un second appui désactive
   le filtre). Avec *Sur le disque*, l'état de ta base s'affiche avec son bouton
   **Actualiser**.
+- **Import en masse** (bouton **+** en haut à droite) : voir
+  [Import en masse](import-en-masse.md).
 - **Défilement infini** : la page suivante de chaque tracker se charge toute
   seule ; tirer vers le bas actualise.
 

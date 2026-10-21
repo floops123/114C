@@ -9,6 +9,18 @@ void main() {
     expect(formatBytes(1495768319), '1,39 Go');
   });
 
+  test('parseBytes', () {
+    expect(parseBytes('512'), 512);
+    expect(parseBytes('1,5 Go'), 1610612736);
+    expect(parseBytes('2go'), 2 * 1024 * 1024 * 1024);
+    expect(parseBytes('700M'), 700 * 1024 * 1024);
+    expect(parseBytes('1 to'), 1024 * 1024 * 1024 * 1024);
+    expect(parseBytes('0'), 0);
+    expect(parseBytes('  '), isNull);
+    expect(parseBytes('abc'), isNull);
+    expect(parseBytes('1.5 Go'), 1610612736);
+  });
+
   test('formatRatio gère les valeurs spéciales de Transmission', () {
     expect(formatRatio(-1), '—');
     expect(formatRatio(-2), '∞');
