@@ -189,6 +189,7 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                   allLabel: 'Tous les trackers',
                   items: ref.watch(trackersProvider).keys.toList(),
                   selected: state.criteria.trackers,
+                  labelOf: (t) => t.label,
                   onChanged: (next) => notifier.update(
                       state.criteria.copyWith(trackers: next)),
                 ),
@@ -324,8 +325,12 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
               : state.items.isEmpty && state.loading
                   ? const Center(child: CircularProgressIndicator())
                   : state.items.isEmpty
-                      ? const EmptyState(Icons.search_off_rounded,
-                          'Aucune sortie ne passe les filtres.')
+                      ? EmptyState(
+                          Icons.search_off_rounded,
+                          state.criteria.hasFilters
+                              ? 'Aucune sortie ne passe les filtres.'
+                              : 'Aucune sortie pour cette recherche.',
+                        )
                       : NotificationListener<ScrollNotification>(
                           onNotification: (n) {
                             if (n.metrics.extentAfter < 400 && state.loading) {
@@ -388,19 +393,22 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
 
 /// Rangée de chips multi-sélection pour une énumération (ici `Tracker`).
 /// `selected` vide = pas de filtre, l'utilisateur voit alors la chip « Tous »
-/// marquée.
+/// marquée seule ; les chips individuels ne sont cochés que lorsqu'ils
+/// sont dans `selected` (le clic démarre par là pour clarifier l'état).
 class _FilterChips<T> extends StatelessWidget {
   const _FilterChips({
     required this.label,
     required this.allLabel,
     required this.items,
     required this.selected,
+    required this.labelOf,
     required this.onChanged,
   });
   final String label;
   final String allLabel;
   final List<T> items;
   final Set<T> selected;
+  final String Function(T) labelOf;
   final void Function(Set<T> next) onChanged;
 
   @override
@@ -412,14 +420,14 @@ class _FilterChips<T> extends StatelessWidget {
               color: c.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
       const SizedBox(height: 4),
       Wrap(spacing: 6, runSpacing: 6, children: [
-        _allChip<T>(context, items, selected, onChanged, allLabel),
-        for (final t in items) _itemChip<T>(context, t, selected, onChanged),
+        _allChip<T>(context, selected, onChanged, allLabel),
+        for (final t in items) _itemChip<T>(context, t, selected, onChanged, labelOf(t)),
       ]),
     ]);
   }
 }
 
-Widget _allChip<T>(BuildContext context, List<T> items, Set<T> selected,
+Widget _allChip<T>(BuildContext context, Set<T> selected,
     void Function(Set<T>) onChanged, String label) {
   final c = context.colors;
   final isOn = selected.isEmpty;
@@ -433,23 +441,25 @@ Widget _allChip<T>(BuildContext context, List<T> items, Set<T> selected,
 }
 
 Widget _itemChip<T>(
-    BuildContext context, T item, Set<T> selected, void Function(Set<T>) onChanged) {
-  final isOn = selected.isEmpty || selected.contains(item);
-  // Clic sur un chip coché → on l'enlève. Sur un chip non coché → on le
-  // garde seul (ou on l'ajoute à l'ensemble courant). Logique : on ne garde
-  // que les chips explicitement cochés, vidés = « tout » via la chip « Tous ».
+    BuildContext context, T item, Set<T> selected, void Function(Set<T>) onChanged,
+    String label) {
+  // Chaque chip ne s'allume que s'il est dans l'ensemble : ainsi, à
+  // l'ouverture, seule « Tous » est marquée, et l'utilisateur voit
+  // immédiatement ce qui change quand il clique.
+  final isOn = selected.contains(item);
   return ChoiceChip(
-    label: Text(item.toString().split('.').last),
+    label: Text(label),
     selected: isOn,
     onSelected: (_) {
-      if (selected.isEmpty) {
-        // Tout est coché, on coche seulement cet item.
-        onChanged({item});
-      } else if (selected.contains(item)) {
-        // On enlève cet item.
+      if (selected.contains(item)) {
+        // On enlève cet item ; si on enlève le dernier, on retombe sur
+        // « tout » (ensemble vide).
         onChanged({...selected}..remove(item));
       } else {
-        // On l'ajoute.
+        // Sinon on l'ajoute à l'ensemble courant. Partir d'un ensemble
+        // vide sur ce premier clic aurait l'effet inverse (limiterait la
+        // recherche à ce seul item) — mieux vaut commencer vide, ajouter
+        // à vide, garder vide.
         onChanged({...selected, item});
       }
     },
@@ -493,15 +503,9 @@ class _CategoryChips extends StatelessWidget {
         )
       else
         Wrap(spacing: 6, runSpacing: 6, children: [
-          _allChip<String>(
-            context,
-            available,
-            selected,
-            onChanged,
-            'Toutes',
-          ),
+          _allChip<String>(context, selected, onChanged, 'Toutes'),
           for (final cat in available)
-            _itemChip<String>(context, cat, selected, onChanged),
+            _itemChip<String>(context, cat, selected, onChanged, cat),
         ]),
     ]);
   }
