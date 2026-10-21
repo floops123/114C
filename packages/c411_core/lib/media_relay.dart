@@ -54,6 +54,9 @@ class MediaRelay {
     'mkv': 'video/x-matroska', 'mp4': 'video/mp4', 'm4v': 'video/mp4',
     'avi': 'video/x-msvideo', 'webm': 'video/webm', 'mov': 'video/quicktime',
     'ts': 'video/mp2t', 'm2ts': 'video/mp2t', 'wmv': 'video/x-ms-wmv',
+    'mp3': 'audio/mpeg', 'flac': 'audio/flac', 'm4a': 'audio/mp4',
+    'aac': 'audio/aac', 'ogg': 'audio/ogg', 'oga': 'audio/ogg',
+    'opus': 'audio/ogg', 'wav': 'audio/wav', 'mka': 'audio/x-matroska',
   };
 
   Future<void> _serve(HttpRequest request) async {

@@ -66,6 +66,17 @@ et convertit à la volée avec ffmpeg ce que le navigateur ne sait pas lire.
 cd web_player && dart pub get && dart run bin/web_player.dart ../personal.json
 ```
 
+## C411 Music : la musique dans le navigateur
+
+Le dossier [`web_music/`](web_music/README.md) fait de même pour la musique.
+Il parcourt les torrents terminés et les dossiers du FTP, identifie chaque
+album sur [MusicBrainz](https://musicbrainz.org/) (pochettes de la Cover Art
+Archive) et le propose dans un lecteur avec file d'attente.
+
+```sh
+cd web_music && dart pub get && dart run bin/web_music.dart ../personal.json
+```
+
 ## Documentation
 
 La documentation complète est dans [`docs/`](docs/README.md).
@@ -110,10 +121,12 @@ le service auquel ils appartiennent.
 
 ## Licences
 
-Code de l'application (et de `packages/c411_core`, `web_player`) : licence
+Code de l'application (et de `packages/c411_core`, `web_player`, `web_music`) : licence
 [WTFPL](LICENSE) — fais-en ce que tu veux. Police
 [Inter](https://rsms.me/inter/) et polices code et rétro sous licence OFL
 (`assets/fonts/`, `assets/fonts/licenses/`). Copie corrigée de `media_kit_video` sous
 licence MIT ([`third_party/media_kit_video`](third_party/media_kit_video/C411-PATCH.md)).
 Données de films et séries fournies par [TMDB](https://www.themoviedb.org/)
-(l'application n'est ni approuvée ni certifiée par TMDB).
+(l'application n'est ni approuvée ni certifiée par TMDB). Données musicales
+de [MusicBrainz](https://musicbrainz.org/) (CC0 et CC BY-NC-SA) et pochettes
+de la [Cover Art Archive](https://coverartarchive.org/).

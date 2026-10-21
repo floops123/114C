@@ -1,5 +1,5 @@
 name: c411_core
-description: "Code Dart pur partagé par C411 Remote et web_player : client FTP, relais HTTP, lecture des noms de release."
+description: "Code Dart pur partagé par C411 Remote, web_player et web_music : client FTP, relais HTTP, lecture des noms de release et de musique."
 publish_to: 'none'
 version: 1.0.0
 

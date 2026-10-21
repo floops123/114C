@@ -31,6 +31,7 @@ et faire évoluer le code.
 | [Compilation personnalisée](dev/build.md) | variante avec réglages préenregistrés via `--dart-define` |
 | [Tests](dev/tests.md) | lancer les tests, ce que couvre chaque fichier |
 | [C411 TV (web)](../web_player/README.md) | diffuser la vidéothèque dans un navigateur |
+| [C411 Music (web)](../web_music/README.md) | diffuser la musique dans un navigateur, fiches MusicBrainz |
 
 ## En un coup d'œil
 
