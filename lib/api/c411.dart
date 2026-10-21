@@ -161,6 +161,23 @@ class C411SiteApi {
     );
   }
 
+  /// La journée en cours torrent par torrent, notée par le site (page
+  /// [page]), par Zen décroissants.
+  Future<ZenTorrentScores> forecastTorrents({int page = 1, int perPage = 100}) async =>
+      ZenTorrentScores.parse(await _json('/api/tokens/forecast-torrents',
+          {'page': page, 'perPage': perPage, 'order': 'desc'}));
+
+  /// Toutes les pages de [forecastTorrents], [maxPages] au plus.
+  Future<List<ZenTorrentScore>> allTorrentScores({int maxPages = 40}) async {
+    final all = <ZenTorrentScore>[];
+    for (var page = 1; page <= maxPages; page++) {
+      final r = await forecastTorrents(page: page);
+      all.addAll(r.items);
+      if (r.items.isEmpty || all.length >= r.total) break;
+    }
+    return all;
+  }
+
   void close() => _dio.close();
 }
 

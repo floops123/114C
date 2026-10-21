@@ -99,6 +99,8 @@ Repris du bundle JavaScript du site (`lib/core/release_quality.dart`,
 | `GET /api/tokens/balance` | solde de Zen, total gagné, total dépensé, dernier versement |
 | `GET /api/tokens/daily-stats?days=30` | un calcul par jour versé (`entries`), plafond du bonus |
 | `GET /api/tokens/forecast` | la journée en cours (`rq` acquis jusqu'ici, `projected.rq` estimé ce soir) |
+| `GET /api/tokens/forecast-torrents?page=1&perPage=100&order=desc` | la journée en cours torrent par torrent : `torrent` (`id`, `name`, `infoHash`, `categoryId`), `zen` acquis et `projectedZen`, `weightBp` (P, part de la journée), `sizeWeightBp` (S), `score` (`categorySlug`, tranches `durationBand` / `sizeBand` / `seedersBand`, `baseBp` 100 et `criteriaBp` [durée, taille × seeders] en centièmes de note) ; en tête `forecastRq`, `projectedRq`, `countedTorrents`, et `releases.total` |
+| `GET /api/tokens/class-pay` | les règles de chaque classe : diviseur (7), catégories (`seed` 1 partout), critères et leurs tranches, grille de bonus (`curve`, plafonnée par `capBp` : 25 % pour le Swarm Keeper, même si l'étape de 15 torrents affiche 30 %), arbre. Lu à la main : les règles sont recopiées dans `lib/core/zen.dart` |
 | `GET /api/profile/revivals?status=all&perPage=100` | réanimations : torrent (nom, `infoHash`, taille), `bountyZen` + `keeperBonusZen`, `status` (`paid`…), `seedProgressSecs` / `requiredSeedSecs` (72 h), `qualifyDeadline`, `qualifiedAt`, `paidAt` |
 | `GET /api/ic/leaderboard/all_time?limit=10` | haut du classement (rang, pseudo, avatar, `className`, `gradeLabel`, XP, niveau) et `self` (rang, total, XP, XP par jour en moyenne) |
 

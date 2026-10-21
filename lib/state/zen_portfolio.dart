@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/c411_profile.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/zen.dart';
 import 'c411_overview.dart';
+import 'palliative.dart';
 
 /// Un torrent C411 de Transmission et ce qu'il rapporte.
 class ZenHolding {
@@ -15,6 +17,7 @@ class ZenHolding {
     required this.estimate,
     this.seedersKnown = true,
     this.contribution = 0,
+    this.site,
   });
 
   final int id;
@@ -27,6 +30,12 @@ class ZenHolding {
 
   /// Le tracker a donné un nombre de seeders (sinon : 1, soi).
   final bool seedersKnown;
+
+  /// Sa note et ses Zen du jour selon le site, s'il les donne : la note de
+  /// [estimate] est alors celle du site.
+  final ZenTorrentScore? site;
+
+  bool get crowded => site?.crowded ?? estimate.crowded;
 
   /// Ce que le portefeuille perdrait sans lui, en Zen par jour : son poids,
   /// mais aussi l'effet de sa note sur la moyenne. Négatif : il fait baisser
@@ -45,6 +54,7 @@ class ZenHolding {
         estimate: estimate,
         seedersKnown: seedersKnown,
         contribution: contribution,
+        site: site,
       );
 }
 
@@ -86,7 +96,10 @@ class ZenPortfolio {
   double get treeBonusNow => treeBonus([for (final h in seeding) h.estimate.note]);
 
   /// Torrents en partage dont la note est réduite à la base.
-  List<ZenHolding> get crowded => [for (final h in seeding) if (h.estimate.crowded) h];
+  List<ZenHolding> get crowded => [for (final h in seeding) if (h.crowded) h];
+
+  /// Torrents dont la note vient du site.
+  int get siteScored => holdings.where((h) => h.site != null).length;
 
   /// Paliers de durée atteints dans les [days] prochains jours.
   List<ZenHolding> upcoming({double days = 7}) => [
@@ -95,8 +108,12 @@ class ZenPortfolio {
       ]..sort((a, b) => a.estimate.nextStep!.inDays.compareTo(b.estimate.nextStep!.inDays));
 
   /// Depuis la réponse `torrent-get` (champs de [ZenPortfolio.fields]) : les
-  /// torrents C411 terminés.
-  static ZenPortfolio fromTorrents(List<Map<String, dynamic>> torrents, {double? bonus}) {
+  /// torrents C411 terminés. [scores] : les notes du site, par info-hash.
+  static ZenPortfolio fromTorrents(
+    List<Map<String, dynamic>> torrents, {
+    double? bonus,
+    Map<String, ZenTorrentScore> scores = const {},
+  }) {
     final mine = <(Map<String, dynamic>, int?)>[];
     for (final t in torrents) {
       final stats = [
@@ -119,9 +136,11 @@ class ZenPortfolio {
     final applied = bonus ?? gridBonus(seedingCount);
     final raw = [
       for (final (t, seeders) in mine)
+        if ((t['hashString'] as String? ?? '').toLowerCase() case final hash)
         ZenHolding(
           id: (t['id'] as num?)?.toInt() ?? 0,
-          hash: (t['hashString'] as String? ?? '').toLowerCase(),
+          hash: hash,
+          site: scores[hash],
           name: t['name'] as String? ?? '',
           // 6 : en partage. En file d'attente (5) ou arrêté, il ne
           // partage pas : il ne rapporte rien.
@@ -132,6 +151,7 @@ class ZenPortfolio {
             seeders: seeders ?? 1,
             seedDays: ((t['secondsSeeding'] as num?)?.toDouble() ?? 0) / 86400,
             bonus: applied,
+            note: scores[hash]?.note,
           ),
         ),
     ];
@@ -152,14 +172,28 @@ class ZenPortfolio {
 }
 
 /// Le portefeuille, lu sur Transmission à la demande (champs lourds :
-/// trackerStats). null : Transmission non configurée.
+/// trackerStats), avec les notes du site si le cookie de session est
+/// configuré. null : Transmission non configurée.
 final zenPortfolioProvider = FutureProvider.autoDispose<ZenPortfolio?>((ref) async {
   final client = ref.watch(transmissionProvider);
   if (client == null) return null;
+  final site = ref.watch(c411SiteApiProvider);
   // Bonus du site s'il est connu (grille + arbre), sinon la grille seule.
   final overview = ref.read(c411OverviewProvider).value;
   final bonusBp = overview?.forecast?.today.bonusBp ?? overview?.history?.latest?.bonusBp;
-  final result = await client.torrentGet(ZenPortfolio.fields);
-  return ZenPortfolio.fromTorrents(result.torrents,
-      bonus: bonusBp == null ? null : bonusBp / 10000);
+  Future<List<ZenTorrentScore>> scores() async {
+    if (site == null) return const [];
+    try {
+      return await site.allTorrentScores();
+    } on Object {
+      return const []; // Sans les notes du site : l'estimation locale.
+    }
+  }
+
+  final (result, siteScores) = await (client.torrentGet(ZenPortfolio.fields), scores()).wait;
+  return ZenPortfolio.fromTorrents(
+    result.torrents,
+    bonus: bonusBp == null ? null : bonusBp / 10000,
+    scores: {for (final s in siteScores) ?s.infoHash: s},
+  );
 });

@@ -137,15 +137,17 @@ class ZenEstimate {
 
 /// Estimation pour un torrent. [joining] : on n'en est pas encore seedeur,
 /// on devient l'un des seeders (10 seeders + soi = 11 : autre colonne).
+/// [note] : celle du site, si on la connaît.
 ZenEstimate estimateZen({
   required int bytes,
   required int seeders,
   double seedDays = 0,
   double bonus = 0.25,
   bool joining = false,
+  double? note,
 }) {
   final count = joining ? seeders + 1 : math.max(seeders, 1);
-  final note = noteOf(bytes: bytes, seeders: count, seedDays: seedDays);
+  note ??= noteOf(bytes: bytes, seeders: count, seedDays: seedDays);
   final weight = weightOf(bytes);
   return ZenEstimate(
     bytes: bytes,

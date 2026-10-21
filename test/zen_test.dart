@@ -203,6 +203,58 @@ void main() {
     expect(ZenBase.of([even, low]).note, closeTo(1.35, 1e-9));
   });
 
+  test('notes du site : forecast-torrents', () {
+    final page = ZenTorrentScores.parse({
+      'forecastRq': 25,
+      'projectedRq': 34,
+      'countedTorrents': 1535,
+      'releases': {
+        'total': 1535,
+        'items': [
+          {
+            'torrent': {'id': 41243, 'name': 'Black.Lightning', 'infoHash': '99D924F6', 'categoryId': 1},
+            'zen': 0.23424976677499976,
+            'projectedZen': 0.3127136728135664,
+            'weightBp': 7938,
+            'sizeWeightBp': 13268,
+            'score': {
+              'categorySlug': 'films-videos',
+              'durationBand': 0,
+              'sizeBand': 3,
+              'seedersBand': 1,
+              'baseBp': 100,
+              'criteriaBp': [0, 35],
+            },
+          },
+        ],
+      },
+    });
+    expect((page.forecast, page.projected, page.counted, page.total), (25, 34, 1535, 1535));
+    final s = page.items.single;
+    expect(s.infoHash, '99d924f6');
+    expect(s.note, 1.35);
+    expect(s.share, closeTo(0.7938, 1e-9));
+    expect(s.weight, closeTo(1.3268, 1e-9));
+    expect(s.crowded, isFalse);
+    // Le site paie chaque torrent à sa note : P × S × note, au même facteur.
+    final p = ZenPortfolio.fromTorrents([
+      {
+        'id': 1,
+        'name': 'Black.Lightning',
+        'hashString': '99D924F6',
+        'status': 6,
+        'percentDone': 1,
+        'sizeWhenDone': 12 * _go,
+        'secondsSeeding': 400 * 86400, // Transmission dirait 2,00
+        'trackerStats': [
+          {'announce': 'https://c411.org/announce/x', 'seederCount': 3},
+        ],
+      },
+    ], bonus: 0.25, scores: {'99d924f6': s});
+    expect(p.holdings.single.estimate.note, 1.35, reason: 'la note du site prime');
+    expect(p.siteScored, 1);
+  });
+
   test('Zen des niveaux d’XP : l’échelle du site', () {
     expect(zenForLevel(1), 1);
     expect(zenForLevel(7), 2);

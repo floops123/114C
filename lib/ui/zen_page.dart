@@ -179,7 +179,8 @@ class _PortfolioTabState extends ConsumerState<_PortfolioTab> {
                 ]),
                 const SizedBox(height: 10),
                 Text(
-                  'Calcul local (taille, seeders et durée de seed de Transmission) : '
+                  '${p.siteScored == 0 ? 'Notes calculées' : 'Notes du site pour ${p.siteScored} torrent${p.siteScored > 1 ? 's' : ''} sur ${p.holdings.length}, les autres calculées'} '
+                  '(taille, seeders et durée de seed de Transmission) ; '
                   'somme des poids × note moyenne × (1 + bonus) ÷ 7. '
                   'L’écart avec le site vient surtout de la part de la journée partagée '
                   'et des seeders, comptés différemment.',
@@ -340,19 +341,22 @@ class _HoldingRow extends StatelessWidget {
                 _gb(e.bytes),
                 '${holding.seedersKnown ? e.seeders : '?'} seeder${e.seeders > 1 ? 's' : ''}',
                 'seedé ${_days(e.seedDays)}',
-                'note ${frNumber(e.note, 2)}',
+                'note ${frNumber(e.note, 2)}${holding.site == null ? '' : ' (site)'}',
                 'poids ${frNumber(e.weight, 2)}',
+                if (holding.site case final site?)
+                  'site : ${frNumber(site.projectedZen, 3)} Zen ce soir, '
+                      'seedé ${frNumber(site.share * 100)} % de la journée',
               ].join(' · '),
               style: small,
             ),
-            if (step != null || e.crowded || !holding.seeding || holding.contribution < 0)
+            if (step != null || holding.crowded || !holding.seeding || holding.contribution < 0)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Wrap(spacing: 6, runSpacing: 4, children: [
                   if (!holding.seeding) Tag('À L’ARRÊT', color: c.danger),
                   if (holding.seeding && holding.contribution < 0)
                     Tag('BAISSE LA NOTE MOYENNE', color: c.warning),
-                  if (e.crowded) Tag('TROP SEEDÉ', color: c.warning),
+                  if (holding.crowded) Tag('TROP SEEDÉ', color: c.warning),
                   if (step != null)
                     Tag('+${frNumber(step.gain, 2)} DANS ${step.inDays.ceil()} J', color: c.success),
                 ]),

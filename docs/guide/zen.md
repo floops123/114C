@@ -59,9 +59,11 @@ tête : le total estimé pour une journée complète, à comparer au versement d
 note et le coefficient moyens (et ceux du site), le bonus, l'avancement de
 l'arbre de progression, et les paliers de la semaine.
 
-C'est un calcul local : l'écart avec le site vient surtout de la part de la
-journée réellement partagée et du nombre de seeders, que le site et le
-tracker ne comptent pas forcément au même moment.
+Avec le cookie de session, la **note de chaque torrent vient du site**
+(« note … (site) »), avec les Zen qu'il lui projette ce soir et la part de
+la journée où il a été partagé ; sinon elle est calculée depuis
+Transmission. Le reste est un calcul local : l'écart avec le site vient
+surtout de la part de la journée réellement partagée.
 
 ## Opportunités
 

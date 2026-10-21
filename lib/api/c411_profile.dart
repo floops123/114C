@@ -278,6 +278,115 @@ class ZenForecast {
   }
 }
 
+/// Un torrent de la journée en cours, noté par le site
+/// (`/api/tokens/forecast-torrents`).
+class ZenTorrentScore {
+  const ZenTorrentScore({
+    required this.id,
+    required this.name,
+    this.infoHash,
+    this.category,
+    this.zen = 0,
+    this.projectedZen = 0,
+    this.shareBp = 0,
+    this.sizeWeightBp = 0,
+    this.durationBand = 0,
+    this.sizeBand = 0,
+    this.seedersBand = 0,
+    this.base = 100,
+    this.criteria = const [],
+  });
+
+  final int id;
+  final String name;
+  final String? infoHash;
+
+  /// `films-videos`, `jeux-video`…
+  final String? category;
+
+  /// Zen acquis jusqu'ici, et projetés à minuit.
+  final double zen;
+  final double projectedZen;
+
+  /// P : part de la journée partagée (`weightBp`), en points de base.
+  final int shareBp;
+
+  /// S : coefficient de poids, en points de base.
+  final int sizeWeightBp;
+
+  /// Tranches de durée de seed, de taille et de seeders (de 0).
+  final int durationBand;
+  final int sizeBand;
+  final int seedersBand;
+
+  /// Note de la catégorie et des critères (durée, taille × seeders), en
+  /// centièmes : 100 + [0, 35] → 1,35.
+  final int base;
+  final List<int> criteria;
+
+  double get note => (base + criteria.fold(0, (n, c) => n + c)) / 100;
+  double get share => shareBp / 10000;
+  double get weight => sizeWeightBp / 10000;
+
+  /// Le critère taille × seeders ne donne rien : trop de seeders.
+  bool get crowded => criteria.length > 1 && criteria[1] == 0;
+
+  static ZenTorrentScore parse(Map<String, dynamic> j) {
+    final t = (j['torrent'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final s = (j['score'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return ZenTorrentScore(
+      id: _int(t['id']),
+      name: t['name'] as String? ?? '',
+      infoHash: (t['infoHash'] as String?)?.toLowerCase(),
+      category: s['categorySlug'] as String?,
+      zen: _num(j['zen']),
+      projectedZen: _num(j['projectedZen']),
+      shareBp: _int(j['weightBp']),
+      sizeWeightBp: _int(j['sizeWeightBp']),
+      durationBand: _int(s['durationBand']),
+      sizeBand: _int(s['sizeBand']),
+      seedersBand: _int(s['seedersBand']),
+      base: s['baseBp'] == null ? 100 : _int(s['baseBp']),
+      criteria: [for (final c in (s['criteriaBp'] as List? ?? const [])) _int(c)],
+    );
+  }
+}
+
+/// Une page de `/api/tokens/forecast-torrents`.
+class ZenTorrentScores {
+  const ZenTorrentScores({
+    required this.items,
+    this.total = 0,
+    this.counted = 0,
+    this.forecast,
+    this.projected,
+  });
+
+  final List<ZenTorrentScore> items;
+
+  /// Torrents de la liste, et torrents comptés pour le versement.
+  final int total;
+  final int counted;
+
+  /// Zen acquis jusqu'ici, et projetés à minuit.
+  final int? forecast;
+  final int? projected;
+
+  static ZenTorrentScores parse(Map<String, dynamic> j) {
+    final r = (j['releases'] as Map?)?.cast<String, dynamic>() ?? const {};
+    return ZenTorrentScores(
+      items: [
+        for (final i in (r['items'] as List? ?? const []).whereType<Map>())
+          ZenTorrentScore.parse(i.cast<String, dynamic>()),
+      ],
+      total: _int(r['total']),
+      counted: _int(j['countedTorrents']),
+      forecast: (j['forecastRq'] as num?)?.toInt(),
+      projected: (j['projectedRq'] as num?)?.toInt(),
+    );
+  }
+}
+
 /// Une réanimation (`/api/profile/revivals`) : un torrent sans seeder
 /// relancé, payé en Zen une fois partagé assez longtemps.
 class C411Revival {
