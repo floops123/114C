@@ -56,6 +56,7 @@ class _Fake implements TrackerApi {
   final Tracker tracker;
   final List<Category> cats;
   String? failure;
+  final asked = <(int?, int?)>[];
 
   @override
   void close() {}
@@ -74,6 +75,7 @@ class _Fake implements TrackerApi {
       String query = '',
       ReleaseSort sort = ReleaseSort.date,
       bool ascending = false}) async {
+    asked.add((categoryId, subcategoryId));
     if (failure != null) throw TrackerException(failure!);
     return const ReleasePage([], 1, 1, 0);
   }
@@ -122,7 +124,7 @@ void main() {
     });
     tearDown(() => server.close(force: true));
 
-    test('un film filtré sur « Movies/HD » passe le filtre', () async {
+    test('un film rangé dans « Movies/HD » le sait', () async {
       final api = TorznabApi(Tracker.tr4ker, 'KEY',
           baseUrl: 'http://127.0.0.1:${server.port}/api');
       addTearDown(api.close);
@@ -133,11 +135,6 @@ void main() {
       expect(film.subcategory, '');
       expect(film.categories, unorderedEquals(['Movies/HD', 'Movies']));
       expect(page.items.last.categories, ['TV/HD']);
-
-      const hd = BulkCriteria(categories: {'Movies/HD'});
-      expect(hd.accepts(film), isTrue);
-      expect(hd.accepts(page.items.last), isFalse);
-      expect(const BulkCriteria(categories: {'movies'}).accepts(film), isTrue);
 
       // Le caps n'est demandé qu'une fois.
       await api.releases(page: 2);
@@ -169,63 +166,82 @@ void main() {
         as Map<String, dynamic>);
     final dune = page.items.firstWhere((r) => r.subcategory == 'Film');
     expect(dune.categories, ['Films & Vidéos', 'Film']);
-    expect(const BulkCriteria(categories: {'Film'}).accepts(dune), isTrue);
   });
 
   test('AstraTorrent : catégorie du site', () {
     final items = AstraApi.parseTorrents(
         File('test/fixtures/astra_torrents.json').readAsStringSync(), 'P');
     expect(items.first.categories, ['Films']);
-    expect(const BulkCriteria(categories: {'Films'}).accepts(items.first),
-        isTrue);
-  });
-
-  test('accepts : la sous-catégorie seule suffit toujours', () {
-    final r = Release(
-        tracker: Tracker.c411,
-        id: '1',
-        name: 'x',
-        subcategory: 'Série',
-        categories: const ['TV'],
-        createdAt: DateTime(2026));
-    expect(const BulkCriteria(categories: {'série'}).accepts(r), isTrue);
-    expect(const BulkCriteria(categories: {'tv'}).accepts(r), isTrue);
-    expect(const BulkCriteria(categories: {'Film'}).accepts(r), isFalse);
   });
 
   group('notifier', () {
-    test('catégories rechargées quand les trackers changent ; une catégorie '
-        'sans sous-catégorie est proposée telle quelle', () async {
+    const c411Cats = [
+      Category(1, 'Films & Vidéos', [Subcategory(6, 'Film'), Subcategory(7, 'Série')]),
+    ];
+    const astraCats = [Category(1, 'Films', []), Category(2, 'Séries', [])];
+
+    test('les catégories sont celles du tracker choisi ; en changer vide la '
+        'sélection', () async {
+      final container = ProviderContainer(overrides: [
+        trackersProvider.overrideWithValue({
+          Tracker.c411: _Fake(Tracker.c411, cats: c411Cats),
+          Tracker.astra: _Fake(Tracker.astra, cats: astraCats),
+        }),
+      ]);
+      addTearDown(container.dispose);
+      container.listen(bulkImportProvider, (_, _) {});
+      await _settle();
+      var state = container.read(bulkImportProvider);
+      expect(state.criteria.tracker, Tracker.c411, reason: 'le premier');
+      expect(state.categories, c411Cats);
+      expect(state.loadingCategories, isFalse);
+
+      final notifier = container.read(bulkImportProvider.notifier);
+      notifier.update(const BulkCriteria(
+          categories: {(category: 1, subcategory: 6)}));
+      expect(container.read(bulkImportProvider).criteria.tracker, Tracker.c411,
+          reason: 'update() sans tracker garde le tracker courant');
+
+      notifier.selectTracker(Tracker.astra);
+      await _settle();
+      state = container.read(bulkImportProvider);
+      expect(state.criteria.tracker, Tracker.astra);
+      expect(state.criteria.categories, isEmpty,
+          reason: 'les identifiants de C411 ne veulent rien dire chez Astra');
+      expect(state.categories, astraCats);
+    });
+
+    test('tracker retiré des Réglages : on passe à un autre', () async {
       final container = ProviderContainer(overrides: [
         trackersProvider.overrideWith((ref) => ref.watch(_trackers)),
       ]);
       addTearDown(container.dispose);
       container.listen(bulkImportProvider, (_, _) {});
       await _settle();
-      expect(container.read(bulkImportProvider).availableCategories, isEmpty);
+      expect(container.read(bulkImportProvider).criteria.tracker, isNull);
 
       container.read(_trackers.notifier).set({
-        Tracker.c411: _Fake(Tracker.c411, cats: const [
-          Category(1, 'Films & Vidéos', [Subcategory(6, 'Film')]),
-        ]),
-        Tracker.astra: _Fake(Tracker.astra, cats: const [
-          Category(1, 'Films', []),
-        ]),
+        Tracker.c411: _Fake(Tracker.c411, cats: c411Cats),
       });
       container.read(bulkImportProvider);
       await _settle();
-      final state = container.read(bulkImportProvider);
-      expect(state.availableCategories, ['Film', 'Films']);
-      expect(state.loadingCategories, isFalse);
+      expect(container.read(bulkImportProvider).criteria.tracker, Tracker.c411);
+      expect(container.read(bulkImportProvider).categories, c411Cats);
+
+      container.read(_trackers.notifier).set({
+        Tracker.astra: _Fake(Tracker.astra, cats: astraCats),
+      });
+      container.read(bulkImportProvider);
+      await _settle();
+      expect(container.read(bulkImportProvider).criteria.tracker, Tracker.astra);
+      expect(container.read(bulkImportProvider).categories, astraCats);
     });
 
-    test('erreurs de chaque tracker cumulées, puis effacées à la recherche '
-        'suivante', () async {
-      final c411 = _Fake(Tracker.c411, failure: 'Clé API C411 refusée');
-      final tr4ker = _Fake(Tracker.tr4ker, failure: 'délai dépassé');
+    test('catégories cochées : une requête par catégorie, avec les '
+        'identifiants du tracker', () async {
+      final c411 = _Fake(Tracker.c411, cats: c411Cats);
       final container = ProviderContainer(overrides: [
-        trackersProvider
-            .overrideWithValue({Tracker.c411: c411, Tracker.tr4ker: tr4ker}),
+        trackersProvider.overrideWithValue({Tracker.c411: c411}),
       ]);
       addTearDown(container.dispose);
       container.listen(bulkImportProvider, (_, _) {});
@@ -233,13 +249,41 @@ void main() {
 
       notifier.search();
       await _settle();
-      expect(container.read(bulkImportProvider).error,
-          'Clé API C411 refusée\n${Tracker.tr4ker.label} : délai dépassé');
+      expect(c411.asked, [(null, null)], reason: 'aucune cochée : tout');
 
-      c411.failure = null;
-      tr4ker.failure = null;
+      c411.asked.clear();
+      notifier.update(const BulkCriteria(categories: {
+        (category: 1, subcategory: 6),
+        (category: 1, subcategory: 7),
+      }));
+      notifier.search();
+      await _settle();
+      expect(c411.asked, unorderedEquals([(1, 6), (1, 7)]));
+    });
+
+    test('erreur du tracker affichée, puis effacée à la recherche suivante',
+        () async {
+      final c411 = _Fake(Tracker.c411, failure: 'Clé API C411 refusée');
+      final container = ProviderContainer(overrides: [
+        trackersProvider.overrideWithValue({Tracker.c411: c411}),
+      ]);
+      addTearDown(container.dispose);
+      container.listen(bulkImportProvider, (_, _) {});
+      final notifier = container.read(bulkImportProvider.notifier);
+
+      notifier.search();
+      await _settle();
+      expect(container.read(bulkImportProvider).error, 'Clé API C411 refusée');
+
+      c411.failure = 'délai dépassé';
       notifier.search();
       expect(container.read(bulkImportProvider).error, isNull);
+      await _settle();
+      expect(container.read(bulkImportProvider).error,
+          '${Tracker.c411.label} : délai dépassé');
+
+      c411.failure = null;
+      notifier.search();
       await _settle();
       expect(container.read(bulkImportProvider).error, isNull);
     });

@@ -126,7 +126,8 @@ void main() {
     expect(tr4ker.requests.single['query'], 'Matrix');
   });
 
-  test('search() sans tracker configuré : état vide, pas d\'erreur', () async {
+  test('search() sans tracker configuré : état vide, invitation aux Réglages',
+      () async {
     final container = ProviderContainer(overrides: [
       settingsProvider.overrideWith(_Settings.new),
       trackersProvider.overrideWithValue(const {}),
@@ -140,7 +141,7 @@ void main() {
     }
     final state = container.read(bulkImportProvider);
     expect(state.items, isEmpty);
-    expect(state.error, isNull);
+    expect(state.error, 'Configure un tracker dans les Réglages');
     // Pas de spinner, pas de page de résultats.
     expect(state.loading, isFalse);
   });

@@ -14,22 +14,19 @@ recherche.
 
 ## Les filtres
 
-- **Nom** : chaîne libre passée à la requête `q` / `name` de chaque
-  tracker. Vide = « tout ce qui sort en ce moment ». Attention au quota
-  C411 (120 requêtes / minute) : un nom trop courant peut vite
-  consommer la fenêtre.
-- **Trackers** : multi-sélection des trackers configurés. Par défaut tout
-  est coché ; désélectionne un ou deux trackers pour limiter la
-  recherche (utile pour ne pas payer le quota d'un tracker lent). Si
-  tous les chips sont désélectionnés, la recherche ne renvoie rien —
-  clique sur « Tous les trackers » pour revenir à l'état par défaut.
-- **Catégorie** : multi-sélection des sous-catégories proposées par les
-  trackers configurés (« Film », « Série », « FLAC » pour C411,
-  « Movies/HD » pour un indexeur Torznab, « Films » pour AstraTorrent…).
-  La liste est chargée à l'ouverture de la page et rechargée quand tu
-  changes de trackers dans les Réglages ; en attendant elle est vide. Une
-  sortie passe si elle est rangée dans l'une des catégories cochées, sur
-  son tracker. Le filtre est insensible à la casse.
+- **Nom** : chaîne libre passée à la requête `q` / `name` du tracker.
+  Vide = « tout ce qui sort en ce moment ».
+- **Tracker** : **un seul à la fois**, parmi ceux configurés (le premier
+  par défaut). Chaque tracker a ses propres catégories, avec ses propres
+  identifiants : changer de tracker remplace la liste des catégories et
+  vide celles cochées, ainsi que les résultats.
+- **Catégorie** : les catégories du tracker choisi, telles qu'il les
+  décrit (« Films & Vidéos » puis « Film », « Série »… pour C411,
+  « Movies » puis « Movies/HD »… pour un indexeur Torznab, « Films »,
+  « Séries »… pour AstraTorrent). Chaque ligne commence par la catégorie
+  entière, suivie de ses sous-catégories. Aucune cochée = toutes. Les
+  catégories cochées sont **transmises au tracker** : c'est lui qui
+  filtre, avec ses identifiants.
 - **Taille min / max** : « 1,5 Go », « 700 Mo », « 2 To ». Tu peux
   saisir la virgule pour les décimales, omettre l'unité (= octets).
   Les suffixes reconnus : o, ko/k, mo/m, go/g, to/t, po/p. Une saisie
@@ -40,8 +37,8 @@ recherche.
 - **Leechers min / max** : idem.
 
 - **Ordre** : *Plus petits* (par défaut), *Plus de seeders* ou *Plus
-  récents*. C'est l'ordre dans lequel les trackers sont parcourus et
-  les résultats affichés.
+  récents*. C'est l'ordre dans lequel le tracker est parcouru et les
+  résultats affichés.
 
 ## Comment la recherche avance
 
@@ -51,26 +48,25 @@ tracker quand il sait le faire, et c'est ce qui rend la recherche de
 petits torrents efficace :
 
 - **C411** trie lui-même par taille croissante : la recherche commence
-  par les plus petits, et s'arrête pour ce tracker dès qu'une page
-  dépasse la taille max. Avec une **taille min**, l'application saute
+  par les plus petits, et s'arrête dès qu'une page dépasse la taille
+  max. Avec une **taille min**, l'application saute
   directement à la bonne page (quelques requêtes, par dichotomie) au
   lieu de parcourir des centaines de fichiers de quelques Ko.
 - **AstraTorrent** trie de même, sur ses 1 000 dernières sorties.
 - **tr4ker, Nostradamus, Draupnirr** (Torznab) ne savent donner que les
   plus récentes : leurs pages sont parcourues dans cet ordre et filtrées.
-- La **catégorie** est transmise au tracker quand elle y désigne une
-  seule catégorie ou sous-catégorie (par exemple « Film » sur C411 ou
-  « Movies/HD » sur un indexeur Torznab). Sinon elle est filtrée par
-  l'application.
+- Avec **plusieurs catégories cochées**, chacune fait l'objet de sa
+  propre recherche (même ordre, même arrêt à la taille max), et les
+  résultats sont réunis.
 
 Les pages s'enchaînent toutes seules jusqu'à environ 50 résultats
-retenus (au plus 10 pages par tracker d'un coup) ; le compteur « sur N
+retenus (au plus 10 pages d'un coup) ; le compteur « sur N
 examinés » montre ce qui a été parcouru. **Encore** (ou **Chercher plus
 loin**, ou faire défiler jusqu'en bas) reprend là où on s'est arrêté ;
 **Stopper** interrompt sans perdre ce qui a été trouvé.
 
 **Filtrer l'existant** applique les champs modifiés aux résultats déjà
-affichés, sans réinterroger les trackers.
+affichés, sans réinterroger le tracker.
 
 ## L'envoi
 
@@ -91,9 +87,10 @@ même sortie est rechargée.
 
 ## Sécurité et quotas
 
-- Le bouton « Rechercher » consomme une page de chaque tracker à la
-  fois, pas un appel global. Sur C411, c'est 120 requêtes par minute
-  par clé : un import de 10 pages × 5 trackers = 50 requêtes, à étaler.
+- Chaque tour consomme une page par catégorie cochée. Sur C411, c'est
+  120 requêtes par minute par clé : 10 pages × 3 catégories = 30
+  requêtes, sans compter les quelques requêtes de la dichotomie vers la
+  taille min.
 - Pas de connexion FTP : tout passe par les API trackers et par
   Transmission. Le serveur de fichiers n'est pas touché.
 - Si Transmission n'est pas configurée, le bouton d'envoi le rappelle

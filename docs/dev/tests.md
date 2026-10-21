@@ -52,10 +52,10 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `build_defaults_test.dart` | `BuildDefaults` : `hasAny`, `allVariables`, round-trip JSON |
 | `build_personal_test.dart` | outil `tool/build_personal.dart` : JSON → `--dart-define` (champs scalaires, `mediaFolders` CSV, `apiKeys` par tracker, valeurs vides ignorées, erreurs de lecture) |
 | `draupnirr_test.dart` | parsing défensif de `DraupnirrAccount` / `Mission` / `Badge` (alias multiples, champs manquants, progress décimal ou pourcentage) |
-| `bulk_import_test.dart` | `BulkCriteria.accepts` : trackers et catégories multi-sélection, min/max taille/seeders/leechers, combinaison des bornes ; `parseBytes` Go/Mo/To |
+| `bulk_import_test.dart` | `BulkCriteria.accepts` : min/max taille/seeders/leechers, combinaison des bornes, catégorie laissée au tracker ; `parseBytes` Go/Mo/To |
 | `release_watch_test.dart` | veille : premier relevé sans alerte, nouveautés en tête et notifiées, trackers choisis, échec d'un tracker, vu / vidé, relevé à l'ouverture puis selon l'intervalle, sérialisation ; page Nouveautés |
-| `bulk_import_small_test.dart` | petits torrents : tri par taille demandé au tracker, arrêt à la taille max, dichotomie vers la taille min, enchaînement des pages sans tri serveur, déjà dans Transmission, stopper puis reprendre, catégorie transmise ; écran (raccourci de taille, en-tête, envoi) |
-| `bulk_import_categories_test.dart` | catégories des sorties (Torznab via le `caps` servi en local, C411, AstraTorrent) et filtre ; catégories rechargées quand les trackers changent ; erreurs cumulées par tracker puis effacées |
+| `bulk_import_small_test.dart` | petits torrents : tri par taille demandé au tracker, arrêt à la taille max, dichotomie vers la taille min, enchaînement des pages sans tri serveur, déjà dans Transmission, stopper puis reprendre, deux catégories parcourues puis réunies ; écrans (raccourci de taille, en-tête, envoi ; un tracker à la fois avec ses catégories et leurs identifiants) |
+| `bulk_import_categories_test.dart` | catégories des sorties (Torznab via le `caps` servi en local, C411, AstraTorrent) ; catégories du tracker choisi, vidées en changeant de tracker ; tracker retiré des Réglages ; une requête par catégorie cochée ; erreur affichée puis effacée |
 | `wishlist_test.dart` | TMDB, liste, Découvrir, fiche, recherche par tracker, tris et intertitres |
 | `media_name_test.dart` | film ou épisode d'après le chemin, extraits et bonus ignorés |
 | `ftp_test.dart` | client FTP **et FTPS** : liste, taille, lecture à une position, repli sur `LIST`, identifiants refusés |

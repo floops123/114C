@@ -61,12 +61,18 @@ class _Catalog implements TrackerApi {
       cat: categoryId,
       sub: subcategoryId,
     ));
+    // Sous-catégorie 6 : les numéros pairs, 7 : les impairs.
+    final inCategory = switch (subcategoryId) {
+      6 => all.where((r) => int.parse(r.id).isEven).toList(),
+      7 => all.where((r) => int.parse(r.id).isOdd).toList(),
+      _ => all,
+    };
     final ordered = sortsBySize && sort == ReleaseSort.size && ascending
-        ? all
-        : all.reversed.toList();
+        ? inCategory
+        : inCategory.reversed.toList();
     final items = ordered.skip((page - 1) * perPage).take(perPage).toList();
-    return ReleasePage(
-        items, page, (all.length / perPage).ceil(), all.length);
+    return ReleasePage(items, page, (ordered.length / perPage).ceil(),
+        ordered.length);
   }
 
   @override
@@ -199,39 +205,24 @@ void main() {
     expect(container.read(bulkImportProvider).items, hasLength(50));
   });
 
-  group('catégorie transmise au tracker', () {
-    const cats = [
-      Category(1, 'Films & Vidéos', [Subcategory(6, 'Film'), Subcategory(7, 'Série')]),
-      Category(2, 'Ebook', [Subcategory(14, 'Livres')]),
-    ];
+  test('deux catégories cochées : chacune parcourue par taille, résultats '
+      'fusionnés', () async {
+    final c411 = _Catalog(Tracker.c411);
+    final container = _container({Tracker.c411: c411});
+    addTearDown(container.dispose);
+    final notifier = container.read(bulkImportProvider.notifier);
+    notifier.update(const BulkCriteria(
+      sizeMax: 20 * _mo,
+      categories: {(category: 1, subcategory: 6), (category: 1, subcategory: 7)},
+    ));
+    notifier.search();
+    await _settle();
 
-    test('une seule correspondance : transmise', () {
-      expect(BulkImportNotifier.serverCategory(cats, {'film'}),
-          (category: 1, subcategory: 6));
-      expect(BulkImportNotifier.serverCategory(cats, {'Ebook'}),
-          (category: 2, subcategory: null));
-    });
-
-    test('dans la requête de recherche', () async {
-      final c411 = _Catalog(Tracker.c411, cats: cats);
-      final container = _container({Tracker.c411: c411});
-      addTearDown(container.dispose);
-      await _settle(); // catégories chargées à l'ouverture
-      final notifier = container.read(bulkImportProvider.notifier);
-      notifier.update(const BulkCriteria(categories: {'Film'}));
-      notifier.search();
-      await _settle();
-      expect(c411.params.first.cat, 1);
-      expect(c411.params.first.sub, 6);
-    });
-
-    test('plusieurs, aucune, ou catégories inconnues : filtre local', () {
-      const none = (category: null, subcategory: null);
-      expect(BulkImportNotifier.serverCategory(cats, {'Film', 'Série'}), none);
-      expect(BulkImportNotifier.serverCategory(cats, {'Movies/HD'}), none);
-      expect(BulkImportNotifier.serverCategory(cats, const {}), none);
-      expect(BulkImportNotifier.serverCategory(null, {'Film'}), none);
-    });
+    final state = container.read(bulkImportProvider);
+    expect(c411.params.map((p) => p.sub), unorderedEquals([6, 7]));
+    expect([for (final i in state.items) i.release.size ~/ _mo],
+        [for (var s = 1; s <= 20; s++) s]);
+    expect(state.hasMore, isFalse, reason: 'les deux ont dépassé 20 Mo');
   });
 
   testWidgets('écran : raccourci de taille, recherche, résultats', (tester) async {
@@ -265,5 +256,55 @@ void main() {
     expect(c411.pages, [1]);
     // La page 2 (51 et 52 Mo) reste à prendre.
     expect(find.text('Encore'), findsOneWidget);
+  });
+
+  testWidgets('écran : un tracker à la fois, avec ses catégories',
+      (tester) async {
+    final c411 = _Catalog(Tracker.c411, cats: const [
+      Category(1, 'Films & Vidéos', [Subcategory(6, 'Film')]),
+    ]);
+    final torznab = _Catalog(Tracker.tr4ker, sortsBySize: false, cats: const [
+      Category(2000, 'Movies', [Subcategory(2040, 'Movies/HD')]),
+    ]);
+    final container =
+        _container({Tracker.c411: c411, Tracker.tr4ker: torznab});
+    addTearDown(container.dispose);
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: buildTheme(Brightness.dark),
+        home: const BulkImportPage(),
+      ),
+    ));
+    await tester.runAsync(_settle);
+    await tester.pump();
+
+    expect(find.text('Film'), findsOneWidget);
+    expect(find.text('Movies/HD'), findsNothing);
+    expect(find.text('Tous les trackers'), findsNothing);
+
+    await tester.tap(find.text('Film'));
+    await tester.pump();
+    expect(container.read(bulkImportProvider).criteria.categories,
+        {(category: 1, subcategory: 6)});
+
+    await tester.tap(find.text(Tracker.tr4ker.label));
+    await tester.runAsync(_settle);
+    await tester.pump();
+    expect(find.text('Movies/HD'), findsOneWidget);
+    expect(find.text('Film'), findsNothing);
+    expect(container.read(bulkImportProvider).criteria.categories, isEmpty);
+
+    await tester.tap(find.text('Movies/HD'));
+    await tester.pump();
+    await tester.tap(find.text('Rechercher'));
+    await tester.runAsync(_settle);
+    await tester.pump();
+    expect(torznab.params.first.cat, 2000);
+    expect(torznab.params.first.sub, 2040);
+    expect(c411.params, isEmpty);
   });
 }

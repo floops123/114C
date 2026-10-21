@@ -31,41 +31,10 @@ void main() {
       expect(c.hasFilters, isFalse);
     });
 
-    test('trackers : seul celui coché passe', () {
-      const c = BulkCriteria(trackers: {Tracker.c411});
-      expect(c.accepts(_r(tracker: Tracker.c411)), isTrue);
-      expect(c.accepts(_r(tracker: Tracker.tr4ker)), isFalse);
-    });
-
-    test('trackers : ensemble vide = pas de filtre', () {
-      const c = BulkCriteria(trackers: {});
-      expect(c.accepts(_r(tracker: Tracker.c411)), isTrue);
-      expect(c.accepts(_r(tracker: Tracker.tr4ker)), isTrue);
-    });
-
-    test('catégories : ensemble insensible à la casse', () {
-      const c = BulkCriteria(categories: {'film'});
-      expect(c.accepts(_r(subcategory: 'Film')), isTrue);
-      expect(c.accepts(_r(subcategory: 'FILM')), isTrue);
-      expect(c.accepts(_r(subcategory: 'Série')), isFalse);
-    });
-
-    test('catégories : ensemble vide = pas de filtre', () {
-      const c = BulkCriteria(categories: {});
-      expect(c.accepts(_r(subcategory: 'Film')), isTrue);
-      expect(c.accepts(_r(subcategory: '')), isTrue);
-    });
-
-    test('catégories : sortie sans sous-catégorie n\'est pas acceptée', () {
-      const c = BulkCriteria(categories: {'Film'});
-      expect(c.accepts(_r(subcategory: '')), isFalse);
-    });
-
-    test('catégories : multi-sélection', () {
-      const c = BulkCriteria(categories: {'Film', 'Série'});
-      expect(c.accepts(_r(subcategory: 'Film')), isTrue);
+    test('catégorie : laissée au tracker, pas refiltrée ici', () {
+      const c = BulkCriteria(categories: {(category: 1, subcategory: 6)});
       expect(c.accepts(_r(subcategory: 'Série')), isTrue);
-      expect(c.accepts(_r(subcategory: 'Animation')), isFalse);
+      expect(c.accepts(_r(subcategory: '')), isTrue);
     });
 
     test('taille : min et max', () {
@@ -94,30 +63,16 @@ void main() {
 
     test('combinaison : tous les filtres ensemble', () {
       const c = BulkCriteria(
-        trackers: {Tracker.c411},
-        categories: {'Film'},
         sizeMin: 1024,
         sizeMax: 4096,
         seedersMin: 1,
         leechersMax: 5,
       );
-      final r = _r(size: 2048, seeders: 3, leechers: 2, subcategory: 'Film');
-      expect(c.accepts(r), isTrue);
-      // Mauvais tracker.
-      expect(c.accepts(_r(
-              tracker: Tracker.tr4ker,
-              size: 2048,
-              seeders: 3,
-              leechers: 2,
-              subcategory: 'Film')),
-          isFalse);
-      // Mauvaise catégorie.
-      expect(c.accepts(_r(size: 2048, seeders: 3, leechers: 2, subcategory: 'Série')),
-          isFalse);
+      expect(c.accepts(_r(size: 2048, seeders: 3, leechers: 2)), isTrue);
       // Trop gros.
-      expect(c.accepts(_r(
-              size: 8192, seeders: 3, leechers: 2, subcategory: 'Film')),
-          isFalse);
+      expect(c.accepts(_r(size: 8192, seeders: 3, leechers: 2)), isFalse);
+      // Pas de seeder.
+      expect(c.accepts(_r(size: 2048, seeders: 0, leechers: 2)), isFalse);
     });
   });
 
@@ -127,13 +82,13 @@ void main() {
       expect(c.hasFilters, isFalse);
     });
 
-    test('trackers non vide : true', () {
-      const c = BulkCriteria(trackers: {Tracker.c411});
-      expect(c.hasFilters, isTrue);
+    test('le tracker choisi n’est pas un filtre', () {
+      const c = BulkCriteria(tracker: Tracker.c411);
+      expect(c.hasFilters, isFalse);
     });
 
     test('catégories non vide : true', () {
-      const c = BulkCriteria(categories: {'Film'});
+      const c = BulkCriteria(categories: {(category: 1, subcategory: null)});
       expect(c.hasFilters, isTrue);
     });
   });

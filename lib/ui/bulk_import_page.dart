@@ -9,9 +9,9 @@ import 'release_detail_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// Import en masse : on cherche un nom sur tous les trackers, on cadre les
-/// résultats (taille, seeders, leechers, catégorie), on coche ce qui
-/// convient, et on envoie tout à Transmission d'un coup.
+/// Import en masse : on choisit un tracker et ses catégories, on cadre les
+/// résultats (taille, seeders, leechers), on coche ce qui convient, et on
+/// envoie tout à Transmission d'un coup.
 class BulkImportPage extends ConsumerStatefulWidget {
   const BulkImportPage({super.key});
 
@@ -170,7 +170,7 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
     final c = context.colors;
     final state = ref.watch(bulkImportProvider);
     final notifier = ref.read(bulkImportProvider.notifier);
-    final trackerCount = ref.watch(trackersProvider.select((t) => t.length));
+    final trackers = ref.watch(trackersProvider).keys.toList();
     final selected = state.selected;
     // Reconstruire les contrôles (champs invalides colorés) après une saisie.
     final invalidSnapshot = _invalid.toSet();
@@ -210,25 +210,21 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                   textInputAction: TextInputAction.search,
                   onSubmitted: (_) => _search(),
                   decoration: const InputDecoration(
-                    labelText: 'Nom (recherché sur les trackers choisis)',
+                    labelText: 'Nom (facultatif)',
                     prefixIcon: Icon(Icons.search_rounded, size: 20),
                     isDense: true,
                   ),
                 ),
                 const SizedBox(height: 12),
-                _FilterChips<Tracker>(
-                  label: 'Trackers',
-                  allLabel: 'Tous les trackers',
-                  items: ref.watch(trackersProvider).keys.toList(),
-                  selected: state.criteria.trackers,
-                  labelOf: (t) => t.label,
-                  onChanged: (next) => notifier.update(
-                      state.criteria.copyWith(trackers: next)),
+                _TrackerChips(
+                  trackers: trackers,
+                  selected: state.criteria.tracker,
+                  onSelected: notifier.selectTracker,
                 ),
                 const SizedBox(height: 6),
                 _CategoryChips(
                   selected: state.criteria.categories,
-                  available: state.availableCategories,
+                  categories: state.categories,
                   loading: state.loadingCategories,
                   onChanged: (next) => notifier.update(
                       state.criteria.copyWith(categories: next)),
@@ -325,18 +321,13 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                 const SizedBox(height: 12),
                 Row(children: [
                   FilledButton.icon(
-                    onPressed: state.loading ? null : _search,
+                    onPressed: state.loading || state.criteria.tracker == null
+                        ? null
+                        : _search,
                     icon: const Icon(Icons.search_rounded, size: 18),
                     label: Text(state.searched && !state.loading
                         ? 'Relancer'
                         : 'Rechercher'),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    trackerCount > 1
-                        ? '$trackerCount trackers configurés'
-                        : '$trackerCount tracker configuré',
-                    style: TextStyle(color: c.muted, fontSize: 11.5),
                   ),
                   const Spacer(),
                   OutlinedButton.icon(
@@ -406,6 +397,7 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                   : state.items.isEmpty
                       ? _EmptyResults(
                           criteria: state.criteria,
+                          categories: state.categories,
                           scanned: state.scanned,
                           onClear: _clear,
                           onMore: state.hasMore ? notifier.loadMore : null,
@@ -487,11 +479,13 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
 class _EmptyResults extends StatelessWidget {
   const _EmptyResults({
     required this.criteria,
+    required this.categories,
     required this.scanned,
     required this.onClear,
     this.onMore,
   });
   final BulkCriteria criteria;
+  final List<Category> categories;
   final int scanned;
   final VoidCallback onClear;
 
@@ -502,11 +496,10 @@ class _EmptyResults extends StatelessWidget {
   Widget build(BuildContext context) {
     final parts = <String>[];
     if (criteria.name.isNotEmpty) parts.add('nom « ${criteria.name} »');
-    if (criteria.trackers.isNotEmpty) {
-      parts.add('trackers : ${criteria.trackers.map((t) => t.label).join(', ')}');
-    }
+    if (criteria.tracker case final t?) parts.add('tracker ${t.label}');
     if (criteria.categories.isNotEmpty) {
-      parts.add('catégories : ${criteria.categories.join(', ')}');
+      parts.add('catégories : '
+          '${criteria.categories.map((r) => categoryLabel(categories, r)).join(', ')}');
     }
     if (criteria.sizeMin != null) {
       parts.add('taille ≥ ${formatBytes(criteria.sizeMin!)}');
@@ -562,34 +555,37 @@ class _EmptyResults extends StatelessWidget {
 /// `selected` vide = pas de filtre, l'utilisateur voit alors la chip « Tous »
 /// marquée seule ; les chips individuels ne sont cochés que lorsqu'ils
 /// sont dans `selected` (le clic démarre par là pour clarifier l'état).
-class _FilterChips<T> extends StatelessWidget {
-  const _FilterChips({
-    required this.label,
-    required this.allLabel,
-    required this.items,
+/// Un seul tracker à la fois : chacun a ses propres catégories.
+class _TrackerChips extends StatelessWidget {
+  const _TrackerChips({
+    required this.trackers,
     required this.selected,
-    required this.labelOf,
-    required this.onChanged,
+    required this.onSelected,
   });
-  final String label;
-  final String allLabel;
-  final List<T> items;
-  final Set<T> selected;
-  final String Function(T) labelOf;
-  final void Function(Set<T> next) onChanged;
+  final List<Tracker> trackers;
+  final Tracker? selected;
+  final ValueChanged<Tracker> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text(label,
+      Text('Tracker',
           style: TextStyle(
               color: c.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
       const SizedBox(height: 4),
-      Wrap(spacing: 6, runSpacing: 6, children: [
-        _allChip<T>(context, selected, onChanged, allLabel),
-        for (final t in items) _itemChip<T>(context, t, selected, onChanged, labelOf(t)),
-      ]),
+      if (trackers.isEmpty)
+        Text('Aucun tracker configuré : renseigne une clé dans les Réglages.',
+            style: TextStyle(color: c.muted, fontSize: 12))
+      else
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final t in trackers)
+            ChoiceChip(
+              label: Text(t.label),
+              selected: t == selected,
+              onSelected: (_) => onSelected(t),
+            ),
+        ]),
     ]);
   }
 }
@@ -633,30 +629,30 @@ Widget _itemChip<T>(
   );
 }
 
-/// Chips de sous-catégories : chargées en tâche de fond depuis les
-/// `categories()` des trackers configurés. Pendant le chargement, une
-/// « placeholder » est affichée.
+/// Catégories du tracker choisi, regroupées par catégorie parente : la
+/// parente entière, puis ses sous-catégories. Aucune cochée = toutes.
 class _CategoryChips extends StatelessWidget {
   const _CategoryChips({
     required this.selected,
-    required this.available,
+    required this.categories,
     required this.loading,
     required this.onChanged,
   });
-  final Set<String> selected;
-  final List<String> available;
+  final Set<CategoryRef> selected;
+  final List<Category> categories;
   final bool loading;
-  final void Function(Set<String>) onChanged;
+  final void Function(Set<CategoryRef>) onChanged;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final small = TextStyle(color: c.muted, fontSize: 12);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Text('Catégorie',
           style: TextStyle(
               color: c.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
       const SizedBox(height: 4),
-      if (loading && available.isEmpty)
+      if (loading && categories.isEmpty)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(children: [
@@ -664,16 +660,36 @@ class _CategoryChips extends StatelessWidget {
                 dimension: 14,
                 child: CircularProgressIndicator(strokeWidth: 2)),
             const SizedBox(width: 8),
-            Text('Chargement des catégories…',
-                style: TextStyle(color: c.muted, fontSize: 12)),
+            Text('Chargement des catégories…', style: small),
           ]),
         )
-      else
+      else if (categories.isEmpty)
+        Text('Ce tracker ne propose pas de catégories : recherche sur tout.',
+            style: small)
+      else ...[
         Wrap(spacing: 6, runSpacing: 6, children: [
-          _allChip<String>(context, selected, onChanged, 'Toutes'),
-          for (final cat in available)
-            _itemChip<String>(context, cat, selected, onChanged, cat),
+          _allChip<CategoryRef>(context, selected, onChanged, 'Toutes'),
         ]),
+        for (final cat in categories) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _itemChip<CategoryRef>(context, (category: cat.id, subcategory: null),
+                  selected, onChanged, cat.name),
+              for (final sub in cat.subcategories)
+                _itemChip<CategoryRef>(
+                    context,
+                    (category: cat.id, subcategory: sub.id),
+                    selected,
+                    onChanged,
+                    sub.name),
+            ],
+          ),
+        ],
+      ],
     ]);
   }
 }

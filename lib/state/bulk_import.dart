@@ -4,18 +4,39 @@ import '../api/tracker.dart';
 import '../api/transmission.dart';
 import 'torrents.dart';
 
-// Import en masse : on interroge les trackers, on ne garde que ce qui passe
-// les bornes (taille, seeders, leechers) et la catégorie, on coche ce qui
-// convient, et on envoie tout d'un coup à Transmission.
+// Import en masse : on interroge un tracker, on ne garde que ce qui passe les
+// bornes (taille, seeders, leechers), on coche ce qui convient, et on envoie
+// tout d'un coup à Transmission.
 //
-// Aucun indexer ne sait filtrer sur la taille ou les seeders : les bornes sont
-// appliquées ici. Mais l'ordre de parcours, lui, est demandé au tracker quand
-// il sait le faire : en taille croissante (le cas d'usage premier : les
-// petits torrents), le parcours s'arrête à la taille max et saute à la taille
-// min par dichotomie. La catégorie est aussi transmise quand elle désigne une
-// seule catégorie du tracker.
+// Un seul tracker à la fois : chacun a ses propres catégories, avec ses
+// propres identifiants. Les catégories cochées sont transmises au tracker
+// (une recherche par catégorie, chacune avec sa pagination). Les bornes, elles,
+// sont appliquées ici : aucun indexer ne sait filtrer sur la taille ou les
+// seeders. Mais l'ordre de parcours est demandé au tracker quand il sait le
+// faire : en taille croissante (le cas d'usage premier : les petits
+// torrents), le parcours s'arrête à la taille max et saute à la taille min
+// par dichotomie.
 
-/// Ordre dans lequel les trackers sont parcourus et les résultats affichés.
+// Bornes d'un critère numérique ; null : pas de borne.
+typedef Bound = ({int? min, int? max});
+
+/// Une catégorie d'un tracker, ou l'une de ses sous-catégories, désignée par
+/// les identifiants de ce tracker.
+typedef CategoryRef = ({int category, int? subcategory});
+
+/// Nom affiché d'une catégorie choisie, d'après les catégories du tracker.
+String categoryLabel(List<Category> categories, CategoryRef ref) {
+  for (final c in categories) {
+    if (c.id != ref.category) continue;
+    if (ref.subcategory == null) return c.name;
+    for (final s in c.subcategories) {
+      if (s.id == ref.subcategory) return s.name;
+    }
+  }
+  return '#${ref.subcategory ?? ref.category}';
+}
+
+/// Ordre dans lequel le tracker est parcouru et les résultats affichés.
 enum BulkOrder {
   smallest('Plus petits'),
   seeders('Plus de seeders'),
@@ -31,14 +52,11 @@ enum BulkOrder {
       };
 }
 
-// Bornes d'un critère numérique ; null : pas de borne.
-typedef Bound = ({int? min, int? max});
-
 /// Ce qu'on cherche. Toutes les bornes sont facultatives.
 class BulkCriteria {
   const BulkCriteria({
     this.name = '',
-    this.trackers = const {},
+    this.tracker,
     this.categories = const {},
     this.sizeMin,
     this.sizeMax,
@@ -52,13 +70,11 @@ class BulkCriteria {
   /// Nom recherché, passé tel quel au tracker.
   final String name;
 
-  /// Trackers à interroger (vide = tous les trackers configurés).
-  final Set<Tracker> trackers;
+  /// Tracker interrogé ; null tant qu'aucun n'est configuré.
+  final Tracker? tracker;
 
-  /// Catégories retenues (vide = tout). Une sortie passe si son
-  /// `subcategory` ou l'une de ses `categories` en fait partie (insensible
-  /// à la casse).
-  final Set<String> categories;
+  /// Catégories du [tracker] retenues (vide = toutes).
+  final Set<CategoryRef> categories;
 
   /// Tailles en octets.
   final int? sizeMin;
@@ -71,7 +87,6 @@ class BulkCriteria {
 
   bool get hasFilters =>
       name.isNotEmpty ||
-      trackers.isNotEmpty ||
       categories.isNotEmpty ||
       sizeMin != null ||
       sizeMax != null ||
@@ -86,8 +101,8 @@ class BulkCriteria {
 
   BulkCriteria copyWith({
     String? name,
-    Set<Tracker>? trackers,
-    Set<String>? categories,
+    Tracker? tracker,
+    Set<CategoryRef>? categories,
     int? sizeMin,
     int? sizeMax,
     int? seedersMin,
@@ -98,7 +113,7 @@ class BulkCriteria {
   }) =>
       BulkCriteria(
         name: name ?? this.name,
-        trackers: trackers ?? this.trackers,
+        tracker: tracker ?? this.tracker,
         categories: categories ?? this.categories,
         sizeMin: sizeMin ?? this.sizeMin,
         sizeMax: sizeMax ?? this.sizeMax,
@@ -109,20 +124,12 @@ class BulkCriteria {
         order: order ?? this.order,
       );
 
-  /// La sortie passe-t-elle les filtres ? Un ensemble vide = pas de filtre.
-  bool accepts(Release r) {
-    if (trackers.isNotEmpty && !trackers.contains(r.tracker)) return false;
-    if (categories.isNotEmpty) {
-      final cs = categories.map((c) => c.toLowerCase()).toSet();
-      if (![r.subcategory, ...r.categories]
-          .any((c) => cs.contains(c.toLowerCase()))) {
-        return false;
-      }
-    }
-    return _within(r.size, size) &&
-        _within(r.seeders, seeders) &&
-        _within(r.leechers, leechers);
-  }
+  /// La sortie passe-t-elle les bornes ? Le tracker et la catégorie sont
+  /// déjà ceux de la requête.
+  bool accepts(Release r) =>
+      _within(r.size, size) &&
+      _within(r.seeders, seeders) &&
+      _within(r.leechers, leechers);
 
   static bool _within(int value, Bound b) =>
       (b.min == null || value >= b.min!) && (b.max == null || value <= b.max!);
@@ -177,7 +184,7 @@ class BulkState {
     this.searched = false,
     this.sending = false,
     this.error,
-    this.availableCategories = const [],
+    this.categories = const [],
     this.loadingCategories = false,
   });
 
@@ -187,7 +194,7 @@ class BulkState {
   /// Requêtes en cours.
   final bool loading;
 
-  /// Des trackers ont encore des pages à parcourir (« Encore »).
+  /// Des pages restent à parcourir (« Encore »).
   final bool hasMore;
 
   /// Sorties examinées depuis la recherche, retenues ou non.
@@ -199,10 +206,8 @@ class BulkState {
   final bool sending;
   final String? error;
 
-  /// Sous-catégories proposées par les `categories()` des trackers configurés,
-  /// pour les proposer en filtre avant même la première recherche. Chargé
-  /// en tâche de fond à l'ouverture de la page.
-  final List<String> availableCategories;
+  /// Catégories du tracker choisi, chargées à sa sélection.
+  final List<Category> categories;
   final bool loadingCategories;
 
   /// Ce qu'il reste à envoyer (coché, pas encore envoyé).
@@ -222,7 +227,7 @@ class BulkState {
     bool? searched,
     bool? sending,
     String? Function()? error,
-    List<String>? availableCategories,
+    List<Category>? categories,
     bool? loadingCategories,
   }) =>
       BulkState(
@@ -234,17 +239,17 @@ class BulkState {
         searched: searched ?? this.searched,
         sending: sending ?? this.sending,
         error: error != null ? error() : this.error,
-        availableCategories: availableCategories ?? this.availableCategories,
+        categories: categories ?? this.categories,
         loadingCategories: loadingCategories ?? this.loadingCategories,
       );
 }
 
 class BulkImportNotifier extends Notifier<BulkState> {
-  /// Taille d'une page demandée à chaque tracker.
+  /// Taille d'une page demandée au tracker.
   static const perPage = 50;
 
   /// Tours de pages enchaînés automatiquement par recherche (ou par
-  /// « Encore ») : évite de marteler un tracker (quota C411 : 120 requêtes /
+  /// « Encore ») : évite de marteler le tracker (quota C411 : 120 requêtes /
   /// minute) quand les bornes ne laissent presque rien passer.
   static const maxPages = 10;
 
@@ -256,20 +261,18 @@ class BulkImportNotifier extends Notifier<BulkState> {
 
   bool _busy = false;
   int _generation = 0;
-  var _pages = <Tracker, int>{};
-  var _more = <Tracker, bool>{};
 
-  /// Catégories de chaque tracker, pour lui transmettre celle choisie.
-  var _trackerCategories = <Tracker, List<Category>>{};
+  /// Pagination de chaque recherche : une par catégorie choisie (null :
+  /// toutes les catégories).
+  var _pages = <CategoryRef?, int>{};
+  var _more = <CategoryRef?, bool>{};
 
   /// Critères saisis par l'utilisateur. Conservés ici pour survivre au
   /// rebuild déclenché par un changement de la liste des trackers.
   BulkCriteria _criteria = const BulkCriteria();
 
-  /// Catégories déjà chargées depuis les `categories()` des trackers. Vides
-  /// tant que `_loadAvailableCategories` n'a pas tourné ; conservées ici
-  /// pour rester affichées pendant leur rechargement.
-  List<String> _availableCategories = const [];
+  /// Catégories déjà chargées, par tracker.
+  var _categories = <Tracker, List<Category>>{};
 
   /// Numéro du dernier chargement des catégories lancé.
   int _categoryLoad = 0;
@@ -282,62 +285,84 @@ class BulkImportNotifier extends Notifier<BulkState> {
     // résultats, la sélection et les flags de chargement repartent à zéro.
     // L'instance survit au rebuild : une `_load()` en vol, faite avec les
     // anciens clients, est invalidée par la génération.
-    ref.watch(trackersProvider);
+    final trackers = ref.watch(trackersProvider);
     _reset();
-    // Les catégories dépendent des trackers configurés : rechargées à chaque
-    // build (le premier compris).
-    Future.microtask(_loadAvailableCategories);
-    return BulkState(
+    _categories = {};
+    final tracker = _criteria.tracker;
+    if (tracker == null || !trackers.containsKey(tracker)) {
+      // Premier tracker configuré ; ses catégories n'ont rien à voir avec
+      // celles de l'ancien.
+      _criteria = BulkCriteria(
+        name: _criteria.name,
+        tracker: trackers.keys.firstOrNull,
+        sizeMin: _criteria.sizeMin,
+        sizeMax: _criteria.sizeMax,
+        seedersMin: _criteria.seedersMin,
+        seedersMax: _criteria.seedersMax,
+        leechersMin: _criteria.leechersMin,
+        leechersMax: _criteria.leechersMax,
+        order: _criteria.order,
+      );
+    }
+    final current = _criteria.tracker;
+    if (current != null) Future.microtask(() => _loadCategories(current));
+    return BulkState(criteria: _criteria, loadingCategories: current != null);
+  }
+
+  /// Charge les catégories de [t] (une fois par tracker). Un échec laisse la
+  /// liste vide : la recherche reste possible, toutes catégories confondues.
+  Future<void> _loadCategories(Tracker t) async {
+    final load = ++_categoryLoad;
+    var categories = _categories[t];
+    if (categories == null) {
+      final api = ref.read(trackersProvider)[t];
+      try {
+        categories = await api?.categories() ?? const [];
+        _categories[t] = categories;
+      } on Object {
+        categories = const [];
+      }
+    }
+    // Un autre tracker a été choisi entre-temps, ou un rebuild a relancé le
+    // chargement : celui-ci est périmé.
+    if (!ref.mounted || load != _categoryLoad) return;
+    state = state.copyWith(categories: categories, loadingCategories: false);
+  }
+
+  /// Change de tracker : catégories et résultats repartent de zéro.
+  void selectTracker(Tracker t) {
+    if (t == state.criteria.tracker) return;
+    _criteria = BulkCriteria(
+      name: _criteria.name,
+      tracker: t,
+      sizeMin: _criteria.sizeMin,
+      sizeMax: _criteria.sizeMax,
+      seedersMin: _criteria.seedersMin,
+      seedersMax: _criteria.seedersMax,
+      leechersMin: _criteria.leechersMin,
+      leechersMax: _criteria.leechersMax,
+      order: _criteria.order,
+    );
+    clear();
+    state = state.copyWith(
       criteria: _criteria,
-      availableCategories: _availableCategories,
+      categories: _categories[t] ?? const [],
       loadingCategories: true,
     );
+    _loadCategories(t);
   }
 
-  /// Récupère les sous-catégories de chaque tracker configuré et alimente
-  /// `availableCategories` avec l'union dédupliquée. Une erreur par tracker
-  /// est ignorée : le tracker qui échoue sera de toute façon signalé dans
-  /// les résultats de recherche.
-  Future<void> _loadAvailableCategories() async {
-    final trackers = ref.read(trackersProvider);
-    final load = ++_categoryLoad;
-    final names = <String>{};
-    final byTracker = <Tracker, List<Category>>{};
-    await Future.wait([
-      for (final t in trackers.keys)
-        () async {
-          try {
-            // Les sous-catégories quand il y en a ; sinon la catégorie
-            // elle-même (AstraTorrent n'expose que celles-ci).
-            final cats = byTracker[t] = await trackers[t]!.categories();
-            for (final c in cats) {
-              for (final n in c.subcategories.isEmpty
-                  ? [c.name]
-                  : c.subcategories.map((s) => s.name)) {
-                if (n.trim().isNotEmpty) names.add(n.trim());
-              }
-            }
-          } on Object catch (_) {
-            // Ignoré.
-          }
-        }(),
-    ]);
-    // Un rebuild entre-temps a relancé le chargement avec les nouveaux
-    // trackers : celui-ci est périmé.
-    if (!ref.mounted || load != _categoryLoad) return;
-    final sorted = (names.toList()..sort());
-    _availableCategories = sorted;
-    _trackerCategories = byTracker;
-    state = state.copyWith(availableCategories: sorted, loadingCategories: false);
-  }
-
+  /// Met à jour les critères. Un tracker non précisé garde le tracker
+  /// courant ; pour en changer, [selectTracker].
   void update(BulkCriteria criteria) {
-    _criteria = criteria;
-    state = state.copyWith(criteria: criteria);
+    _criteria = criteria.tracker == null
+        ? criteria.copyWith(tracker: state.criteria.tracker)
+        : criteria;
+    state = state.copyWith(criteria: _criteria);
   }
 
-  /// Applique les critères aux résultats déjà là, sans réinterroger les
-  /// trackers : retire ce qui ne passe plus (sauf ce qui est déjà envoyé) et
+  /// Applique les critères aux résultats déjà là, sans réinterroger le
+  /// tracker : retire ce qui ne passe plus (sauf ce qui est déjà envoyé) et
   /// retrie dans l'ordre choisi.
   void refilter() {
     final criteria = state.criteria;
@@ -394,10 +419,9 @@ class BulkImportNotifier extends Notifier<BulkState> {
 
   /// Stoppe la recherche en cours : la génération est incrémentée, donc la
   /// `_load()` en vol jette ses résultats ; le spinner s'arrête et « Encore »
-  /// reprend là où on en était. Les
-  /// requêtes HTTP déjà parties vont au bout (pas d'annulation possible
-  /// sans `CancelToken` par requête), mais leur réponse est ignorée. Les
-  /// résultats déjà accumulés dans `items` sont conservés.
+  /// reprend là où on en était. Les requêtes HTTP déjà parties vont au bout
+  /// (pas d'annulation possible sans `CancelToken` par requête), mais leur
+  /// réponse est ignorée. Les résultats déjà accumulés sont conservés.
   void stop() {
     _generation++;
     _busy = false;
@@ -407,36 +431,45 @@ class BulkImportNotifier extends Notifier<BulkState> {
     );
   }
 
-  /// Parcourt les trackers page par page, en enchaînant tant que moins de
-  /// [target] sorties ont été retenues (au plus [maxPages] tours) : avec des
-  /// bornes serrées, une page peut ne rien laisser passer. Si
-  /// `criteria.trackers` est non vide, seuls ceux-là sont interrogés.
+  /// Parcourt le tracker page par page — une recherche par catégorie
+  /// choisie —, en enchaînant tant que moins de [target] sorties ont été
+  /// retenues (au plus [maxPages] tours) : avec des bornes serrées, une page
+  /// peut ne rien laisser passer.
   Future<void> _load(int generation) async {
-    final trackers = ref.read(trackersProvider);
     final criteria = state.criteria;
-    final selected = criteria.trackers;
+    final api = ref.read(trackersProvider)[criteria.tracker];
+    if (api == null) {
+      _busy = false;
+      state = state.copyWith(
+        loading: false,
+        hasMore: false,
+        error: () => 'Configure un tracker dans les Réglages',
+      );
+      return;
+    }
+    final streams = criteria.categories.isEmpty
+        ? const <CategoryRef?>[null]
+        : <CategoryRef?>[...criteria.categories];
     var retained = 0;
     for (var round = 0; round < maxPages && retained < target; round++) {
       final todo = [
-        for (final t in trackers.keys)
-          if ((selected.isEmpty || selected.contains(t)) &&
-              (_pages[t] == null || (_more[t] ?? false)))
-            t,
+        for (final s in streams)
+          if (_pages[s] == null || (_more[s] ?? false)) s,
       ];
       if (todo.isEmpty) break;
       final results = await Future.wait([
-        for (final t in todo)
+        for (final s in todo)
           () async {
             try {
-              final (page, r) = await _fetch(t, trackers[t]!, criteria);
-              return (t, page, r, null);
+              final (page, r) = await _fetch(api, s, criteria);
+              return (s, page, r, null);
             } on Object catch (e) {
-              return (t, _pages[t] ?? 1, null, '$e');
+              return (s, _pages[s] ?? 1, null, '$e');
             }
           }(),
       ]);
       if (!ref.mounted || generation != _generation) return;
-      retained += _merge(criteria, results);
+      retained += _merge(api, criteria, results);
     }
     if (!ref.mounted || generation != _generation) return;
     _busy = false;
@@ -460,45 +493,24 @@ class BulkImportNotifier extends Notifier<BulkState> {
     };
   }
 
-  /// Catégorie à transmettre au tracker : seulement si les noms choisis y
-  /// désignent une seule catégorie ou sous-catégorie (un seul paramètre
-  /// possible). Sinon le filtre reste fait ici.
-  static ({int? category, int? subcategory}) serverCategory(
-      List<Category>? categories, Set<String> names) {
-    const none = (category: null, subcategory: null);
-    if (names.isEmpty || categories == null) return none;
-    final wanted = {for (final n in names) n.trim().toLowerCase()};
-    final matches = [
-      for (final c in categories) ...[
-        if (wanted.contains(c.name.trim().toLowerCase()))
-          (category: c.id, subcategory: null),
-        for (final s in c.subcategories)
-          if (wanted.contains(s.name.trim().toLowerCase()))
-            (category: c.id, subcategory: s.id),
-      ],
-    ];
-    return matches.length == 1 ? matches.single : none;
-  }
-
-  /// Page suivante d'un tracker. La toute première, en taille croissante
+  /// Page suivante d'une recherche. La toute première, en taille croissante
   /// avec une taille min, est cherchée par dichotomie : les plus petites
   /// sorties (fichiers de quelques Ko) occupent souvent des dizaines de
   /// pages.
   Future<(int, ReleasePage)> _fetch(
-      Tracker t, TrackerApi api, BulkCriteria criteria) async {
+      TrackerApi api, CategoryRef? category, BulkCriteria criteria) async {
     final how = plan(api, criteria.order);
-    final cat = serverCategory(_trackerCategories[t], criteria.categories);
     Future<ReleasePage> get(int page) => api.releases(
           page: page,
           perPage: perPage,
           query: criteria.name,
           sort: how.sort,
           ascending: how.ascending,
-          categoryId: cat.category,
-          subcategoryId: cat.subcategory,
+          categoryId: category?.category,
+          subcategoryId: category?.subcategory,
         );
 
-    final previous = _pages[t];
+    final previous = _pages[category];
     if (previous != null) return (previous + 1, await get(previous + 1));
     final first = await get(1);
     final min = criteria.sizeMin;
@@ -526,35 +538,33 @@ class BulkImportNotifier extends Notifier<BulkState> {
   }
 
   /// Intègre un tour de résultats ; renvoie le nombre de sorties retenues.
-  int _merge(BulkCriteria criteria,
-      List<(Tracker, int, ReleasePage?, String?)> results) {
-    final trackers = ref.read(trackersProvider);
+  int _merge(TrackerApi api, BulkCriteria criteria,
+      List<(CategoryRef?, int, ReleasePage?, String?)> results) {
     final present = ref.read(torrentsProvider).hashes;
-    // Un torrent déjà présent (page précédente) garde son état d'envoi ;
-    // seuls les nouveaux entrent.
+    final bySize = plan(api, criteria.order).bySize;
+    final label = api.tracker.label;
+    // Une sortie déjà là (page précédente, ou autre catégorie choisie) garde
+    // son état d'envoi ; seules les nouvelles entrent.
     final known = {for (final i in state.items) i.key: i};
     final fresh = <String, BulkItem>{};
-    final errors = <String>[];
+    final errors = <String>{};
     var scanned = 0;
-    for (final (t, page, r, failure) in results) {
-      _pages[t] = page;
+    for (final (stream, page, r, failure) in results) {
+      _pages[stream] = page;
       if (r == null) {
-        _more[t] = false;
-        errors.add(
-            failure!.contains(t.label) ? failure : '${t.label} : $failure');
+        _more[stream] = false;
+        errors.add(failure!.contains(label) ? failure : '$label : $failure');
         continue;
       }
       scanned += r.items.length;
       final max = criteria.sizeMax;
-      final api = trackers[t];
       // En taille croissante, une sortie au-delà de la taille max annonce
       // que toutes les suivantes le sont aussi.
       final pastMax = max != null &&
-          api != null &&
-          plan(api, criteria.order).bySize &&
+          bySize &&
           r.items.isNotEmpty &&
           r.items.last.size > max;
-      _more[t] = page < r.totalPages && r.items.isNotEmpty && !pastMax;
+      _more[stream] = page < r.totalPages && r.items.isNotEmpty && !pastMax;
       for (final release in r.items) {
         if (!criteria.accepts(release)) continue;
         final key = '${release.tracker.name}:${release.id}';
