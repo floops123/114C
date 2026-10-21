@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
@@ -322,6 +324,9 @@ class BulkImportNotifier extends Notifier<BulkState> {
     final trackers = ref.read(trackersProvider);
     final criteria = state.criteria;
     final selected = criteria.trackers;
+    developer.log('bulk _load gen=$generation trackers=${trackers.keys.map((t)=>t.name).toList()} '
+        'name="${criteria.name}" selected=$selected',
+        name: 'bulk_import');
     final todo = [
       for (final t in trackers.keys)
         if ((selected.isEmpty || selected.contains(t)) &&

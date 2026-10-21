@@ -93,6 +93,26 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
     ref.read(bulkImportProvider.notifier).search();
   }
 
+  /// Remet tous les champs à zéro et vide la sélection côté notifier.
+  void _clear() {
+    FocusScope.of(context).unfocus();
+    for (final c in [
+      _name,
+      _sizeMin,
+      _sizeMax,
+      _seedMin,
+      _seedMax,
+      _leechMin,
+      _leechMax,
+    ]) {
+      c.clear();
+    }
+    _invalid.clear();
+    ref.read(bulkImportProvider.notifier).update(const BulkCriteria());
+    ref.read(bulkImportProvider.notifier).clear();
+    setState(() {});
+  }
+
   /// Applique les bornes à l'affichage (sans réinterroger les trackers).
   void _apply() {
     FocusScope.of(context).unfocus();
@@ -325,12 +345,7 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
               : state.items.isEmpty && state.loading
                   ? const Center(child: CircularProgressIndicator())
                   : state.items.isEmpty
-                      ? EmptyState(
-                          Icons.search_off_rounded,
-                          state.criteria.hasFilters
-                              ? 'Aucune sortie ne passe les filtres.'
-                              : 'Aucune sortie pour cette recherche.',
-                        )
+                      ? _EmptyResults(criteria: state.criteria, onClear: _clear)
                       : NotificationListener<ScrollNotification>(
                           onNotification: (n) {
                             if (n.metrics.extentAfter < 400 && state.loading) {
@@ -386,6 +401,65 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
               ),
             ),
           ),
+      ]),
+    );
+  }
+}
+
+/// État vide plus bavard que le simple « aucune sortie » : il récapitule
+/// les filtres actifs pour aider à comprendre pourquoi la recherche n'a rien
+/// ramené, et propose de tout effacer.
+class _EmptyResults extends StatelessWidget {
+  const _EmptyResults({required this.criteria, required this.onClear});
+  final BulkCriteria criteria;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = <String>[];
+    if (criteria.name.isNotEmpty) parts.add('nom « ${criteria.name} »');
+    if (criteria.trackers.isNotEmpty) {
+      parts.add('trackers : ${criteria.trackers.map((t) => t.label).join(', ')}');
+    }
+    if (criteria.categories.isNotEmpty) {
+      parts.add('catégories : ${criteria.categories.join(', ')}');
+    }
+    if (criteria.sizeMin != null) {
+      parts.add('taille ≥ ${formatBytes(criteria.sizeMin!)}');
+    }
+    if (criteria.sizeMax != null) {
+      parts.add('taille ≤ ${formatBytes(criteria.sizeMax!)}');
+    }
+    if (criteria.seedersMin != null) parts.add('seeders ≥ ${criteria.seedersMin}');
+    if (criteria.seedersMax != null) parts.add('seeders ≤ ${criteria.seedersMax}');
+    if (criteria.leechersMin != null) parts.add('leechers ≥ ${criteria.leechersMin}');
+    if (criteria.leechersMax != null) parts.add('leechers ≤ ${criteria.leechersMax}');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 32, 8, 16),
+      child: Column(children: [
+        const Icon(Icons.search_off_rounded, size: 48),
+        const SizedBox(height: 12),
+        Text(
+          'Aucun résultat',
+          style: TextStyle(
+              fontWeight: FontWeight.w600, color: context.colors.text),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          parts.isEmpty
+              ? 'La recherche n’a rien ramené — vérifie qu’un tracker est '
+                  'bien configuré avec une clé API.'
+              : 'Filtres actifs : ${parts.join(' · ')}',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: context.colors.muted, fontSize: 12.5),
+        ),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: onClear,
+          icon: const Icon(Icons.clear_all_rounded, size: 18),
+          label: const Text('Vider les filtres'),
+        ),
       ]),
     );
   }
