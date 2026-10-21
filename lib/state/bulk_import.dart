@@ -324,9 +324,17 @@ class BulkImportNotifier extends Notifier<BulkState> {
     final trackers = ref.read(trackersProvider);
     final criteria = state.criteria;
     final selected = criteria.trackers;
-    developer.log('bulk _load gen=$generation trackers=${trackers.keys.map((t)=>t.name).toList()} '
-        'name="${criteria.name}" selected=$selected',
-        name: 'bulk_import');
+    // Log via stderr : sort en build release et debug, visible dans le
+    // terminal `flutter run` (et `adb logcat` sur Android).
+    // ignore: avoid_print
+    print('[bulk_import] _load gen=$generation '
+        'trackers=${trackers.keys.map((t) => t.name).toList()} '
+        'name="${criteria.name}" selected=$selected '
+        'categories=${criteria.categories} '
+        'bounds=(${criteria.sizeMin},${criteria.sizeMax}) '
+        'seeders=(${criteria.seedersMin},${criteria.seedersMax}) '
+        'leechers=(${criteria.leechersMin},${criteria.leechersMax})');
+    developer.log('bulk _load', name: 'bulk_import');
     final todo = [
       for (final t in trackers.keys)
         if ((selected.isEmpty || selected.contains(t)) &&
