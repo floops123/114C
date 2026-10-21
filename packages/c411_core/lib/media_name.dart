@@ -14,6 +14,20 @@ bool isVideoPath(String path) {
 /// Ce qu'on devine d'un fichier vidéo d'après son nom et ses dossiers :
 /// `/torrents/The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E01.mkv` → série
 /// « The Bear », saison 3, épisode 1.
+/// Taille minimale d'un film : en dessous, ce n'est pas un film (vidéos de
+/// jeux, extraits, bandes-annonces…).
+const minMovieBytes = 500 * 1024 * 1024;
+
+/// Taille minimale d'un épisode reconnu (S01E03, 1x03…) : un épisode court
+/// en H.265 pèse souvent 200 à 450 Mo.
+const minEpisodeBytes = 100 * 1024 * 1024;
+
+/// Le fichier est-il un film ou un épisode, au vu de sa taille ? Une taille
+/// inconnue (0) ne l'écarte pas.
+bool isMediaSize(String path, int size) =>
+    size <= 0 ||
+    size >= (MediaGuess.parse(path).isEpisode ? minEpisodeBytes : minMovieBytes);
+
 class MediaGuess {
   const MediaGuess({
     required this.title,

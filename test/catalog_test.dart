@@ -198,7 +198,7 @@ void main() {
         tmdbProvider.overrideWithValue(null),
         tmdbMatchStoreProvider.overrideWithValue(MemoryTmdbMatchStore()),
         mediaLibraryStoreProvider.overrideWithValue(MemoryMediaLibraryStore(MediaLibrary(
-            files: [MediaFile(path: '/Films/Amélie (2001)/Amélie (2001).mkv', size: 1)],
+            files: [MediaFile(path: '/Films/Amélie (2001)/Amélie (2001).mkv', size: 2 << 30)],
             scannedAt: DateTime.now()))),
       ],
       child: MaterialApp(theme: buildTheme(Brightness.dark), home: const TrackersPage()),

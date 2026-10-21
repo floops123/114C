@@ -18,11 +18,14 @@ String _prefs(Map<String, Object?> library) =>
 
 final _library = {
   'files': [
-    {'path': '/t/VisionQuest.S01E04.Malware.MULTi.1080p.DSNP.WEB.H264-BYOR.mkv', 'size': 4, 'added': '2026-10-20T10:00:00.000'},
-    {'path': '/t/VisionQuest.S01E03.MULTi.1080p.WEB.H265-GL0P.mkv', 'size': 3, 'added': '2026-10-21T10:00:00.000'},
-    {'path': '/t/Dune.Part.Two.2024.1080p.mkv', 'size': 7},
-    {'path': '/t/Dune.Deuxieme.Partie.2024.MULTi.2160p.mkv', 'size': 9},
-    {'path': '/t/Inconnu.1999.720p.avi', 'size': 1},
+    {'path': '/t/VisionQuest.S01E04.Malware.MULTi.1080p.DSNP.WEB.H264-BYOR.mkv', 'size': 1900 << 20, 'added': '2026-10-20T10:00:00.000'},
+    // Épisode court : gardé dès 100 Mo.
+    {'path': '/t/VisionQuest.S01E03.MULTi.1080p.WEB.H265-GL0P.mkv', 'size': 211 << 20, 'added': '2026-10-21T10:00:00.000'},
+    {'path': '/t/Dune.Part.Two.2024.1080p.mkv', 'size': 7 << 30},
+    {'path': '/t/Dune.Deuxieme.Partie.2024.MULTi.2160p.mkv', 'size': 9 << 30},
+    {'path': '/t/Inconnu.1999.720p.avi', 'size': 700 << 20},
+    // Vidéo de jeu (3 Mo) : ni film ni épisode.
+    {'path': '/t/vectrex/videos/Mine Storm-video.mp4', 'size': 3 << 20},
   ],
   'tmdb': {
     'tv:visionquest': {'id': 1, 'type': 'tv', 'title': 'VisionQuest', 'overview': 'Vision…', 'posterUrl': 'https://image/p.jpg', 'rating': 7.5, 'date': '2026-10-01'},
@@ -50,6 +53,13 @@ void main() {
       expect(byTitle['Dune : Deuxième partie']!.files, hasLength(2));
       expect(byTitle['Inconnu']!.series, isFalse);
       expect(byTitle['Inconnu']!.year, 1999);
+    });
+
+    test('trop petits pour un film ou un épisode : écartés', () {
+      final catalog = Catalog.parse(_prefs(_library));
+      final names = [for (final t in catalog.titles) for (final f in t.files) f.name];
+      expect(names, isNot(contains('Mine Storm-video.mp4')));
+      expect(names, contains('VisionQuest.S01E03.MULTi.1080p.WEB.H265-GL0P.mkv'));
     });
 
     test('identifiants stables, fichier retrouvé par identifiant', () {

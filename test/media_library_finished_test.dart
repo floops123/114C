@@ -26,7 +26,7 @@ class _Transmission extends TransmissionClient {
             'downloadDir': _dir,
             'percentDone': done ? 1.0 : 0.4,
             'files': [
-              {'name': 'Alien.1979.VFF.1080p.mkv', 'length': 42},
+              {'name': 'Alien.1979.VFF.1080p.mkv', 'length': 2 << 30},
               {'name': 'sample.mkv', 'length': 1},
             ],
           },
@@ -47,7 +47,7 @@ class _ScanTransmission extends TransmissionClient {
             'downloadDir': _dir,
             'percentDone': 1.0,
             'files': [
-              {'name': 'Dune.2024.1080p.mkv', 'length': 7},
+              {'name': 'Dune.2024.1080p.mkv', 'length': 2 << 30},
             ],
           },
         ],
@@ -116,7 +116,7 @@ void main() {
     // Base déjà connue : un film, avec la correspondance des chemins en place
     // (comme après un premier parcours).
     final store = MemoryMediaLibraryStore(MediaLibrary(
-      files: [MediaFile(path: '/torrents/Dune.2024.1080p.mkv', size: 7)],
+      files: [MediaFile(path: '/torrents/Dune.2024.1080p.mkv', size: 2 << 30)],
       tmdb: const {},
       scannedAt: DateTime(2026),
       pathFrom: _dir,
@@ -165,7 +165,7 @@ void main() {
     // _ScanTransmission n'est pas utilisé ici : on vérifie juste que la
     // construction de la base ne déclenche pas de parcours automatique.
     final store = MemoryMediaLibraryStore(MediaLibrary(
-      files: [MediaFile(path: '/torrents/a.mkv', size: 1)],
+      files: [MediaFile(path: '/torrents/a.mkv', size: 2 << 30)],
       scannedAt: DateTime(2026),
     ));
     final container = ProviderContainer(overrides: [
@@ -183,7 +183,7 @@ void main() {
   test('sans dossier à parcourir et correspondance connue : aucun FTP', () async {
     var connects = 0;
     final store = MemoryMediaLibraryStore(MediaLibrary(
-      files: [MediaFile(path: '/torrents/ancien.mkv', size: 1)],
+      files: [MediaFile(path: '/torrents/ancien.mkv', size: 2 << 30)],
       scannedAt: DateTime(2026),
       pathFrom: _dir,
       pathTo: '/torrents',
@@ -222,10 +222,13 @@ void main() {
       '/medias/Films/Amélie (2001)/Amélie (2001).mkv': [1, 2],
       // Les fichiers du torrent : la correspondance des chemins se vérifie.
       '/torrents/Alien.1979.VFF.1080p.mkv': [1, 2, 3],
+    }, sizes: {
+      '/medias/Films/Amélie (2001)/Amélie (2001).mkv': 2 << 30,
+      '/torrents/Alien.1979.VFF.1080p.mkv': 2 << 30,
     });
     addTearDown(server.close);
     final store = MemoryMediaLibraryStore(MediaLibrary(
-      files: [MediaFile(path: '/torrents/ancien.mkv', size: 1)],
+      files: [MediaFile(path: '/torrents/ancien.mkv', size: 2 << 30)],
       scannedAt: DateTime(2026),
       pathFrom: _dir,
       pathTo: '/torrents',
@@ -258,7 +261,7 @@ void main() {
   group('réconciliation avec Transmission', () {
     MemoryMediaLibraryStore known() => MemoryMediaLibraryStore(MediaLibrary(
           files: [
-            MediaFile(path: '/torrents/Dune.2024.1080p.mkv', size: 7, hash: 'old1'),
+            MediaFile(path: '/torrents/Dune.2024.1080p.mkv', size: 2 << 30, hash: 'old1'),
           ],
           tmdb: const {},
           scannedAt: DateTime(2026),
@@ -371,7 +374,7 @@ class _Many extends TransmissionClient {
         'downloadDir': _dir,
         'percentDone': 1.0,
         'files': [
-          {'name': id == 9 ? 'Livre.epub' : 'Show.S01E0$id.mkv', 'length': 5},
+          {'name': id == 9 ? 'Livre.epub' : 'Show.S01E0$id.mkv', 'length': 300 << 20},
         ],
       };
 

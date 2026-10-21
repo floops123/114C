@@ -83,7 +83,9 @@ Raccourcis du lecteur : Espace (lecture/pause), ← / → (10 s), F (plein
 écran), Échap (retour). Les positions de reprise sont gardées dans le
 navigateur. Liens directs : `#films`, `#series`, `#t=<titre>`.
 
-Seuls les titres reconnus par TMDB sont mis en avant ; les autres (fichiers
+Comme dans l'application, un fichier ne compte que s'il fait au moins
+**500 Mo (film)** ou **100 Mo (épisode)** : les vidéos de jeux et autres
+petits fichiers sont ignorés. Seuls les titres reconnus par TMDB sont mis en avant ; les autres (fichiers
 épars, vidéos de jeux…) restent accessibles par la recherche et « Tout
 afficher » dans Films et Séries.
 

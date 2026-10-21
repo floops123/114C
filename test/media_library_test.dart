@@ -27,7 +27,7 @@ class _Transmission extends TransmissionClient {
             'downloadDir': _dir,
             'percentDone': 1.0,
             'files': [
-              {'name': 'Dune.Part.Two.2024.MULTi.2160p.WEB-GRP.mkv', 'length': 6},
+              {'name': 'Dune.Part.Two.2024.MULTi.2160p.WEB-GRP.mkv', 'length': _go2},
             ],
           },
           {
@@ -36,8 +36,8 @@ class _Transmission extends TransmissionClient {
             'downloadDir': _dir,
             'percentDone': 1.0,
             'files': [
-              {'name': 'The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E02.mkv', 'length': 2},
-              {'name': 'The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E01.mkv', 'length': 1},
+              {'name': 'The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E02.mkv', 'length': _mo700},
+              {'name': 'The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E01.mkv', 'length': _mo600},
               {'name': 'The.Bear.S03.MULTi.1080p-GRP/info.nfo', 'length': 1},
             ],
           },
@@ -54,6 +54,9 @@ class _Transmission extends TransmissionClient {
         removed: <int>[],
       );
 }
+
+// Tailles réalistes : un film fait au moins 500 Mo, un épisode 100 Mo.
+const _go2 = 2 << 30, _mo700 = 700 << 20, _mo600 = 600 << 20;
 
 class _Tmdb extends TmdbApi {
   _Tmdb() : super('x');
@@ -101,6 +104,16 @@ void main() {
       '/medias/Films/Amélie (2001)/Amélie (2001).mkv': [1],
       '/medias/Films/Amélie (2001)/Sample/sample.mkv': [1],
       '/medias/Séries/MobLand/Saison 1/MobLand - S01E01.mkv': [1],
+      // Vidéo de jeu : trop petite pour un film, écartée.
+      '/medias/Jeux/vectrex/videos/Mine Storm-video.mp4': [1],
+    }, sizes: {
+      '/torrents/Dune.Part.Two.2024.MULTi.2160p.WEB-GRP.mkv': _go2,
+      '/torrents/The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E01.mkv': _mo600,
+      '/torrents/The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E02.mkv': _mo700,
+      '/medias/Films/Amélie (2001)/Amélie (2001).mkv': _go2,
+      // Épisode court en H.265 : gardé (au moins 100 Mo).
+      '/medias/Séries/MobLand/Saison 1/MobLand - S01E01.mkv': 211 << 20,
+      '/medias/Jeux/vectrex/videos/Mine Storm-video.mp4': 3 << 20,
     });
     addTearDown(server.close);
     final tmdb = _Tmdb();

@@ -41,6 +41,11 @@ class MediaFile {
   final DateTime? added;
 
   late final MediaGuess guess = MediaGuess.parse(path);
+
+  /// Assez gros pour un film ou un épisode (voir [isMediaSize]).
+  bool get isMedia =>
+      size <= 0 ||
+      size >= (guess.isEpisode ? minEpisodeBytes : minMovieBytes);
   String get name => path.split('/').last;
 
   /// Clé de reprise de lecture.
@@ -145,7 +150,10 @@ class MediaLibrary {
 
   late final List<MediaTitle> titles = () {
     final groups = <String, List<MediaFile>>{};
+    // Trop petits pour un film ou un épisode (vidéos de jeux…) : ignorés,
+    // y compris ceux d'une base enregistrée avant cette règle.
     for (final f in files) {
+      if (!f.isMedia) continue;
       (groups[groupKey(f.guess)] ??= []).add(f);
     }
     // Deux noms différents pour la même fiche TMDB (« Dune Part Two » et
@@ -362,7 +370,9 @@ List<({String path, int size, String hash})> completedVideos(
           for (final f in (t['files'] as List? ?? const []).whereType<Map>())
             if ('${t['downloadDir']}/${f['name']}'.replaceAll('//', '/')
                 case final path
-                when isVideoPath(path) && !MediaGuess.isExtra(path))
+                when isVideoPath(path) &&
+                    !MediaGuess.isExtra(path) &&
+                    isMediaSize(path, (f['length'] as num?)?.toInt() ?? 0))
               (
                 path: path,
                 size: (f['length'] as num?)?.toInt() ?? 0,
@@ -671,7 +681,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       // un list() par dossier).
       if (roots.isNotEmpty && ftp != null) {
         for (final f in await scanFolders(ftp, roots, onFolder: (d) => status('Dossier $d'))) {
-          found.putIfAbsent(f.path, () => f);
+          if (isMediaSize(f.path, f.size)) found.putIfAbsent(f.path, () => f);
         }
       }
 
@@ -705,7 +715,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   Future<MediaLibrary> _identify(MediaLibrary library, TmdbApi tmdb) async {
     final pending = <String, MediaGuess>{
       for (final f in library.files)
-        if (!library.tmdb.containsKey(MediaLibrary.groupKey(f.guess)))
+        if (f.isMedia && !library.tmdb.containsKey(MediaLibrary.groupKey(f.guess)))
           MediaLibrary.groupKey(f.guess): f.guess,
     };
     // Fiches gardées avant la note TMDB : la note seule est relue.

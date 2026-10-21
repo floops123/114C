@@ -1,4 +1,5 @@
 import 'package:c411_remote/core/media_name.dart';
+import 'package:c411_remote/state/media_library.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -35,5 +36,28 @@ void main() {
     expect(MediaGuess.isExtra('/t/Samples.Of.Life.2024.mkv'), isFalse);
     expect(isVideoPath('/a/b.MKV'), isTrue);
     expect(isVideoPath('/a/b.nfo'), isFalse);
+  });
+
+  test('taille minimale : 500 Mo pour un film, 100 Mo pour un épisode', () {
+    const mo = 1 << 20;
+    expect(isMediaSize('/Films/Dune.2021.1080p.mkv', 2048 * mo), isTrue);
+    expect(isMediaSize('/Films/Court.Metrage.2021.1080p.mkv', 499 * mo), isFalse);
+    expect(isMediaSize('/vectrex/videos/Mine Storm-video.mp4', 3 * mo), isFalse,
+        reason: 'vidéo de jeu');
+    expect(isMediaSize('/S/Cyberpunk.Edgerunners.S01E02.1080p.mkv', 426 * mo), isTrue,
+        reason: 'épisode court en H.265');
+    expect(isMediaSize('/S/Show.S01E02.mkv', 99 * mo), isFalse);
+    expect(isMediaSize('/x/inconnu.mkv', 0), isTrue, reason: 'taille inconnue');
+  });
+
+  test('base enregistrée avant la règle : petits fichiers ignorés à l’affichage', () {
+    const mo = 1 << 20;
+    final library = MediaLibrary(files: [
+      MediaFile(path: '/t/Film.2020.1080p.mkv', size: 2048 * mo),
+      MediaFile(path: '/o2em/videos/Jeu (Europe)-video.mp4', size: 4 * mo),
+      MediaFile(path: '/t/Show.S01E01.mkv', size: 211 * mo),
+    ]);
+    expect([for (final t in library.titles) t.files.single.path],
+        unorderedEquals(['/t/Film.2020.1080p.mkv', '/t/Show.S01E01.mkv']));
   });
 }

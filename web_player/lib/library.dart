@@ -119,7 +119,10 @@ class Catalog {
     final groups = <String, List<CatalogFile>>{};
     for (final f in (library['files'] as List? ?? const []).whereType<Map>()) {
       final path = f['path'] as String? ?? '';
-      if (path.isEmpty) continue;
+      final size = (f['size'] as num?)?.toInt() ?? 0;
+      // Trop petit pour un film (500 Mo) ou un épisode (100 Mo) : vidéos
+      // de jeux, extraits… Même règle que l'application.
+      if (path.isEmpty || !isMediaSize(path, size)) continue;
       final guess = MediaGuess.parse(path);
       final key = guess.isEpisode
           ? 'tv:${titleKey(guess.title)}'
@@ -127,7 +130,7 @@ class Catalog {
       (groups[key] ??= []).add(CatalogFile(
         id: fileId(path),
         path: path,
-        size: (f['size'] as num?)?.toInt() ?? 0,
+        size: size,
         guess: guess,
         added: DateTime.tryParse(f['added'] as String? ?? ''),
       ));

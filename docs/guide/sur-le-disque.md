@@ -25,6 +25,12 @@ Sont retenus les fichiers vidéo (`mkv`, `mp4`, `avi`, `ts`, `m2ts`, `webm`,
 `mov`…) ; les extraits (*sample*) et les bonus (*Extras*, *Featurettes*…) sont
 ignorés.
 
+Seuls les fichiers assez gros pour être un film ou un épisode comptent :
+**au moins 500 Mo pour un film**, **au moins 100 Mo pour un épisode**
+reconnu (S01E03, 1x03…). Les petites vidéos (vidéos de jeux, extraits,
+bandes-annonces) sont ignorées, y compris dans une base enregistrée avant
+cette règle, sans nouveau parcours.
+
 ## Comment un fichier est reconnu
 
 Le nom du fichier **et** celui de ses dossiers sont analysés :

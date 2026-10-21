@@ -5,12 +5,16 @@ import 'dart:io';
 /// Petit serveur FTP pour les tests : fichiers en mémoire, mode passif
 /// (`EPSV`), TLS explicite facultatif (certificat de test autosigné).
 class FakeFtpServer {
-  FakeFtpServer._(this._server, this.files, this.tls);
+  FakeFtpServer._(this._server, this.files, this.tls, this.sizes);
 
   final ServerSocket _server;
 
   /// Chemin absolu → contenu. Les dossiers se déduisent des chemins.
   final Map<String, List<int>> files;
+
+  /// Tailles annoncées (SIZE, MLSD, LIST) à la place de celle du contenu :
+  /// un « film » de 2 Go sans 2 Go en mémoire.
+  final Map<String, int> sizes;
   final bool tls;
 
   /// Commandes reçues, toutes connexions confondues.
@@ -26,9 +30,9 @@ class FakeFtpServer {
     ..usePrivateKey('test/fixtures/ftp_test_key.pem');
 
   static Future<FakeFtpServer> start(Map<String, List<int>> files,
-      {bool tls = false}) async {
+      {bool tls = false, Map<String, int> sizes = const {}}) async {
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-    final fake = FakeFtpServer._(server, files, tls);
+    final fake = FakeFtpServer._(server, files, tls, sizes);
     server.listen((s) => _Session(fake, s).run());
     return fake;
   }
@@ -116,7 +120,7 @@ class _Session {
         reply('229 Passif (|||${passive!.port}|)');
       case 'SIZE':
         final f = files[arg];
-        reply(f == null ? '550 Absent' : '213 ${f.length}');
+        reply(f == null ? '550 Absent' : '213 ${server.sizes[arg] ?? f.length}');
       case 'REST':
         offset = int.parse(arg);
         reply('350 Reprise à $arg');
@@ -133,7 +137,8 @@ class _Session {
           for (final d in server.dirs())
             if (child(d)) d.substring(dir.length + 1): null,
           for (final MapEntry(:key, :value) in files.entries)
-            if (child(key)) key.substring(dir.length + 1): value.length,
+            if (child(key))
+              key.substring(dir.length + 1): server.sizes[key] ?? value.length,
         };
         reply('150 Liste');
         await socket.flush();
