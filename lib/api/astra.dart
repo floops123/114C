@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../core/release_name.dart';
+import 'quota.dart';
 import 'tracker.dart';
 
 /// Torrent local soumis au scanner de cross-seed d'AstraTorrent.
@@ -233,11 +234,13 @@ class AstraApi implements TrackerApi {
     if (url == null) {
       throw const TrackerException('AstraTorrent : pas de lien de téléchargement');
     }
-    final res = await _dio.get<List<int>>(url,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: {'Accept': 'application/x-bittorrent, */*'},
-        ));
+    final res = await trackerRequest(
+        tracker,
+        () => _dio.get<List<int>>(url,
+            options: Options(
+              responseType: ResponseType.bytes,
+              headers: {'Accept': 'application/x-bittorrent, */*'},
+            )));
     if (res.statusCode != 200) {
       throw TrackerException(
           'AstraTorrent : téléchargement refusé (HTTP ${res.statusCode})');

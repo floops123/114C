@@ -5,6 +5,7 @@ import '../api/tracker.dart';
 import '../core/format.dart';
 import '../state/release_watch.dart';
 import '../state/releases.dart';
+import 'quota_notice.dart';
 import 'release_detail_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -87,6 +88,10 @@ class _ReleaseWatchPageState extends ConsumerState<ReleaseWatchPage> {
                 children: const [WatchSettingsPanel()],
               ),
             ),
+          ),
+          QuotaNotice(
+            trackers: ref.watch(trackersProvider).keys,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           ),
           for (final MapEntry(key: t, value: e) in state.errors.entries)
             Padding(

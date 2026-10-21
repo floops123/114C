@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import 'quota.dart';
+import 'tracker.dart';
 
 /// Le contenu des messages arrive encodé en HTML (`c&#x27;est`).
 String unescapeHtml(String s) => s.replaceAllMapped(
@@ -292,7 +294,8 @@ class C411ChatApi {
       [Map<String, dynamic>? query]) async {
     final Response<dynamic> res;
     try {
-      res = await _dio.get<dynamic>(path, queryParameters: query);
+      res = await trackerRequest(Tracker.c411,
+          () => _dio.get<dynamic>(path, queryParameters: query));
     } on DioException catch (e) {
       throw ChatException('C411 injoignable : ${e.message ?? e.type.name}');
     }

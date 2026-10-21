@@ -44,6 +44,7 @@ lib/
 │   └── format.dart            octets, vitesses, durées, dates en français
 ├── api/
 │   ├── tracker.dart           enum Tracker, modèle Release, interface TrackerApi
+│   ├── quota.dart             quota de requêtes par minute de chaque tracker, 429
 │   ├── c411.dart              API JSON de C411
 │   ├── torznab.dart           Torznab générique (tr4ker, Nostradamus, Draupnirr)
 │   ├── draupnirr.dart          API JSON Draupnirr : /api/me, missions, badges
@@ -195,7 +196,8 @@ environ à chaque saut dans la vidéo.
 ## Ajouter un tracker
 
 1. Une ligne dans l'enum `Tracker` (`api/tracker.dart`) : nom, URL, fragment
-   d'URL d'annonce (pour reconnaître ses torrents), nom de l'identifiant.
+   d'URL d'annonce (pour reconnaître ses torrents), nom de l'identifiant,
+   requêtes permises par minute (120 par défaut).
 2. Le brancher dans `Tracker.client` : `TorznabApi` s'il parle Torznab,
    sinon une nouvelle classe qui implémente `TrackerApi`.
 

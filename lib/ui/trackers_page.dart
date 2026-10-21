@@ -14,6 +14,7 @@ import 'bulk_import_page.dart';
 import 'content_art.dart';
 import 'disk_page.dart';
 import 'on_disk.dart';
+import 'quota_notice.dart';
 import 'release_watch_page.dart';
 import 'releases_page.dart';
 import 'send_button.dart';
@@ -229,6 +230,10 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
                     ),
             ),
           ),
+        ),
+        QuotaNotice(
+          trackers: trackers.keys,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
         ),
         // Trackers, avec leur nombre de titres.
         if (trackers.length > 1) ...[

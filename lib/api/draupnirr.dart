@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import 'quota.dart';
 import 'tracker.dart';
 
 /// Client JSON de Draupnirr (draupnirr.xyz). Authentification par clé API
@@ -33,10 +34,12 @@ class DraupnirrApi {
 
   Future<Response<dynamic>> _get(String path) async {
     try {
-      return await _dio.get<dynamic>(
-        path,
-        queryParameters: {'apikey': apiKey},
-      );
+      return await trackerRequest(
+          Tracker.draupnirr,
+          () => _dio.get<dynamic>(
+                path,
+                queryParameters: {'apikey': apiKey},
+              ));
     } on DioException catch (e) {
       throw TrackerException(
           'Draupnirr injoignable : ${e.message ?? e.type.name}');

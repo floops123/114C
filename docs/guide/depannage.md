@@ -13,6 +13,13 @@ Le bouton **Tester** des Réglages donne le message exact du serveur.
 Recopie la clé depuis ton profil, sans espace. Pour AstraTorrent, c'est la
 **passkey** qui est demandée, pas une clé d'API.
 
+**« Limite de requêtes par minute atteinte : reprise dans N s »**
+Chaque tracker n'accepte qu'un nombre limité de requêtes par minute (120
+pour C411 et les indexeurs Torznab). Quand une recherche ou un import en
+demande davantage, l'application patiente au lieu de se faire refuser :
+le bandeau indique quand ça repart. Rien à faire, sinon éviter de lancer
+plusieurs gros imports en même temps.
+
 **Les notifications et le salon restent vides**
 Le cookie de session a probablement expiré : reconnecte-toi sur le site et
 recolle l'en-tête `Cookie` (voir [Configuration](configuration.md#cookie-de-session-c411)).

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/tracker.dart';
 import '../core/format.dart';
 import '../state/bulk_import.dart';
+import 'quota_notice.dart';
 import 'release_detail_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -372,6 +373,11 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                 child: const Text('Tout décocher'),
               ),
             ]),
+          ),
+        if (state.criteria.tracker case final t?)
+          QuotaNotice(
+            trackers: [t],
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
           ),
         if (state.error != null)
           Padding(

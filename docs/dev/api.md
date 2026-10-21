@@ -14,6 +14,7 @@ formats, pièges. À lire avant de toucher à un client de `lib/api/`.
 - [TMDB](#tmdb)
 - [Jellyfin](#jellyfin)
 - [FTP / FTPS (Appbox)](#ftp--ftps-appbox)
+- [Quotas des trackers](#quotas-des-trackers)
 
 ---
 
@@ -228,3 +229,34 @@ Draupnirr).
   seedboxes).
 - Limite connue : la reprise de session TLS sur la connexion de données n'est
   pas faite ; un serveur qui l'exige refusera les transferts.
+
+## Quotas des trackers
+
+| Tracker | Limite annoncée | Budget de l'application |
+|---|---|---|
+| C411 | 120 / min par clé | 108 / min |
+| tr4ker, Nostradamus | 120 / min par clé | 108 / min |
+| Draupnirr | 120 / min par clé (300 / min par IP) | 108 / min |
+| AstraTorrent | non publiée | 54 / min (60 supposées) |
+
+Toute requête HTTP vers un tracker passe par `trackerRequest`
+(`lib/api/quota.dart`) : clé API, cookie de session (palliatif, salon) ou
+téléchargement de `.torrent`, toutes fonctions confondues (import en masse,
+veille, disponibilité, cross-seed…). Un `RequestQuota` par tracker compte
+les départs sur une **fenêtre glissante d'une minute** et fait patienter la
+requête de trop au lieu de la laisser se faire refuser ; les rafales restent
+permises sous la limite. Le budget garde 10 % de marge (horloge du serveur,
+autre appareil avec la même clé).
+
+Sur un **HTTP 429**, le quota du tracker est suspendu le temps donné par
+`Retry-After` (secondes ou date HTTP ; 60 s à défaut) et la requête est
+refaite une fois. Un second refus remonte en erreur.
+
+Les attentes sont visibles : `QuotaNotice` affiche « reprise dans N s » sur
+les pages Trackers, Import en masse et Nouveautés. Les espacements propres à
+certaines tâches de fond (disponibilité : `trackerLimitersProvider`,
+cross-seed : `crossSeedDelayProvider`) restent en place : ils leur évitent
+de consommer tout le budget au détriment de ce qu'on fait à l'écran.
+
+La limite d'un tracker se règle dans l'enum `Tracker`
+(`requestsPerMinute`).

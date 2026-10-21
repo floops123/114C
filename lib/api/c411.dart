@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import 'quota.dart';
 import 'tracker.dart';
 
 /// Client JSON de C411 authentifié par le cookie de session du site
@@ -38,17 +39,19 @@ class C411SiteApi {
     int perPage = 25,
   }) async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/torrents',
-        queryParameters: {
-          'palliative': 'only',
-          'palliativeAge': age,
-          'sortBy': 'bounty',
-          'sortOrder': 'desc',
-          'page': page,
-          'perPage': perPage,
-        },
-      );
+      final res = await trackerRequest(
+          Tracker.c411,
+          () => _dio.get<Map<String, dynamic>>(
+                '/api/torrents',
+                queryParameters: {
+                  'palliative': 'only',
+                  'palliativeAge': age,
+                  'sortBy': 'bounty',
+                  'sortOrder': 'desc',
+                  'page': page,
+                  'perPage': perPage,
+                },
+              ));
       if (res.statusCode == 401 || res.statusCode == 403) {
         throw TrackerException('Cookie de session C411 refusé');
       }

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/settings.dart';
 import 'astra.dart';
 import 'c411.dart';
+import 'quota.dart';
 import 'torznab.dart';
 
 /// Trackers pris en charge. Ajouter un tracker Torznab = une ligne ici.
@@ -19,13 +20,21 @@ enum Tracker {
   draupnirr('Draupnirr', 'https://draupnirr.xyz/torznab/api',
       apiKeyHeader: 'X-Api-Key', announceHint: 'draupnirr'),
 
+  // Limite non publiée : prudence.
   astra('AstraTorrent', 'https://astratorrent.la',
-      announceHint: 'astratorrent', keyLabel: 'Passkey');
+      announceHint: 'astratorrent', keyLabel: 'Passkey', requestsPerMinute: 60);
 
   const Tracker(this.label, this.baseUrl,
-      {this.apiKeyHeader, required this.announceHint, this.keyLabel = 'Clé API'});
+      {this.apiKeyHeader,
+      required this.announceHint,
+      this.keyLabel = 'Clé API',
+      this.requestsPerMinute = 120});
   final String label;
   final String baseUrl;
+
+  /// Requêtes permises par minute (voir docs/dev/api.md) ; l'application en
+  /// garde une marge, voir [trackerQuotas].
+  final int requestsPerMinute;
 
   /// Nom de l'identifiant dans les réglages.
   final String keyLabel;
@@ -269,7 +278,7 @@ Future<Response<T>> _trackerSend<T>(
     Tracker tracker, Future<Response<T>> Function() send) async {
   final Response<T> res;
   try {
-    res = await send();
+    res = await trackerRequest(tracker, send);
   } on DioException catch (e) {
     throw TrackerException(
         '${tracker.label} injoignable : ${e.message ?? e.type.name}');
@@ -277,8 +286,8 @@ Future<Response<T>> _trackerSend<T>(
   return switch (res.statusCode) {
     200 => res,
     401 || 403 => throw TrackerException('Clé API ${tracker.label} refusée'),
-    429 => throw TrackerException(
-        'Limite de requêtes ${tracker.label} atteinte, réessaie dans une minute'),
+    429 => throw TrackerException('Limite de requêtes ${tracker.label} '
+        'atteinte malgré l’attente, réessaie dans une minute'),
     _ => throw TrackerException(
         'Réponse ${tracker.label} inattendue (HTTP ${res.statusCode})'),
   };
