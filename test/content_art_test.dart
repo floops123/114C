@@ -42,6 +42,23 @@ void main() {
     expect(k('Archive-GRP'), ContentKind.other);
   });
 
+  test('type de contenu : catégories du tracker', () {
+    ContentKind k(String sub, List<String> cats, {String name = 'X'}) => ContentKind.of(Release(
+        tracker: Tracker.c411, id: '1', name: name, subcategory: sub, categories: cats,
+        createdAt: DateTime(2026)));
+    expect(k('Windows', ['Jeux Vidéo', 'Windows']), ContentKind.game,
+        reason: 'un jeu Windows n’est pas un logiciel');
+    expect(k('Windows', ['Applications', 'Windows']), ContentKind.software);
+    expect(k('Audio', ['Ebook', 'Audio']), ContentKind.book, reason: 'livre audio');
+    expect(k('Musique', ['Audio', 'Musique']), ContentKind.music);
+    // Torznab : pas de sous-catégorie, les catégories du caps.
+    expect(k('', ['Movies/HD', 'Movies']), ContentKind.movie);
+    expect(k('', ['TV/HD', 'TV']), ContentKind.series);
+    expect(k('', ['Books/EBook', 'Books']), ContentKind.book);
+    expect(k('', ['PC/Games', 'PC']), ContentKind.game);
+    expect(k('', ['Audio/MP3', 'Audio']), ContentKind.music);
+  });
+
   testWidgets('affiche absente : image du type de contenu', (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: buildTheme(Brightness.dark),

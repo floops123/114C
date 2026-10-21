@@ -137,6 +137,7 @@ class WatchedRelease {
       'created': r.createdAt.toIso8601String(),
       'poster': r.posterUrl,
       'quality': r.qualityProfile,
+      'kind': r.mediaKind,
       'found': foundAt.toIso8601String(),
       'new': isNew,
     };
@@ -164,6 +165,7 @@ class WatchedRelease {
             DateTime.fromMillisecondsSinceEpoch(0),
         posterUrl: j['poster'] as String?,
         qualityProfile: j['quality'] as String?,
+        mediaKind: j['kind'] as String?,
       ),
       foundAt: DateTime.tryParse(j['found'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),

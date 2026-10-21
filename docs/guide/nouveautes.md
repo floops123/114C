@@ -37,6 +37,11 @@ Veille des nouveautés**. Ils s'appliquent tout de suite.
   ne fait pas revenir les anciennes comme nouvelles.
 - Ouvrir la page marque tout comme vu ; les nouveautés restent repérées
   (« NOUVEAU ») le temps de la visite.
+- Chaque sortie porte une **vignette de couleur** selon son type (film,
+  série, documentaire, animation, musique, livre, jeu vidéo, logiciel…) et
+  sa **catégorie** telle que le tracker la range (« Jeux Vidéo › Windows »,
+  « Movies/HD »). Des **filtres par type**, avec leur nombre de sorties,
+  sont en tête de liste.
 - ⬇ envoie la sortie à Transmission ; toucher la ligne ouvre son détail.
 - Un tracker en échec est signalé en haut de la page ; les autres sont
   relevés normalement.

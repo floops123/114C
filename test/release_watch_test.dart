@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/state/release_watch.dart';
+import 'package:c411_remote/ui/content_art.dart';
 import 'package:c411_remote/ui/release_watch_page.dart';
 import 'package:c411_remote/ui/theme.dart';
 import 'package:flutter/material.dart';
@@ -245,6 +246,7 @@ void main() {
             name: 'X.2026.1080p',
             downloadUrl: 'https://x/dl/7',
             categories: const ['Movies/HD'],
+            mediaKind: 'movie',
             size: 42,
             seeders: 3,
             createdAt: DateTime.utc(2026, 10, 20),
@@ -265,6 +267,7 @@ void main() {
     expect(r.seeders, 3);
     expect(r.createdAt, DateTime.utc(2026, 10, 20));
     expect(d.items.single.isNew, isTrue);
+    expect(d.items.single.release.mediaKind, 'movie', reason: 'type C411 conservé');
     expect(d.known, ['tr4ker:7']);
     expect(d.baselined, {Tracker.tr4ker});
     expect(d.lastCheck, DateTime.utc(2026, 10, 21));
@@ -319,5 +322,55 @@ void main() {
     await tester.pump();
     expect(h.container.read(watchConfigProvider).trackers, isEmpty);
     expect(find.text('Aucun tracker surveillé'), findsOneWidget);
+  });
+
+  test('libellé de catégorie : catégorie › sous-catégorie, Torznab, type', () {
+    Release r(String sub, List<String> cats) => Release(
+        tracker: Tracker.c411, id: '1', name: 'X', subcategory: sub, categories: cats,
+        createdAt: DateTime(2026));
+    expect(categoryLabel(r('Windows', ['Jeux Vidéo', 'Windows']), ContentKind.game),
+        'Jeux Vidéo › Windows');
+    expect(categoryLabel(r('', ['Movies', 'Movies/HD']), ContentKind.movie), 'Movies/HD');
+    expect(categoryLabel(r('Film', const []), ContentKind.movie), 'Film');
+    expect(categoryLabel(r('', const []), ContentKind.book), 'Livre');
+  });
+
+  testWidgets('Nouveautés : filtre par type de contenu', (tester) async {
+    Release r(String id, String sub, List<String> cats) => Release(
+        tracker: Tracker.c411, id: id, name: 'R$id', subcategory: sub, categories: cats,
+        createdAt: DateTime(2026));
+    final store = MemoryWatchStore()
+      ..data = WatchData(items: [
+        for (final rel in [
+          r('1', 'Film', ['Films & Vidéos', 'Film']),
+          r('2', 'Windows', ['Jeux Vidéo', 'Windows']),
+          r('3', 'Série TV', ['Films & Vidéos', 'Série TV']),
+        ])
+          WatchedRelease(release: rel, foundAt: DateTime(2026), isNew: false),
+      ]);
+    final container = ProviderContainer(overrides: [
+      trackersProvider.overrideWithValue(const {}),
+      watchStoreProvider.overrideWithValue(store),
+      systemNotifierProvider.overrideWithValue(_Notifier()),
+    ]);
+    addTearDown(container.dispose);
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(theme: buildTheme(Brightness.dark), home: const ReleaseWatchPage()),
+    ));
+    await tester.pump();
+    expect(find.text('R1'), findsOneWidget);
+    expect(find.text('JEUX VIDÉO › WINDOWS'), findsOneWidget);
+    await tester.tap(find.text('Jeu vidéo · 1'));
+    await tester.pump();
+    expect(find.text('R2'), findsOneWidget);
+    expect(find.text('R1'), findsNothing);
+    expect(find.text('R3'), findsNothing);
+    await tester.tap(find.text('Tout · 3'));
+    await tester.pump();
+    expect(find.text('R3'), findsOneWidget);
   });
 }

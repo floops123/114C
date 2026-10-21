@@ -5,6 +5,7 @@ import '../api/tracker.dart';
 import '../core/format.dart';
 import '../state/release_watch.dart';
 import '../state/releases.dart';
+import 'content_art.dart';
 import 'quota_notice.dart';
 import 'release_detail_page.dart';
 import 'theme.dart';
@@ -22,6 +23,9 @@ class _ReleaseWatchPageState extends ConsumerState<ReleaseWatchPage> {
   /// Nouvelles à l'ouverture : restent signalées le temps de la visite, même
   /// une fois marquées comme vues.
   late final Set<String> _highlight;
+
+  /// Type de contenu affiché ; null : tous.
+  ContentKind? _kind;
 
   @override
   void initState() {
@@ -41,6 +45,17 @@ class _ReleaseWatchPageState extends ConsumerState<ReleaseWatchPage> {
     final config = ref.watch(watchConfigProvider);
     final notifier = ref.read(releaseWatchProvider.notifier);
     final small = TextStyle(fontSize: 12, color: c.muted);
+    final kinds = {for (final i in state.items) i.key: ContentKind.of(i.release)};
+    final counts = <ContentKind, int>{};
+    for (final k in kinds.values) {
+      counts[k] = (counts[k] ?? 0) + 1;
+    }
+    // Un type filtré qui n'a plus de sortie (liste vidée) : tout.
+    final kind = counts.containsKey(_kind) ? _kind : null;
+    final shown = [
+      for (final i in state.items)
+        if (kind == null || kinds[i.key] == kind) i,
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -110,12 +125,21 @@ class _ReleaseWatchPageState extends ConsumerState<ReleaseWatchPage> {
                         'des trackers.',
               ),
             )
-          else
-            for (final item in state.items)
+          else ...[
+            if (counts.length > 1)
+              _KindFilter(
+                counts: counts,
+                total: state.items.length,
+                selected: kind,
+                onSelected: (k) => setState(() => _kind = k),
+              ),
+            for (final item in shown)
               _WatchRow(
                 item: item,
+                kind: kinds[item.key]!,
                 highlight: item.isNew || _highlight.contains(item.key),
               ),
+          ],
         ],
       ),
     );
@@ -222,9 +246,119 @@ class WatchSettingsPanel extends ConsumerWidget {
   }
 }
 
+/// Filtres par type de contenu, avec le nombre de sorties de chacun.
+class _KindFilter extends StatelessWidget {
+  const _KindFilter({
+    required this.counts,
+    required this.total,
+    required this.selected,
+    required this.onSelected,
+  });
+  final Map<ContentKind, int> counts;
+  final int total;
+  final ContentKind? selected;
+  final ValueChanged<ContentKind?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final kinds = counts.keys.toList()..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Row(spacing: 6, children: [
+        ChoiceChip(
+          label: Text('Tout · $total'),
+          selected: selected == null,
+          onSelected: (_) => onSelected(null),
+        ),
+        for (final k in kinds)
+          ChoiceChip(
+            avatar: Icon(k.icon,
+                size: 16, color: selected == k ? c.onAccent : k.colors(c).first),
+            label: Text('${k.label} · ${counts[k]}'),
+            selected: selected == k,
+            onSelected: (_) => onSelected(selected == k ? null : k),
+          ),
+      ]),
+    );
+  }
+}
+
+/// Vignette du type de contenu : dégradé et icône, reconnaissables d'un
+/// coup d'œil dans la liste.
+class _KindTile extends StatelessWidget {
+  const _KindTile(this.kind);
+  final ContentKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = kind.colors(context.colors);
+    return Tooltip(
+      message: kind.label,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: colors,
+          ),
+        ),
+        child: Icon(kind.icon, size: 24, color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// Catégorie telle que le tracker la range : « Jeux Vidéo › Windows » (C411 :
+/// catégorie et sous-catégorie), « Movies/HD » (Torznab), sinon le type.
+String categoryLabel(Release r, ContentKind kind) {
+  final sub = r.subcategory.trim();
+  final parent = r.categories.where((c) => c.trim().isNotEmpty && c != sub).firstOrNull;
+  if (sub.isNotEmpty && parent != null && !sub.toLowerCase().contains(parent.toLowerCase())) {
+    return '$parent › $sub';
+  }
+  if (sub.isNotEmpty) return sub;
+  // Torznab : la plus précise (« Movies/HD » plutôt que « Movies »).
+  final precise = [...r.categories]..sort((a, b) => b.length.compareTo(a.length));
+  return precise.firstOrNull ?? kind.label;
+}
+
+/// Étiquette de catégorie : icône du type et nom, à la couleur du type.
+class _KindTag extends StatelessWidget {
+  const _KindTag(this.kind, this.label);
+  final ContentKind kind;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final color = kind.colors(c).first;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Color.lerp(color, c.surface, 0.82),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: Color.lerp(color, c.surface, 0.5)!),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(kind.icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(label.toUpperCase(),
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.w700, color: c.text, letterSpacing: .3)),
+      ]),
+    );
+  }
+}
+
 class _WatchRow extends ConsumerWidget {
-  const _WatchRow({required this.item, required this.highlight});
+  const _WatchRow({required this.item, required this.kind, required this.highlight});
   final WatchedRelease item;
+  final ContentKind kind;
   final bool highlight;
 
   @override
@@ -247,8 +381,10 @@ class _WatchRow extends ConsumerWidget {
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => ReleaseDetailPage(release: r))),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+            padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
             child: Row(children: [
+              _KindTile(kind),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,8 +402,8 @@ class _WatchRow extends ConsumerWidget {
                       physics: const NeverScrollableScrollPhysics(),
                       child: Row(spacing: 6, children: [
                         if (highlight) Tag('NOUVEAU', color: c.success),
+                        _KindTag(kind, categoryLabel(r, kind)),
                         Tag(r.tracker.label, color: c.accent),
-                        if (r.subcategory.isNotEmpty) Tag(r.subcategory),
                         Text(formatBytes(r.size), style: small),
                         Text('▲ ${r.seeders}', style: small),
                         Text('▼ ${r.leechers}', style: small),

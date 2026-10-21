@@ -25,8 +25,11 @@ enum ContentKind {
 
   /// D'après la fiche du tracker (C411), la sous-catégorie, puis le nom.
   static ContentKind of(Release r) {
-    final sub = r.subcategory.toLowerCase();
+    // Sous-catégorie et catégories du tracker (pour Torznab, celles du
+    // `caps` : « Movies/HD », « TV/HD », « Books/EBook »…).
+    final sub = [r.subcategory, ...r.categories].join(' ').toLowerCase();
     final name = r.name.toLowerCase();
+    bool word(String pattern) => RegExp('\\b($pattern)\\b').hasMatch(sub);
     if (_any(sub, ['xxx', 'adulte', 'hentai', 'porn'])) return adult;
     if (sub.contains('documentaire') || RegExp(r'[.\s]doc[.\s]').hasMatch(name)) {
       return documentary;
@@ -42,22 +45,29 @@ enum ContentKind {
         return _any(sub, ['anim']) ? animation : movie;
     }
     if (_any(sub, ['anim'])) return animation;
-    if (_any(sub, ['série', 'serie', 'saison', 'épisode', 'episode', 'émission'])) {
+    if (_any(sub, ['série', 'serie', 'saison', 'épisode', 'episode', 'émission']) ||
+        word('tv')) {
       return series;
     }
-    if (_any(sub, ['musique', 'album', 'flac', 'mp3', 'audio', 'karaok', 'podcast'])) {
-      return music;
-    }
-    if (_any(sub, ['livre', 'ebook', 'bd', 'manga', 'comic', 'presse', 'roman'])) {
+    if (_any(sub, ['livre', 'ebook', 'bd', 'manga', 'comic', 'presse', 'roman']) ||
+        word('books?|magazines?')) {
       return book;
     }
-    if (_any(sub, ['jeu', 'jv', 'nintendo', 'playstation', 'xbox', 'switch', 'sony'])) {
+    // Après les livres : « Ebook › Audio » est un livre audio.
+    if (_any(sub, ['musique', 'album', 'flac', 'mp3', 'audio', 'karaok', 'podcast']) ||
+        word('music')) {
+      return music;
+    }
+    if (_any(sub, ['jeu', 'jv', 'nintendo', 'playstation', 'xbox', 'switch', 'sony']) ||
+        word('games?|console')) {
       return game;
     }
-    if (_any(sub, ['logiciel', 'application', 'apps', 'macos', 'linux', 'windows'])) {
+    if (_any(sub, ['logiciel', 'application', 'apps', 'macos', 'linux', 'windows']) ||
+        word('pc|mobile|software')) {
       return software;
     }
-    if (_any(sub, ['film', 'métrage', 'metrage', 'spectacle', 'concert'])) {
+    if (_any(sub, ['film', 'métrage', 'metrage', 'spectacle', 'concert']) ||
+        word('movies?')) {
       return movie;
     }
     // Rien dans la catégorie : indices dans le nom.
