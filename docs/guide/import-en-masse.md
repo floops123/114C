@@ -7,10 +7,23 @@ page dédiée à l'import en masse : tu donnes un nom (optionnel) et des
 bornes, les trackers cherchent et l'application te montre tout ce qui
 passe, tu coches, et l'envoi part en une fois à Transmission.
 
-Son usage premier : **lister les petits torrents**. Choisis une taille
-max (raccourcis ≤ 50 Mo, ≤ 200 Mo, ≤ 500 Mo, ≤ 1 Go, ≤ 4 Go sous les
-champs de taille), laisse l'ordre sur **Plus petits**, et lance la
-recherche.
+Son usage premier : **lister les petits torrents**. Choisis le tracker,
+une taille max (raccourcis *Toutes*, ≤ 50 Mo … ≤ 4 Go), laisse l'ordre sur
+**Plus petits**, et lance la recherche.
+
+## L'écran
+
+- **Grand écran** : les filtres dans un panneau à gauche, les résultats à
+  droite. **Rechercher** (puis **Relancer**) et **Réinitialiser** restent
+  visibles en bas du panneau.
+- **Téléphone** : avant la recherche, les filtres occupent l'écran ; après,
+  ils se replient en une ligne qui les résume (« C411 · ≤ 200 Mo · Plus
+  petits ») : **Modifier** les rouvre.
+- **Résultats** : une case en tête coche ou décoche tout ; chaque ligne
+  montre le titre, le nom de la release, la catégorie, la taille et les
+  pairs (▲ seeders, ▼ leechers). Toucher la ligne la coche ; ⓘ ouvre le
+  détail. Une barre en bas rappelle la sélection et sa taille totale, et
+  envoie à Transmission.
 
 ## Les filtres
 
@@ -20,21 +33,24 @@ recherche.
   par défaut). Chaque tracker a ses propres catégories, avec ses propres
   identifiants : changer de tracker remplace la liste des catégories et
   vide celles cochées, ainsi que les résultats.
-- **Catégorie** : les catégories du tracker choisi, telles qu'il les
-  décrit (« Films & Vidéos » puis « Film », « Série »… pour C411,
-  « Movies » puis « Movies/HD »… pour un indexeur Torznab, « Films »,
-  « Séries »… pour AstraTorrent). Chaque ligne commence par la catégorie
-  entière, suivie de ses sous-catégories. Aucune cochée = toutes. Les
-  catégories cochées sont **transmises au tracker** : c'est lui qui
-  filtre, avec ses identifiants.
-- **Taille min / max** : « 1,5 Go », « 700 Mo », « 2 To ». Tu peux
+- **Catégories** : celles du tracker choisi, telles qu'il les décrit
+  (« Films & Vidéos » puis « Film », « Série »… pour C411, « Movies » puis
+  « Movies/HD »… pour un indexeur Torznab, « Films », « Séries »… pour
+  AstraTorrent), **repliées** : une ligne par catégorie, avec le nombre de
+  sous-catégories. Toucher la ligne la déplie ; sa case la prend entière
+  (case pleine), ou retire ce qui en est coché ; une sous-catégorie cochée
+  seule laisse la case à moitié. Au-delà de 15 catégories, un champ
+  **Filtrer les catégories** déplie ce qui correspond. Aucune cochée =
+  toutes ; **Tout effacer** remet à zéro. Les catégories cochées sont
+  **transmises au tracker** : c'est lui qui filtre, avec ses identifiants.
+- **Taille** : un raccourci, appliqué aussitôt aux résultats déjà là, ou
+  les champs **Min** / **Max** (Entrée pour appliquer) : « 1,5 Go », « 700 Mo », « 2 To ». Tu peux
   saisir la virgule pour les décimales, omettre l'unité (= octets).
   Les suffixes reconnus : o, ko/k, mo/m, go/g, to/t, po/p. Une saisie
   invalide est ignorée (le champ devient rouge, et le filtre garde
   l'ancienne valeur) — la recherche ne se casse pas.
-- **Seeders min / max** : entier, 0 = « inactif toléré ». Vide = pas de
-  borne.
-- **Leechers min / max** : idem.
+- **Plus de filtres** (repliés) : **Seeders min / max** — entier, 0 =
+  « inactif toléré », vide = pas de borne — et **Leechers min / max**.
 
 - **Ordre** : *Plus petits* (par défaut), *Plus de seeders* ou *Plus
   récents*. C'est l'ordre dans lequel le tracker est parcouru et les
@@ -65,8 +81,9 @@ examinés » montre ce qui a été parcouru. **Encore** (ou **Chercher plus
 loin**, ou faire défiler jusqu'en bas) reprend là où on s'est arrêté ;
 **Stopper** interrompt sans perdre ce qui a été trouvé.
 
-**Filtrer l'existant** applique les champs modifiés aux résultats déjà
-affichés, sans réinterroger le tracker.
+Un raccourci de taille, ou Entrée dans un champ de borne, applique les
+bornes aux résultats déjà affichés, sans réinterroger le tracker ; pour
+élargir, **Relancer**.
 
 ## L'envoi
 

@@ -282,10 +282,15 @@ void main() {
     await tester.runAsync(_settle);
     await tester.pump();
 
-    expect(find.text('Film'), findsOneWidget);
-    expect(find.text('Movies/HD'), findsNothing);
+    // Catégories repliées : la parente d'abord, ses sous-catégories une fois
+    // dépliée.
+    expect(find.text('Films & Vidéos'), findsOneWidget);
+    expect(find.text('Film'), findsNothing);
+    expect(find.text('Movies'), findsNothing);
     expect(find.text('Tous les trackers'), findsNothing);
 
+    await tester.tap(find.text('Films & Vidéos'));
+    await tester.pump();
     await tester.tap(find.text('Film'));
     await tester.pump();
     expect(container.read(bulkImportProvider).criteria.categories,
@@ -294,10 +299,12 @@ void main() {
     await tester.tap(find.text(Tracker.tr4ker.label));
     await tester.runAsync(_settle);
     await tester.pump();
-    expect(find.text('Movies/HD'), findsOneWidget);
-    expect(find.text('Film'), findsNothing);
+    expect(find.text('Movies'), findsOneWidget);
+    expect(find.text('Films & Vidéos'), findsNothing);
     expect(container.read(bulkImportProvider).criteria.categories, isEmpty);
 
+    await tester.tap(find.text('Movies'));
+    await tester.pump();
     await tester.tap(find.text('Movies/HD'));
     await tester.pump();
     await tester.tap(find.text('Rechercher'));
@@ -306,5 +313,89 @@ void main() {
     expect(torznab.params.first.cat, 2000);
     expect(torznab.params.first.sub, 2040);
     expect(c411.params, isEmpty);
+  });
+
+  testWidgets('écran : arbre des catégories (filtre, cases à trois états)',
+      (tester) async {
+    final cats = [
+      for (var i = 1; i <= 8; i++)
+        Category(i, 'Parent $i', [
+          for (var j = 1; j <= 3; j++) Subcategory(i * 10 + j, 'Sous $i.$j'),
+        ]),
+      const Category(99, 'Ebook', [Subcategory(991, 'Manga')]),
+    ];
+    final c411 = _Catalog(Tracker.c411, cats: cats);
+    final container = _container({Tracker.c411: c411});
+    addTearDown(container.dispose);
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+          theme: buildTheme(Brightness.dark), home: const BulkImportPage()),
+    ));
+    await tester.runAsync(_settle);
+    await tester.pump();
+    Set<CategoryRef> chosen() =>
+        container.read(bulkImportProvider).criteria.categories;
+
+    // Longue liste : un champ filtre, qui déplie ce qui correspond.
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Filtrer les catégories'), 'mang');
+    await tester.pump();
+    expect(find.text('Manga'), findsOneWidget);
+    expect(find.text('Parent 1'), findsNothing);
+    await tester.tap(find.text('Manga'));
+    await tester.pump();
+    expect(chosen(), {(category: 99, subcategory: 991)});
+    // Parente en partie cochée : case indéterminée.
+    final box = tester.widget<Checkbox>(find.descendant(
+        of: find.ancestor(
+            of: find.text('Ebook'), matching: find.byType(InkWell)).first,
+        matching: find.byType(Checkbox)));
+    expect(box.value, isNull);
+
+    // La case de la parente : retire tout ce qui la concerne, puis la prend
+    // entière.
+    await tester.tap(find.byWidget(box));
+    await tester.pump();
+    expect(chosen(), isEmpty);
+    await tester.tap(find.byWidget(tester.widget<Checkbox>(find.descendant(
+        of: find.ancestor(
+            of: find.text('Ebook'), matching: find.byType(InkWell)).first,
+        matching: find.byType(Checkbox)))));
+    await tester.pump();
+    expect(chosen(), {(category: 99, subcategory: null)});
+    expect(find.textContaining('Tout effacer'), findsOneWidget);
+  });
+
+  testWidgets('petit écran : filtres repliés en un résumé après la recherche',
+      (tester) async {
+    final c411 = _Catalog(Tracker.c411);
+    final container = _container({Tracker.c411: c411});
+    addTearDown(container.dispose);
+    tester.view.physicalSize = const Size(420, 860);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+          theme: buildTheme(Brightness.dark), home: const BulkImportPage()),
+    ));
+    await tester.pump();
+    await tester.tap(find.text('≤ 50 Mo'));
+    await tester.pump();
+    await tester.tap(find.text('Rechercher'));
+    await tester.runAsync(_settle);
+    await tester.pump();
+
+    expect(find.text('Modifier'), findsOneWidget);
+    expect(find.textContaining('C411  ·  ≤ 50 Mo'), findsOneWidget);
+    expect(find.text('Envoyer'), findsOneWidget, reason: 'libellé court');
+    expect(find.text('≤ 200 Mo'), findsNothing, reason: 'filtres repliés');
+    await tester.tap(find.text('Modifier'));
+    await tester.pump();
+    expect(find.text('≤ 200 Mo'), findsOneWidget);
   });
 }

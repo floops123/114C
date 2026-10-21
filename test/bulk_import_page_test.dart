@@ -73,8 +73,15 @@ void main() {
     expect(find.text('Import en masse'), findsOneWidget);
     // Les catégories sont chargées en arrière-plan.
     await tester.pump(const Duration(milliseconds: 50));
-    expect(find.text('Film'), findsOneWidget);
-    expect(find.text('Série'), findsOneWidget);
+    // Repliées : les catégories parentes seulement.
+    expect(find.text('Films & Vidéos'), findsOneWidget);
+    expect(find.text('Audio'), findsOneWidget);
+    expect(find.text('Film'), findsNothing);
+    // Peu de catégories : pas de champ de filtre ; on déplie à la main.
+    expect(find.widgetWithText(TextField, 'Filtrer les catégories'),
+        findsNothing);
+    await tester.tap(find.text('Audio'));
+    await tester.pump();
     expect(find.text('FLAC'), findsOneWidget);
   });
 }
