@@ -136,9 +136,11 @@ tracker privé, c'est lui qui porte la passkey.
 
 L'import en masse (`lib/ui/bulk_import_page.dart`) suit le même chemin,
 sortie par sortie, après filtrage côté client. Les bornes (taille, seeders,
-leechers, catégorie) ne sont pas transmises aux trackers — aucun indexer ne
-les supporte de manière homogène — mais elles rognent les résultats avant
-l'envoi. Voir [Import en masse](../guide/import-en-masse.md).
+leechers) ne sont pas transmises aux trackers — aucun indexer ne les
+supporte de manière homogène. L'ordre l'est (taille croissante quand le
+tracker trie lui-même : arrêt à la taille max, dichotomie vers la taille
+min), et la catégorie quand elle désigne une seule catégorie du tracker.
+Les bornes rognent les résultats avant l'envoi. Voir [Import en masse](../guide/import-en-masse.md).
 
 ## Flux : notre base
 

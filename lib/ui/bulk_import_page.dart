@@ -20,6 +20,9 @@ class BulkImportPage extends ConsumerStatefulWidget {
 }
 
 class _BulkImportPageState extends ConsumerState<BulkImportPage> {
+  /// Raccourcis de taille max (le cas d'usage premier : les petits torrents).
+  static const _sizePresets = ['50 Mo', '200 Mo', '500 Mo', '1 Go', '4 Go'];
+
   final _name = TextEditingController();
   final _sizeMin = TextEditingController();
   final _sizeMax = TextEditingController();
@@ -116,8 +119,16 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
   /// Applique les bornes à l'affichage (sans réinterroger les trackers).
   void _apply() {
     FocusScope.of(context).unfocus();
-    ref.read(bulkImportProvider.notifier).update(_criteria(ref.read(bulkImportProvider).criteria));
+    final notifier = ref.read(bulkImportProvider.notifier);
+    notifier.update(_criteria(ref.read(bulkImportProvider).criteria));
+    notifier.refilter();
     setState(() {}); // Pour repeindre les champs invalides en rouge.
+  }
+
+  /// Raccourci de taille max : remplit le champ et l'applique.
+  void _presetMax(String size) {
+    _sizeMax.text = size;
+    _apply();
   }
 
   Future<void> _send() async {
@@ -168,18 +179,18 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
       appBar: AppBar(
         title: const Text('Import en masse'),
         actions: [
-          if (state.loading) ...[
+          if (state.loading)
             TextButton.icon(
               onPressed: notifier.stop,
               icon: const Icon(Icons.stop_rounded, size: 18),
               label: const Text('Stopper'),
-            ),
+            )
+          else if (state.hasMore)
             TextButton.icon(
               onPressed: notifier.loadMore,
               icon: const Icon(Icons.expand_more_rounded, size: 18),
               label: const Text('Encore'),
             ),
-          ],
           IconButton(
             tooltip: 'Chercher',
             icon: const Icon(Icons.search_rounded),
@@ -223,6 +234,22 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                       state.criteria.copyWith(categories: next)),
                 ),
                 const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<BulkOrder>(
+                    showSelectedIcon: false,
+                    segments: [
+                      for (final o in BulkOrder.values)
+                        ButtonSegment(value: o, label: Text(o.label)),
+                    ],
+                    selected: {state.criteria.order},
+                    onSelectionChanged: (s) {
+                      notifier.update(state.criteria.copyWith(order: s.first));
+                      notifier.refilter();
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
                     child: _BoundField(
@@ -237,10 +264,19 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                     child: _BoundField(
                       controller: _sizeMax,
                       label: 'Taille max',
-                      hint: 'ex. 50 Go',
+                      hint: 'ex. 500 Mo',
                       invalid: invalidSnapshot.contains(_sizeMax),
                     ),
                   ),
+                ]),
+                const SizedBox(height: 6),
+                Wrap(spacing: 6, runSpacing: 4, children: [
+                  for (final size in _sizePresets)
+                    ActionChip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text('≤ $size'),
+                      onPressed: () => _presetMax(size),
+                    ),
                 ]),
                 const SizedBox(height: 10),
                 Row(children: [
@@ -326,8 +362,9 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
               Expanded(
                 child: Text(
                   '${state.items.length} résultat${state.items.length > 1 ? 's' : ''}'
+                  ' sur ${state.scanned} examiné${state.scanned > 1 ? 's' : ''}'
                   '${state.sentCount > 0 ? ' · ${state.sentCount} envoyé${state.sentCount > 1 ? 's' : ''}' : ''}'
-                  '${selected.isNotEmpty ? ' · ${selected.length} sélectionné${selected.length > 1 ? 's' : ''}' : ''}',
+                  '${selected.isNotEmpty ? ' · ${selected.length} sélectionné${selected.length > 1 ? 's' : ''} (${formatBytes(state.selectedSize)})' : ''}',
                   style: TextStyle(color: c.muted, fontSize: 12.5),
                 ),
               ),
@@ -354,32 +391,55 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
           child: !state.searched
               ? const EmptyState(
                   Icons.playlist_add_rounded,
-                  'Renseigne un nom et les bornes, puis lance la recherche.',
+                  'Choisis une taille max (et, si tu veux, un nom ou une '
+                  'catégorie), puis lance la recherche.',
                 )
               : state.items.isEmpty && state.loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 12),
+                        Text('${state.scanned} sorties examinées',
+                            style: TextStyle(color: c.muted, fontSize: 12.5)),
+                      ]),
+                    )
                   : state.items.isEmpty
-                      ? _EmptyResults(criteria: state.criteria, onClear: _clear)
+                      ? _EmptyResults(
+                          criteria: state.criteria,
+                          scanned: state.scanned,
+                          onClear: _clear,
+                          onMore: state.hasMore ? notifier.loadMore : null,
+                        )
                       : NotificationListener<ScrollNotification>(
                           onNotification: (n) {
-                            if (n.metrics.extentAfter < 400 && state.loading) {
+                            if (n.metrics.extentAfter < 400 &&
+                                state.hasMore &&
+                                !state.loading) {
                               notifier.loadMore();
                             }
                             return false;
                           },
                           child: ListView.builder(
                             itemCount: state.items.length +
-                                (state.loading ? 1 : 0),
+                                (state.loading || state.hasMore ? 1 : 0),
                             itemBuilder: (_, i) {
                               if (i >= state.items.length) {
-                                return const Padding(
-                                  padding: EdgeInsets.all(16),
+                                return Padding(
+                                  padding: const EdgeInsets.all(16),
                                   child: Center(
-                                    child: SizedBox.square(
-                                      dimension: 22,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    ),
+                                    child: state.loading
+                                        ? const SizedBox.square(
+                                            dimension: 22,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2),
+                                          )
+                                        : OutlinedButton.icon(
+                                            onPressed: notifier.loadMore,
+                                            icon: const Icon(
+                                                Icons.expand_more_rounded,
+                                                size: 18),
+                                            label: const Text('Chercher plus loin'),
+                                          ),
                                   ),
                                 );
                               }
@@ -410,7 +470,8 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                       : const Icon(Icons.download_rounded, size: 18),
                   label: Text(state.sending
                       ? 'Envoi…'
-                      : 'Envoyer à Transmission (${selected.length})'),
+                      : 'Envoyer à Transmission (${selected.length} · '
+                          '${formatBytes(state.selectedSize)})'),
                 ),
               ),
             ),
@@ -424,9 +485,18 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
 /// les filtres actifs pour aider à comprendre pourquoi la recherche n'a rien
 /// ramené, et propose de tout effacer.
 class _EmptyResults extends StatelessWidget {
-  const _EmptyResults({required this.criteria, required this.onClear});
+  const _EmptyResults({
+    required this.criteria,
+    required this.scanned,
+    required this.onClear,
+    this.onMore,
+  });
   final BulkCriteria criteria;
+  final int scanned;
   final VoidCallback onClear;
+
+  /// Des pages restent à parcourir.
+  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -464,16 +534,25 @@ class _EmptyResults extends StatelessWidget {
           parts.isEmpty
               ? 'La recherche n’a rien ramené — vérifie qu’un tracker est '
                   'bien configuré avec une clé API.'
-              : 'Filtres actifs : ${parts.join(' · ')}',
+              : '$scanned sorties examinées. Filtres actifs : '
+                  '${parts.join(' · ')}',
           textAlign: TextAlign.center,
           style: TextStyle(color: context.colors.muted, fontSize: 12.5),
         ),
         const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: onClear,
-          icon: const Icon(Icons.clear_all_rounded, size: 18),
-          label: const Text('Vider les filtres'),
-        ),
+        Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
+          if (onMore != null)
+            FilledButton.icon(
+              onPressed: onMore,
+              icon: const Icon(Icons.expand_more_rounded, size: 18),
+              label: const Text('Chercher plus loin'),
+            ),
+          OutlinedButton.icon(
+            onPressed: onClear,
+            icon: const Icon(Icons.clear_all_rounded, size: 18),
+            label: const Text('Vider les filtres'),
+          ),
+        ]),
       ]),
     );
   }
@@ -701,6 +780,8 @@ class _BulkRow extends ConsumerWidget {
                         Text(formatBytes(r.size), style: small),
                         Text('▲ ${r.seeders}', style: small),
                         Text('▼ ${r.leechers}', style: small),
+                        if (item.present && !item.done)
+                          Tag('DANS TRANSMISSION', color: c.muted),
                         if (item.done) Tag('ENVOYÉ', color: c.success),
                         if (item.failed) Tag('ÉCHEC', color: c.danger),
                       ]),

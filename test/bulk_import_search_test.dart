@@ -95,7 +95,16 @@ void main() {
     // La requête a bien été envoyée avec les bons paramètres.
     expect(tr4ker.requests, hasLength(1));
     expect(tr4ker.requests.single['query'], '');
-    expect(tr4ker.requests.single['sort'], 'seeders');
+    // Ordre par défaut « plus petits » : ce tracker ne trie pas par taille,
+    // on lui demande les plus récentes.
+    expect(tr4ker.requests.single['sort'], 'createdAt');
+
+    notifier.update(const BulkCriteria(order: BulkOrder.seeders));
+    notifier.search();
+    for (var i = 0; i < 10; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(tr4ker.requests.last['sort'], 'seeders');
   });
 
   test('search() avec un nom : le query est envoyé', () async {

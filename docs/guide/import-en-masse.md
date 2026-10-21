@@ -7,6 +7,11 @@ page dédiée à l'import en masse : tu donnes un nom (optionnel) et des
 bornes, les trackers cherchent et l'application te montre tout ce qui
 passe, tu coches, et l'envoi part en une fois à Transmission.
 
+Son usage premier : **lister les petits torrents**. Choisis une taille
+max (raccourcis ≤ 50 Mo, ≤ 200 Mo, ≤ 500 Mo, ≤ 1 Go, ≤ 4 Go sous les
+champs de taille), laisse l'ordre sur **Plus petits**, et lance la
+recherche.
+
 ## Les filtres
 
 - **Nom** : chaîne libre passée à la requête `q` / `name` de chaque
@@ -34,17 +39,46 @@ passe, tu coches, et l'envoi part en une fois à Transmission.
   borne.
 - **Leechers min / max** : idem.
 
-Les bornes **s'appliquent côté client** : aucun indexer ne sait filtrer
-sur les seeders ou la taille, et l'avantage est qu'elles couvrent tous les
-trackers à la fois. C'est pour ça qu'on plafonne à 10 pages par tracker
-(500 sorties par tracker, donc 2 500 sur cinq trackers) — au-delà, on
-vous le dit (« Encore » pour charger la suite).
+- **Ordre** : *Plus petits* (par défaut), *Plus de seeders* ou *Plus
+  récents*. C'est l'ordre dans lequel les trackers sont parcourus et
+  les résultats affichés.
+
+## Comment la recherche avance
+
+Aucun indexer ne sait filtrer sur la taille ou les seeders : les bornes
+sont appliquées par l'application. Mais l'**ordre** est demandé au
+tracker quand il sait le faire, et c'est ce qui rend la recherche de
+petits torrents efficace :
+
+- **C411** trie lui-même par taille croissante : la recherche commence
+  par les plus petits, et s'arrête pour ce tracker dès qu'une page
+  dépasse la taille max. Avec une **taille min**, l'application saute
+  directement à la bonne page (quelques requêtes, par dichotomie) au
+  lieu de parcourir des centaines de fichiers de quelques Ko.
+- **AstraTorrent** trie de même, sur ses 1 000 dernières sorties.
+- **tr4ker, Nostradamus, Draupnirr** (Torznab) ne savent donner que les
+  plus récentes : leurs pages sont parcourues dans cet ordre et filtrées.
+- La **catégorie** est transmise au tracker quand elle y désigne une
+  seule catégorie ou sous-catégorie (par exemple « Film » sur C411 ou
+  « Movies/HD » sur un indexeur Torznab). Sinon elle est filtrée par
+  l'application.
+
+Les pages s'enchaînent toutes seules jusqu'à environ 50 résultats
+retenus (au plus 10 pages par tracker d'un coup) ; le compteur « sur N
+examinés » montre ce qui a été parcouru. **Encore** (ou **Chercher plus
+loin**, ou faire défiler jusqu'en bas) reprend là où on s'est arrêté ;
+**Stopper** interrompt sans perdre ce qui a été trouvé.
+
+**Filtrer l'existant** applique les champs modifiés aux résultats déjà
+affichés, sans réinterroger les trackers.
 
 ## L'envoi
 
-Chaque ligne a une case cochée par défaut. **Tout cocher / Tout décocher**
-en tête, et un bouton **Envoyer à Transmission (n)** qui envoie d'un
-coup toutes les lignes cochées. Avant l'envoi, une boîte de dialogue
+Chaque ligne a une case cochée par défaut, sauf les torrents **déjà dans
+Transmission** (signalés « DANS TRANSMISSION »). **Tout cocher / Tout
+décocher** en tête, et un bouton **Envoyer à Transmission (n · taille)**
+qui envoie d'un coup toutes les lignes cochées et rappelle leur taille
+totale. Avant l'envoi, une boîte de dialogue
 récapitule le nombre de torrents qui vont partir. Les envois sont
 séquentiels (un par un), et les échecs restent affichés sur leur ligne
 (« ÉCHEC » rouge, motif en dessous). Transmission est rafraîchie en

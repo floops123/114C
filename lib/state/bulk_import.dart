@@ -4,14 +4,32 @@ import '../api/tracker.dart';
 import '../api/transmission.dart';
 import 'torrents.dart';
 
-// Import en masse : on interroge les trackers avec un nom, on ne garde que ce
-// qui passe les bornes (taille, seeders, leechers) et la catégorie, on coche
-// ce qui convient, et on envoie tout d'un coup à Transmission.
+// Import en masse : on interroge les trackers, on ne garde que ce qui passe
+// les bornes (taille, seeders, leechers) et la catégorie, on coche ce qui
+// convient, et on envoie tout d'un coup à Transmission.
 //
-// Seul le nom est demandé au tracker (paramètre `q` / `name`) : aucun indexer
-// ne sait filtrer sur le nombre de seeders ou sur la taille, et les bornes
-// doivent gelten sur tous les trackers à la fois. Elles sont donc appliquées
-// ici, sur les résultats de la page.
+// Aucun indexer ne sait filtrer sur la taille ou les seeders : les bornes sont
+// appliquées ici. Mais l'ordre de parcours, lui, est demandé au tracker quand
+// il sait le faire : en taille croissante (le cas d'usage premier : les
+// petits torrents), le parcours s'arrête à la taille max et saute à la taille
+// min par dichotomie. La catégorie est aussi transmise quand elle désigne une
+// seule catégorie du tracker.
+
+/// Ordre dans lequel les trackers sont parcourus et les résultats affichés.
+enum BulkOrder {
+  smallest('Plus petits'),
+  seeders('Plus de seeders'),
+  newest('Plus récents');
+
+  const BulkOrder(this.label);
+  final String label;
+
+  int compare(Release a, Release b) => switch (this) {
+        smallest => a.size.compareTo(b.size),
+        seeders => b.seeders.compareTo(a.seeders),
+        newest => b.createdAt.compareTo(a.createdAt),
+      };
+}
 
 // Bornes d'un critère numérique ; null : pas de borne.
 typedef Bound = ({int? min, int? max});
@@ -28,6 +46,7 @@ class BulkCriteria {
     this.seedersMax,
     this.leechersMin,
     this.leechersMax,
+    this.order = BulkOrder.smallest,
   });
 
   /// Nom recherché, passé tel quel au tracker.
@@ -48,6 +67,7 @@ class BulkCriteria {
   final int? seedersMax;
   final int? leechersMin;
   final int? leechersMax;
+  final BulkOrder order;
 
   bool get hasFilters =>
       name.isNotEmpty ||
@@ -74,6 +94,7 @@ class BulkCriteria {
     int? seedersMax,
     int? leechersMin,
     int? leechersMax,
+    BulkOrder? order,
   }) =>
       BulkCriteria(
         name: name ?? this.name,
@@ -85,6 +106,7 @@ class BulkCriteria {
         seedersMax: seedersMax ?? this.seedersMax,
         leechersMin: leechersMin ?? this.leechersMin,
         leechersMax: leechersMax ?? this.leechersMax,
+        order: order ?? this.order,
       );
 
   /// La sortie passe-t-elle les filtres ? Un ensemble vide = pas de filtre.
@@ -114,6 +136,7 @@ class BulkItem {
     this.done = false,
     this.failed = false,
     this.detail,
+    this.present = false,
   });
 
   final Release release;
@@ -128,6 +151,9 @@ class BulkItem {
   final bool failed;
   final String? detail;
 
+  /// Déjà dans Transmission au moment de la recherche : décochée d'office.
+  final bool present;
+
   String get key => '${release.tracker.name}:${release.id}';
 
   BulkItem copyWith({bool? selected, bool? done, bool? failed, String? detail}) =>
@@ -137,6 +163,7 @@ class BulkItem {
         done: done ?? this.done,
         failed: failed ?? this.failed,
         detail: detail ?? this.detail,
+        present: present,
       );
 }
 
@@ -145,6 +172,8 @@ class BulkState {
     this.items = const [],
     this.criteria = const BulkCriteria(),
     this.loading = false,
+    this.hasMore = false,
+    this.scanned = 0,
     this.searched = false,
     this.sending = false,
     this.error,
@@ -154,7 +183,15 @@ class BulkState {
 
   final List<BulkItem> items;
   final BulkCriteria criteria;
+
+  /// Requêtes en cours.
   final bool loading;
+
+  /// Des trackers ont encore des pages à parcourir (« Encore »).
+  final bool hasMore;
+
+  /// Sorties examinées depuis la recherche, retenues ou non.
+  final int scanned;
 
   /// Une recherche a eu lieu (pour distinguer « pas encore cherché » de
   /// « aucun résultat »).
@@ -174,10 +211,14 @@ class BulkState {
 
   int get sentCount => items.where((i) => i.done).length;
 
+  int get selectedSize => selected.fold(0, (n, i) => n + i.release.size);
+
   BulkState copyWith({
     List<BulkItem>? items,
     BulkCriteria? criteria,
     bool? loading,
+    bool? hasMore,
+    int? scanned,
     bool? searched,
     bool? sending,
     String? Function()? error,
@@ -188,6 +229,8 @@ class BulkState {
         items: items ?? this.items,
         criteria: criteria ?? this.criteria,
         loading: loading ?? this.loading,
+        hasMore: hasMore ?? this.hasMore,
+        scanned: scanned ?? this.scanned,
         searched: searched ?? this.searched,
         sending: sending ?? this.sending,
         error: error != null ? error() : this.error,
@@ -200,14 +243,24 @@ class BulkImportNotifier extends Notifier<BulkState> {
   /// Taille d'une page demandée à chaque tracker.
   static const perPage = 50;
 
-  /// Plafond de pages par tracker : évite de marteler un nom vide ou trop
-  /// courant (quota C411 : 120 requêtes / minute).
+  /// Tours de pages enchaînés automatiquement par recherche (ou par
+  /// « Encore ») : évite de marteler un tracker (quota C411 : 120 requêtes /
+  /// minute) quand les bornes ne laissent presque rien passer.
   static const maxPages = 10;
+
+  /// Résultats retenus au-delà desquels on cesse d'enchaîner les pages.
+  static const target = perPage;
+
+  /// Plafond de requêtes pour trouver la page de la taille min.
+  static const maxProbes = 14;
 
   bool _busy = false;
   int _generation = 0;
   var _pages = <Tracker, int>{};
   var _more = <Tracker, bool>{};
+
+  /// Catégories de chaque tracker, pour lui transmettre celle choisie.
+  var _trackerCategories = <Tracker, List<Category>>{};
 
   /// Critères saisis par l'utilisateur. Conservés ici pour survivre au
   /// rebuild déclenché par un changement de la liste des trackers.
@@ -249,13 +302,15 @@ class BulkImportNotifier extends Notifier<BulkState> {
     final trackers = ref.read(trackersProvider);
     final load = ++_categoryLoad;
     final names = <String>{};
+    final byTracker = <Tracker, List<Category>>{};
     await Future.wait([
       for (final t in trackers.keys)
         () async {
           try {
             // Les sous-catégories quand il y en a ; sinon la catégorie
             // elle-même (AstraTorrent n'expose que celles-ci).
-            for (final c in await trackers[t]!.categories()) {
+            final cats = byTracker[t] = await trackers[t]!.categories();
+            for (final c in cats) {
               for (final n in c.subcategories.isEmpty
                   ? [c.name]
                   : c.subcategories.map((s) => s.name)) {
@@ -272,12 +327,26 @@ class BulkImportNotifier extends Notifier<BulkState> {
     if (!ref.mounted || load != _categoryLoad) return;
     final sorted = (names.toList()..sort());
     _availableCategories = sorted;
+    _trackerCategories = byTracker;
     state = state.copyWith(availableCategories: sorted, loadingCategories: false);
   }
 
   void update(BulkCriteria criteria) {
     _criteria = criteria;
     state = state.copyWith(criteria: criteria);
+  }
+
+  /// Applique les critères aux résultats déjà là, sans réinterroger les
+  /// trackers : retire ce qui ne passe plus (sauf ce qui est déjà envoyé) et
+  /// retrie dans l'ordre choisi.
+  void refilter() {
+    final criteria = state.criteria;
+    state = state.copyWith(
+      items: [
+        for (final i in state.items)
+          if (i.done || criteria.accepts(i.release)) i,
+      ]..sort((a, b) => criteria.order.compare(a.release, b.release)),
+    );
   }
 
   /// Oublie la pagination et invalide la `_load()` en vol.
@@ -294,6 +363,9 @@ class BulkImportNotifier extends Notifier<BulkState> {
       items: const [],
       searched: false,
       sending: false,
+      loading: false,
+      hasMore: false,
+      scanned: 0,
       error: () => null,
     );
   }
@@ -306,74 +378,164 @@ class BulkImportNotifier extends Notifier<BulkState> {
       items: const [],
       searched: true,
       loading: true,
+      hasMore: false,
+      scanned: 0,
       error: () => null,
     );
     Future.microtask(() => _load(generation));
   }
 
   void loadMore() {
-    if (_busy) return;
+    if (_busy || !state.hasMore) return;
     _busy = true;
+    state = state.copyWith(loading: true);
     Future.microtask(() => _load(_generation));
   }
 
   /// Stoppe la recherche en cours : la génération est incrémentée, donc la
-  /// `_load()` en vol jette ses résultats ; le spinner s'arrête. Les
+  /// `_load()` en vol jette ses résultats ; le spinner s'arrête et « Encore »
+  /// reprend là où on en était. Les
   /// requêtes HTTP déjà parties vont au bout (pas d'annulation possible
   /// sans `CancelToken` par requête), mais leur réponse est ignorée. Les
   /// résultats déjà accumulés dans `items` sont conservés.
   void stop() {
     _generation++;
-    state = state.copyWith(loading: false);
+    _busy = false;
+    state = state.copyWith(
+      loading: false,
+      hasMore: _pages.isEmpty || _more.values.any((m) => m),
+    );
   }
 
-  /// Charge une page de chaque tracker encore à feuilleter, et n'ajoute que
-  /// les sorties qui passent les bornes. Si `criteria.trackers` est non vide,
-  /// on n'interroge que les trackers qu'il contient.
+  /// Parcourt les trackers page par page, en enchaînant tant que moins de
+  /// [target] sorties ont été retenues (au plus [maxPages] tours) : avec des
+  /// bornes serrées, une page peut ne rien laisser passer. Si
+  /// `criteria.trackers` est non vide, seuls ceux-là sont interrogés.
   Future<void> _load(int generation) async {
     final trackers = ref.read(trackersProvider);
     final criteria = state.criteria;
     final selected = criteria.trackers;
-    final todo = [
-      for (final t in trackers.keys)
-        if ((selected.isEmpty || selected.contains(t)) &&
-            (_pages[t] == null || (_more[t] ?? false)))
-          t,
-    ];
-    if (todo.isEmpty) {
-      _busy = false;
-      state = state.copyWith(loading: false);
-      return;
+    var retained = 0;
+    for (var round = 0; round < maxPages && retained < target; round++) {
+      final todo = [
+        for (final t in trackers.keys)
+          if ((selected.isEmpty || selected.contains(t)) &&
+              (_pages[t] == null || (_more[t] ?? false)))
+            t,
+      ];
+      if (todo.isEmpty) break;
+      final results = await Future.wait([
+        for (final t in todo)
+          () async {
+            try {
+              final (page, r) = await _fetch(t, trackers[t]!, criteria);
+              return (t, page, r, null);
+            } on Object catch (e) {
+              return (t, _pages[t] ?? 1, null, '$e');
+            }
+          }(),
+      ]);
+      if (!ref.mounted || generation != _generation) return;
+      retained += _merge(criteria, results);
     }
-    final results = await Future.wait([
-      for (final t in todo)
-        () async {
-          final page = (_pages[t] ?? 0) + 1;
-          try {
-            final api = trackers[t]!;
-            final sort = api.sorts.contains(ReleaseSort.seeders)
-                ? ReleaseSort.seeders
-                : ReleaseSort.date;
-            final r = await api.releases(
-              page: page,
-              perPage: perPage,
-              query: criteria.name,
-              sort: sort,
-            );
-            return (t, page, r, null);
-          } on Object catch (e) {
-            return (t, page, null, '$e');
-          }
-        }(),
-    ]);
     if (!ref.mounted || generation != _generation) return;
     _busy = false;
+    state = state.copyWith(
+      loading: false,
+      hasMore: _more.values.any((m) => m),
+    );
+  }
 
+  /// Comment interroger [api] pour l'ordre voulu : taille croissante ou
+  /// seeders si le tracker trie lui-même, sinon les plus récentes.
+  static ({ReleaseSort sort, bool ascending, bool bySize}) plan(
+      TrackerApi api, BulkOrder order) {
+    final server = api.serverSorts;
+    return switch (order) {
+      BulkOrder.smallest when server.contains(ReleaseSort.size) =>
+        (sort: ReleaseSort.size, ascending: true, bySize: true),
+      BulkOrder.seeders when server.contains(ReleaseSort.seeders) =>
+        (sort: ReleaseSort.seeders, ascending: false, bySize: false),
+      _ => (sort: ReleaseSort.date, ascending: false, bySize: false),
+    };
+  }
+
+  /// Catégorie à transmettre au tracker : seulement si les noms choisis y
+  /// désignent une seule catégorie ou sous-catégorie (un seul paramètre
+  /// possible). Sinon le filtre reste fait ici.
+  static ({int? category, int? subcategory}) serverCategory(
+      List<Category>? categories, Set<String> names) {
+    const none = (category: null, subcategory: null);
+    if (names.isEmpty || categories == null) return none;
+    final wanted = {for (final n in names) n.trim().toLowerCase()};
+    final matches = [
+      for (final c in categories) ...[
+        if (wanted.contains(c.name.trim().toLowerCase()))
+          (category: c.id, subcategory: null),
+        for (final s in c.subcategories)
+          if (wanted.contains(s.name.trim().toLowerCase()))
+            (category: c.id, subcategory: s.id),
+      ],
+    ];
+    return matches.length == 1 ? matches.single : none;
+  }
+
+  /// Page suivante d'un tracker. La toute première, en taille croissante
+  /// avec une taille min, est cherchée par dichotomie : les plus petites
+  /// sorties (fichiers de quelques Ko) occupent souvent des dizaines de
+  /// pages.
+  Future<(int, ReleasePage)> _fetch(
+      Tracker t, TrackerApi api, BulkCriteria criteria) async {
+    final how = plan(api, criteria.order);
+    final cat = serverCategory(_trackerCategories[t], criteria.categories);
+    Future<ReleasePage> get(int page) => api.releases(
+          page: page,
+          perPage: perPage,
+          query: criteria.name,
+          sort: how.sort,
+          ascending: how.ascending,
+          categoryId: cat.category,
+          subcategoryId: cat.subcategory,
+        );
+
+    final previous = _pages[t];
+    if (previous != null) return (previous + 1, await get(previous + 1));
+    final first = await get(1);
+    final min = criteria.sizeMin;
+    if (!how.bySize ||
+        min == null ||
+        first.items.isEmpty ||
+        first.items.last.size >= min ||
+        first.totalPages <= 1) {
+      return (1, first);
+    }
+    // Page 1 entièrement sous la taille min : on cherche la première page
+    // dont la dernière sortie l'atteint.
+    final seen = <int, ReleasePage>{};
+    var lo = 2, hi = first.totalPages;
+    for (var probes = 0; lo < hi && probes < maxProbes; probes++) {
+      final mid = (lo + hi) ~/ 2;
+      final r = seen[mid] = await get(mid);
+      if (r.items.isEmpty || r.items.last.size >= min) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return (lo, seen[lo] ?? await get(lo));
+  }
+
+  /// Intègre un tour de résultats ; renvoie le nombre de sorties retenues.
+  int _merge(BulkCriteria criteria,
+      List<(Tracker, int, ReleasePage?, String?)> results) {
+    final trackers = ref.read(trackersProvider);
+    final present = ref.read(torrentsProvider).hashes;
     // Un torrent déjà présent (page précédente) garde son état d'envoi ;
     // seuls les nouveaux entrent.
     final known = {for (final i in state.items) i.key: i};
     final fresh = <String, BulkItem>{};
     final errors = <String>[];
+    var scanned = 0;
     for (final (t, page, r, failure) in results) {
       _pages[t] = page;
       if (r == null) {
@@ -382,19 +544,35 @@ class BulkImportNotifier extends Notifier<BulkState> {
             failure!.contains(t.label) ? failure : '${t.label} : $failure');
         continue;
       }
-      _more[t] = page < r.totalPages && r.items.isNotEmpty && page < maxPages;
+      scanned += r.items.length;
+      final max = criteria.sizeMax;
+      final api = trackers[t];
+      // En taille croissante, une sortie au-delà de la taille max annonce
+      // que toutes les suivantes le sont aussi.
+      final pastMax = max != null &&
+          api != null &&
+          plan(api, criteria.order).bySize &&
+          r.items.isNotEmpty &&
+          r.items.last.size > max;
+      _more[t] = page < r.totalPages && r.items.isNotEmpty && !pastMax;
       for (final release in r.items) {
         if (!criteria.accepts(release)) continue;
         final key = '${release.tracker.name}:${release.id}';
         if (known.containsKey(key) || fresh.containsKey(key)) continue;
-        fresh[key] = BulkItem(release: release);
+        final here = release.infoHash != null &&
+            present.contains(release.infoHash);
+        fresh[key] =
+            BulkItem(release: release, selected: !here, present: here);
       }
     }
+    final items = [...known.values, ...fresh.values]
+      ..sort((a, b) => criteria.order.compare(a.release, b.release));
     state = state.copyWith(
-      items: [...fresh.values, ...known.values],
-      loading: _more.values.any((m) => m),
+      items: items,
+      scanned: state.scanned + scanned,
       error: () => errors.isEmpty ? null : errors.join('\n'),
     );
+    return fresh.length;
   }
 
   void toggle(String key, bool selected) =>
@@ -430,7 +608,7 @@ class BulkImportNotifier extends Notifier<BulkState> {
     }
     final todo = state.selected;
     if (todo.isEmpty) return 0;
-    state = state.copyWith(sending: true, error: null);
+    state = state.copyWith(sending: true, error: () => null);
     var added = 0;
     for (final item in todo) {
       if (!ref.mounted) return added;
