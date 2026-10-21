@@ -13,9 +13,9 @@ import 'tracker.dart';
 /// Le format de réponse est le même que [C411Api] (mêmes clés `data` et
 /// `meta`), donc on réutilise [_release] et [parsePage].
 class C411SiteApi {
-  C411SiteApi(this.cookie)
+  C411SiteApi(this.cookie, {String? baseUrl})
       : _dio = Dio(BaseOptions(
-          baseUrl: Tracker.c411.baseUrl,
+          baseUrl: baseUrl ?? Tracker.c411.baseUrl,
           connectTimeout: const Duration(seconds: 10),
           receiveTimeout: const Duration(seconds: 30),
           validateStatus: (_) => true,
@@ -64,6 +64,41 @@ class C411SiteApi {
       throw TrackerException(
           'C411 injoignable : ${e.message ?? e.type.name}');
     }
+  }
+
+  /// Le .torrent d'une sortie, par le site (`/api/torrents/<infohash>/download`)
+  /// : authentifié par le cookie de session plutôt que par la clé API. Pas
+  /// d'espacement entre téléchargements sur cette voie (seule la voie par
+  /// clé API se faisait refuser) ; la requête reste comptée dans le quota de
+  /// C411, avec la reprise sur 429.
+  Future<Uint8List> downloadTorrent(Release release) async {
+    final hash = release.infoHash;
+    if (hash == null || hash.isEmpty) {
+      throw const TrackerException('C411 : sortie sans infohash');
+    }
+    final Response<List<int>> res;
+    try {
+      res = await trackerRequest(
+          Tracker.c411,
+          () => _dio.get<List<int>>('/api/torrents/$hash/download',
+              options: Options(
+                responseType: ResponseType.bytes,
+                headers: {'Accept': 'application/x-bittorrent, */*'},
+              )));
+    } on DioException catch (e) {
+      throw TrackerException(
+          'C411 injoignable : ${e.message ?? e.type.name}');
+    }
+    return switch (res.statusCode) {
+      200 => checkTorrent(Tracker.c411, res.data),
+      401 || 403 => throw const TrackerException(
+          'Cookie de session C411 refusé : recolle-le dans les Réglages'),
+      404 => throw const TrackerException('C411 : torrent introuvable'),
+      429 => throw const TrackerException('Limite de requêtes C411 '
+          'atteinte malgré l’attente, réessaie dans une minute'),
+      _ => throw TrackerException(
+          'Réponse C411 inattendue (HTTP ${res.statusCode})'),
+    };
   }
 
   void close() => _dio.close();

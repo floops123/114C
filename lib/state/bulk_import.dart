@@ -1,7 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/c411.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
+import 'palliative.dart';
 import 'torrents.dart';
 
 // Import en masse : on interroge un tracker, on ne garde que ce qui passe les
@@ -621,6 +625,7 @@ class BulkImportNotifier extends Notifier<BulkState> {
     if (state.sending) return 0;
     final trackers = ref.read(trackersProvider);
     final transmission = ref.read(transmissionProvider);
+    final site = ref.read(c411SiteApiProvider);
     if (transmission == null) {
       state = state.copyWith(
         error: () => 'Configure Transmission dans les Réglages',
@@ -646,7 +651,7 @@ class BulkImportNotifier extends Notifier<BulkState> {
         final ok = link != null && link.startsWith('magnet:')
             ? await transmission.addTorrent(filename: link)
             : await transmission.addTorrent(
-                metainfo: await api.downloadTorrent(item.release),
+                metainfo: await _download(api, site, item.release),
               );
         if (ok) added++;
         _patch(item.key, (i) => i.copyWith(done: true, failed: false, detail: null));
@@ -669,6 +674,15 @@ class BulkImportNotifier extends Notifier<BulkState> {
     return added;
   }
 }
+
+/// C411 : par le site avec le cookie de session s'il est renseigné
+/// (`/api/torrents/<infohash>/download`), sinon par la clé API ; les
+/// autres trackers par leur propre méthode.
+Future<Uint8List> _download(
+        TrackerApi api, C411SiteApi? site, Release release) =>
+    api.tracker == Tracker.c411 && site != null && release.infoHash != null
+        ? site.downloadTorrent(release)
+        : api.downloadTorrent(release);
 
 final bulkImportProvider =
     NotifierProvider<BulkImportNotifier, BulkState>(BulkImportNotifier.new);

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/tracker.dart';
 import '../core/format.dart';
 import '../state/bulk_import.dart';
+import '../state/palliative.dart';
 import 'quota_notice.dart';
 import 'release_detail_page.dart';
 import 'theme.dart';
@@ -142,9 +143,10 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Envoyer $n torrent${n > 1 ? 's' : ''} ?'),
-        content: const Text(
+        content: Text(
           'Ils seront ajoutés à Transmission avec leurs dossiers d’origine, '
-          'un par un. Les échecs restent affichés ligne par ligne.',
+          'un par un. Les échecs restent affichés ligne par ligne.'
+          '${state.criteria.tracker != Tracker.c411 ? '' : ref.read(c411SiteApiProvider) != null ? '\n\nC411 : téléchargés avec ton cookie de session.' : '\n\nC411 : téléchargés avec ta clé API (pas de cookie de session dans les Réglages).'}',
         ),
         actions: [
           TextButton(

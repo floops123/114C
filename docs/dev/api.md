@@ -28,6 +28,7 @@ Deux API coexistent, avec **deux modes d'authentification** :
 | Catégories | `GET /api/categories` | Bearer |
 | Sorties « palliatives » (sans seeder depuis un certain temps) | `GET /api/torrents?palliative=only&palliativeAge=recent` | cookie de session |
 | `.torrent` | `GET /api?t=get&id=<infohash>&apikey=<clé>` | paramètre `apikey` (le Bearer y est refusé) |
+| `.torrent` (import en masse, si un cookie est renseigné) | `GET /api/torrents/<infohash>/download` | cookie de session |
 
 Paramètres de `/api/torrents` : `page`, `perPage`, `cat`, `subcat`, `name`
 (recherche), `sortBy` (`createdAt`, `seeders`, `leechers`, `completions`,
@@ -234,7 +235,7 @@ Draupnirr).
 
 | Tracker | Limite annoncée | Budget de l'application |
 |---|---|---|
-| C411 | 120 / min par clé | 80 / min, `.torrent` espacés de 3 s |
+| C411 | 120 / min par clé | 80 / min, `.torrent` espacés de 3 s (sauf par le cookie) |
 | tr4ker, Nostradamus | 120 / min par clé | 108 / min, `.torrent` espacés de 2 s |
 | Draupnirr | 120 / min par clé (300 / min par IP) | 108 / min, `.torrent` espacés de 2 s |
 | AstraTorrent | non publiée | 54 / min (60 supposées), `.torrent` espacés de 2 s |
@@ -254,8 +255,11 @@ autre appareil avec la même clé), davantage pour C411.
 
 Les **téléchargements de `.torrent`** (`trackerGet(…, download: true)`,
 quel que soit l'appelant : envoi en masse, bouton ⬇, revive, palliatif,
-cross-seed) sont en plus espacés d'un écart minimal depuis le précédent :
-un envoi de 20 torrents C411 prend ainsi une minute, sans rafale. Cet
+cross-seed) sont en plus espacés d'un écart minimal depuis le précédent.
+Exception : l'import en masse prend les `.torrent` C411 par le site avec le
+cookie de session (`C411SiteApi.downloadTorrent`) quand il est renseigné ;
+cette voie n'est pas espacée (seule celle par clé API se faisait refuser),
+mais reste comptée dans le quota de C411. Cet
 espacement ne déclenche pas le bandeau d'attente ; le bouton d'envoi en
 masse affiche la progression (« Envoi 3 / 20… »).
 

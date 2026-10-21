@@ -76,9 +76,11 @@ décocher** en tête, et un bouton **Envoyer à Transmission (n · taille)**
 qui envoie d'un coup toutes les lignes cochées et rappelle leur taille
 totale. Avant l'envoi, une boîte de dialogue
 récapitule le nombre de torrents qui vont partir. Les envois sont
-séquentiels (un par un) et **espacés** pour ménager le tracker (3 s entre
-deux `.torrent` sur C411, 2 s ailleurs) : le bouton affiche où on en est
-(« Envoi 3 / 20… »). Les échecs restent affichés sur leur ligne
+séquentiels (un par un) ; le bouton affiche où on en est (« Envoi 3 / 20… »).
+Sur **C411**, si le cookie de session est renseigné dans les Réglages, les
+`.torrent` sont pris sur le site avec ce cookie, sans attente entre deux
+(la boîte de confirmation le précise) ; sans cookie, ils passent par la clé
+API, espacés de 3 s. Sur les autres trackers, 2 s entre deux `.torrent`. Les échecs restent affichés sur leur ligne
 (« ÉCHEC » rouge, motif en dessous). Transmission est rafraîchie en
 bloc à la fin.
 
