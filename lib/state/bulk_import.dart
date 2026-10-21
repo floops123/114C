@@ -305,6 +305,16 @@ class BulkImportNotifier extends Notifier<BulkState> {
     Future.microtask(() => _load(_generation));
   }
 
+  /// Stoppe la recherche en cours : la génération est incrémentée, donc la
+  /// `_load()` en vol jette ses résultats ; le spinner s'arrête. Les
+  /// requêtes HTTP déjà parties vont au bout (pas d'annulation possible
+  /// sans `CancelToken` par requête), mais leur réponse est ignorée. Les
+  /// résultats déjà accumulés dans `items` sont conservés.
+  void stop() {
+    _generation++;
+    state = state.copyWith(loading: false);
+  }
+
   /// Charge une page de chaque tracker encore à feuilleter, et n'ajoute que
   /// les sorties qui passent les bornes. Si `criteria.trackers` est non vide,
   /// on n'interroge que les trackers qu'il contient.

@@ -147,12 +147,18 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
       appBar: AppBar(
         title: const Text('Import en masse'),
         actions: [
-          if (state.loading)
+          if (state.loading) ...[
+            TextButton.icon(
+              onPressed: notifier.stop,
+              icon: const Icon(Icons.stop_rounded, size: 18),
+              label: const Text('Stopper'),
+            ),
             TextButton.icon(
               onPressed: notifier.loadMore,
               icon: const Icon(Icons.expand_more_rounded, size: 18),
               label: const Text('Encore'),
             ),
+          ],
           IconButton(
             tooltip: 'Chercher',
             icon: const Icon(Icons.search_rounded),
