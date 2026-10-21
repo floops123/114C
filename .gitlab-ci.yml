@@ -5,9 +5,9 @@ stages:
   - build
 
 variables:
-  # Branche ou tag Flutter a installer (ex: stable, beta, 3.47.0).
-  # Le projet requiert Dart ^3.13.5 (Flutter >= 3.47.0).
-  FLUTTER_REF: "stable"
+  # Tag Flutter a installer, fige pour des builds reproductibles (celui
+  # utilise en local). Le projet requiert Dart ^3.13.5 (Flutter >= 3.47.0).
+  FLUTTER_REF: "3.47.7"
   PUB_CACHE: "$CI_PROJECT_DIR/.pub-cache"
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
 
@@ -35,9 +35,8 @@ analyze:
   extends: .flutter_setup
   script:
     - flutter pub get
-    - flutter analyze --no-fatal-infos --no-fatal-warnings
+    - flutter analyze --no-fatal-infos
     - flutter test
-  allow_failure: true
 
 build_android_apk:
   stage: build
