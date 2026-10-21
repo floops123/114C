@@ -159,6 +159,7 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
     final c = context.colors;
     final state = ref.watch(bulkImportProvider);
     final notifier = ref.read(bulkImportProvider.notifier);
+    final trackerCount = ref.watch(trackersProvider.select((t) => t.length));
     final selected = state.selected;
     // Reconstruire les contrôles (champs invalides colorés) après une saisie.
     final invalidSnapshot = _invalid.toSet();
@@ -296,7 +297,9 @@ class _BulkImportPageState extends ConsumerState<BulkImportPage> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    '${ref.watch(trackersProvider).length} tracker${ref.watch(trackersProvider).length > 1 ? 's' : ''} configuré${ref.watch(trackersProvider).length > 1 ? 's' : ''}',
+                    trackerCount > 1
+                        ? '$trackerCount trackers configurés'
+                        : '$trackerCount tracker configuré',
                     style: TextStyle(color: c.muted, fontSize: 11.5),
                   ),
                   const Spacer(),

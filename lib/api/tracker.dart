@@ -77,6 +77,7 @@ class Release {
     this.originalTitle,
     this.year,
     this.subcategory = '',
+    this.categories = const [],
     this.size = 0,
     this.seeders = 0,
     this.leechers = 0,
@@ -116,6 +117,11 @@ class Release {
   final String? originalTitle;
   final int? year;
   final String subcategory;
+
+  /// Catégories et sous-catégories du tracker auxquelles la sortie est
+  /// rattachée, dans le vocabulaire de [TrackerApi.categories] (noms du
+  /// `caps` pour Torznab). Sert au filtre par catégorie de l'import en masse.
+  final List<String> categories;
   final int size;
   final int seeders;
   final int leechers;

@@ -72,6 +72,27 @@ class TorznabApi implements TrackerApi {
         .toList();
   }
 
+  /// Noms des catégories du `caps`, par identifiant (parentes et
+  /// sous-catégories). Chargés une fois ; un échec est retenté au prochain
+  /// appel, les sorties restant alors sans [Release.categories].
+  Future<Map<int, String>>? _names;
+
+  Future<Map<int, String>> _categoryNames() => _names ??= _loadNames();
+
+  Future<Map<int, String>> _loadNames() async {
+    try {
+      return {
+        for (final c in await categories()) ...{
+          c.id: c.name,
+          for (final s in c.subcategories) s.id: s.name,
+        },
+      };
+    } on Object {
+      _names = null;
+      return const {};
+    }
+  }
+
   @override
   Future<ReleasePage> releases({
     int page = 1,
@@ -82,6 +103,8 @@ class TorznabApi implements TrackerApi {
     ReleaseSort sort = ReleaseSort.date,
     bool ascending = false,
   }) async {
+    // Le caps (une fois) part en même temps que la recherche.
+    final names = _categoryNames();
     final doc = await _call({
       't': 'search',
       if (query.isNotEmpty) 'q': query,
@@ -91,7 +114,10 @@ class TorznabApi implements TrackerApi {
       'extended': 1,
     });
 
-    final items = doc.findAllElements('item').map(_release).toList();
+    final byId = await names;
+    final items = [
+      for (final item in doc.findAllElements('item')) _release(item, byId),
+    ];
     // <torznab:response offset="0" total="1234"/> : facultatif selon les indexeurs.
     final response = doc
         .findAllElements('*')
@@ -118,7 +144,7 @@ class TorznabApi implements TrackerApi {
   @override
   void close() => _dio.close();
 
-  Release _release(XmlElement item) {
+  Release _release(XmlElement item, Map<int, String> names) {
     String? text(String name) =>
         item.findElements(name).firstOrNull?.innerText.trim();
     final attrs = <String, String>{
@@ -126,6 +152,15 @@ class TorznabApi implements TrackerApi {
         a.getAttribute('name')!: a.getAttribute('value') ?? '',
     };
     int? attrInt(String k) => int.tryParse(attrs[k] ?? '');
+    // Plusieurs `category` possibles (parente et sous-catégorie), en attribut
+    // torznab et/ou en élément RSS : `attrs` n'en garde qu'une.
+    final categoryIds = {
+      for (final a in item.childElements)
+        if (a.name.local == 'attr' && a.getAttribute('name') == 'category')
+          ?int.tryParse(a.getAttribute('value') ?? ''),
+      for (final c in item.findElements('category'))
+        ?int.tryParse(c.innerText.trim()),
+    };
 
     final name = text('title') ?? '';
     final parsed = ReleaseName.parse(name);
@@ -142,6 +177,7 @@ class TorznabApi implements TrackerApi {
       title: parsed.title,
       year: parsed.year,
       subcategory: parsed.kind,
+      categories: [for (final id in categoryIds) ?names[id]],
       size: int.tryParse(text('size') ?? '') ?? attrInt('size') ?? 0,
       seeders: seeders,
       // Torznab donne « peers » = seeders + leechers.

@@ -163,6 +163,10 @@ class C411Api implements TrackerApi {
       originalTitle: media['originalTitle'] as String?,
       year: integer(media['year']),
       subcategory: (json['subcategory'] as Map?)?['name'] as String? ?? '',
+      categories: [
+        for (final k in ['category', 'subcategory'])
+          if ((json[k] as Map?)?['name'] case final String n) n,
+      ],
       size: integer(json['size']) ?? 0,
       seeders: integer(json['seeders']) ?? 0,
       leechers: integer(json['leechers']) ?? 0,

@@ -147,6 +147,10 @@ class AstraApi implements TrackerApi {
       title: text('clean_title') ?? parsed.title,
       year: parsed.year,
       subcategory: text('sub_category') ?? parsed.kind,
+      categories: [
+        for (final (slug, label) in _categories.values)
+          if (slug == text('category')) label,
+      ],
       size: integer('size_bytes'),
       seeders: integer('seeders'),
       leechers: integer('leechers'),

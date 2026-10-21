@@ -19,9 +19,12 @@ passe, tu coches, et l'envoi part en une fois à Transmission.
   tous les chips sont désélectionnés, la recherche ne renvoie rien —
   clique sur « Tous les trackers » pour revenir à l'état par défaut.
 - **Catégorie** : multi-sélection des sous-catégories proposées par les
-  trackers configurés (« Film », « Série », « FLAC »…). La liste est
-  chargée à l'ouverture de la page (en tâche de fond) ; en attendant
-  elle est vide. Le filtre est insensible à la casse.
+  trackers configurés (« Film », « Série », « FLAC » pour C411,
+  « Movies/HD » pour un indexeur Torznab, « Films » pour AstraTorrent…).
+  La liste est chargée à l'ouverture de la page et rechargée quand tu
+  changes de trackers dans les Réglages ; en attendant elle est vide. Une
+  sortie passe si elle est rangée dans l'une des catégories cochées, sur
+  son tracker. Le filtre est insensible à la casse.
 - **Taille min / max** : « 1,5 Go », « 700 Mo », « 2 To ». Tu peux
   saisir la virgule pour les décimales, omettre l'unité (= octets).
   Les suffixes reconnus : o, ko/k, mo/m, go/g, to/t, po/p. Une saisie

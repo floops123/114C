@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
@@ -38,8 +36,9 @@ class BulkCriteria {
   /// Trackers à interroger (vide = tous les trackers configurés).
   final Set<Tracker> trackers;
 
-  /// Sous-catégories retenues (vide = tout). Les valeurs correspondent à
-  /// `r.subcategory` (insensible à la casse).
+  /// Catégories retenues (vide = tout). Une sortie passe si son
+  /// `subcategory` ou l'une de ses `categories` en fait partie (insensible
+  /// à la casse).
   final Set<String> categories;
 
   /// Tailles en octets.
@@ -93,7 +92,10 @@ class BulkCriteria {
     if (trackers.isNotEmpty && !trackers.contains(r.tracker)) return false;
     if (categories.isNotEmpty) {
       final cs = categories.map((c) => c.toLowerCase()).toSet();
-      if (!cs.contains(r.subcategory.toLowerCase())) return false;
+      if (![r.subcategory, ...r.categories]
+          .any((c) => cs.contains(c.toLowerCase()))) {
+        return false;
+      }
     }
     return _within(r.size, size) &&
         _within(r.seeders, seeders) &&
@@ -207,19 +209,17 @@ class BulkImportNotifier extends Notifier<BulkState> {
   var _pages = <Tracker, int>{};
   var _more = <Tracker, bool>{};
 
-  /// Vrai après le premier déclenchement de chargement des catégories.
-  /// Conservé en champ privé pour persister d'un build à l'autre : lire
-  /// `state` depuis `build()` est interdit en Riverpod 3.
-  bool _categoriesRequested = false;
-
   /// Critères saisis par l'utilisateur. Conservés ici pour survivre au
   /// rebuild déclenché par un changement de la liste des trackers.
   BulkCriteria _criteria = const BulkCriteria();
 
   /// Catégories déjà chargées depuis les `categories()` des trackers. Vides
   /// tant que `_loadAvailableCategories` n'a pas tourné ; conservées ici
-  /// pour ne pas re-solliciter les trackers à chaque rebuild.
+  /// pour rester affichées pendant leur rechargement.
   List<String> _availableCategories = const [];
+
+  /// Numéro du dernier chargement des catégories lancé.
+  int _categoryLoad = 0;
 
   @override
   BulkState build() {
@@ -227,15 +227,17 @@ class BulkImportNotifier extends Notifier<BulkState> {
     // On n'utilise pas `state` ici (interdit en Riverpod 3) : les champs
     // privés ci-dessus conservent ce qui doit l'être, et la liste des
     // résultats, la sélection et les flags de chargement repartent à zéro.
+    // L'instance survit au rebuild : une `_load()` en vol, faite avec les
+    // anciens clients, est invalidée par la génération.
     ref.watch(trackersProvider);
-    if (!_categoriesRequested) {
-      _categoriesRequested = true;
-      Future.microtask(_loadAvailableCategories);
-    }
+    _reset();
+    // Les catégories dépendent des trackers configurés : rechargées à chaque
+    // build (le premier compris).
+    Future.microtask(_loadAvailableCategories);
     return BulkState(
       criteria: _criteria,
       availableCategories: _availableCategories,
-      loadingCategories: false,
+      loadingCategories: true,
     );
   }
 
@@ -245,15 +247,19 @@ class BulkImportNotifier extends Notifier<BulkState> {
   /// les résultats de recherche.
   Future<void> _loadAvailableCategories() async {
     final trackers = ref.read(trackersProvider);
+    final load = ++_categoryLoad;
     final names = <String>{};
     await Future.wait([
       for (final t in trackers.keys)
         () async {
           try {
+            // Les sous-catégories quand il y en a ; sinon la catégorie
+            // elle-même (AstraTorrent n'expose que celles-ci).
             for (final c in await trackers[t]!.categories()) {
-              for (final s in c.subcategories) {
-                final n = s.name.trim();
-                if (n.isNotEmpty) names.add(n);
+              for (final n in c.subcategories.isEmpty
+                  ? [c.name]
+                  : c.subcategories.map((s) => s.name)) {
+                if (n.trim().isNotEmpty) names.add(n.trim());
               }
             }
           } on Object catch (_) {
@@ -261,7 +267,9 @@ class BulkImportNotifier extends Notifier<BulkState> {
           }
         }(),
     ]);
-    if (!ref.mounted) return;
+    // Un rebuild entre-temps a relancé le chargement avec les nouveaux
+    // trackers : celui-ci est périmé.
+    if (!ref.mounted || load != _categoryLoad) return;
     final sorted = (names.toList()..sort());
     _availableCategories = sorted;
     state = state.copyWith(availableCategories: sorted, loadingCategories: false);
@@ -272,31 +280,33 @@ class BulkImportNotifier extends Notifier<BulkState> {
     state = state.copyWith(criteria: criteria);
   }
 
-  void clear() {
+  /// Oublie la pagination et invalide la `_load()` en vol.
+  void _reset() {
     _generation++;
     _busy = false;
     _pages = {};
     _more = {};
+  }
+
+  void clear() {
+    _reset();
     state = state.copyWith(
       items: const [],
       searched: false,
       sending: false,
-      error: null,
+      error: () => null,
     );
   }
 
   /// Relance la recherche depuis la première page.
   void search() {
-    _generation++;
+    _reset();
     final generation = _generation;
-    _busy = false;
-    _pages = {};
-    _more = {};
     state = state.copyWith(
       items: const [],
       searched: true,
       loading: true,
-      error: null,
+      error: () => null,
     );
     Future.microtask(() => _load(generation));
   }
@@ -324,17 +334,6 @@ class BulkImportNotifier extends Notifier<BulkState> {
     final trackers = ref.read(trackersProvider);
     final criteria = state.criteria;
     final selected = criteria.trackers;
-    // Log via stderr : sort en build release et debug, visible dans le
-    // terminal `flutter run` (et `adb logcat` sur Android).
-    // ignore: avoid_print
-    print('[bulk_import] _load gen=$generation '
-        'trackers=${trackers.keys.map((t) => t.name).toList()} '
-        'name="${criteria.name}" selected=$selected '
-        'categories=${criteria.categories} '
-        'bounds=(${criteria.sizeMin},${criteria.sizeMax}) '
-        'seeders=(${criteria.seedersMin},${criteria.seedersMax}) '
-        'leechers=(${criteria.leechersMin},${criteria.leechersMax})');
-    developer.log('bulk _load', name: 'bulk_import');
     final todo = [
       for (final t in trackers.keys)
         if ((selected.isEmpty || selected.contains(t)) &&
@@ -374,12 +373,13 @@ class BulkImportNotifier extends Notifier<BulkState> {
     // seuls les nouveaux entrent.
     final known = {for (final i in state.items) i.key: i};
     final fresh = <String, BulkItem>{};
-    String? error;
+    final errors = <String>[];
     for (final (t, page, r, failure) in results) {
       _pages[t] = page;
       if (r == null) {
         _more[t] = false;
-        error = failure;
+        errors.add(
+            failure!.contains(t.label) ? failure : '${t.label} : $failure');
         continue;
       }
       _more[t] = page < r.totalPages && r.items.isNotEmpty && page < maxPages;
@@ -393,7 +393,7 @@ class BulkImportNotifier extends Notifier<BulkState> {
     state = state.copyWith(
       items: [...fresh.values, ...known.values],
       loading: _more.values.any((m) => m),
-      error: () => error,
+      error: () => errors.isEmpty ? null : errors.join('\n'),
     );
   }
 
