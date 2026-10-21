@@ -84,14 +84,30 @@ final trackerQuotas = {
 const defaultRetryAfter = Duration(seconds: 60);
 
 /// Délai demandé par `Retry-After` (secondes ou date HTTP), sinon null.
+/// L'en-tête peut être répété (C411 le fait, sans doute via un proxy) : on
+/// retient le plus long des délais lisibles. Ne lève jamais.
 Duration? retryAfter(Headers headers, {DateTime? now}) {
-  final value = headers.value('retry-after')?.trim();
-  if (value == null || value.isEmpty) return null;
+  Duration? longest;
+  final at = now ?? DateTime.now();
+  for (final raw in headers['retry-after'] ?? const <String>[]) {
+    // Répétitions repliées en une ligne : « 7, 9 ». Une date HTTP contient
+    // aussi une virgule : on la tente d'abord entière.
+    final whole = _retryDelay(raw.trim(), at);
+    for (final d in whole != null
+        ? [whole]
+        : [for (final part in raw.split(',')) _retryDelay(part.trim(), at)]) {
+      if (d != null && (longest == null || d > longest)) longest = d;
+    }
+  }
+  return longest;
+}
+
+Duration? _retryDelay(String value, DateTime now) {
+  if (value.isEmpty) return null;
   final seconds = int.tryParse(value);
   if (seconds != null) return Duration(seconds: seconds.clamp(0, 3600));
   try {
-    final at = HttpDate.parse(value);
-    final d = at.difference(now ?? DateTime.now());
+    final d = HttpDate.parse(value).difference(now);
     return d.isNegative ? Duration.zero : d;
   } on HttpException {
     return null;

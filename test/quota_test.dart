@@ -92,6 +92,15 @@ void main() {
           const Duration(seconds: 45));
     });
 
+    test('répété : le plus long délai lisible, sans exception', () {
+      final headers = Headers.fromMap({
+        'retry-after': ['5', 'n’importe quoi', '30'],
+      });
+      expect(retryAfter(headers), const Duration(seconds: 30));
+      expect(retryAfter(Headers.fromMap({'retry-after': ['7, 9']})),
+          const Duration(seconds: 9));
+    });
+
     test('absent ou illisible', () {
       expect(retryAfter(Headers()), isNull);
       expect(retryAfter(h('bientôt')), isNull);
@@ -103,16 +112,21 @@ void main() {
     late List<int> statuses;
     late RequestQuota saved;
     late _Clock clock;
+    var doubleRetryAfter = false;
 
     setUp(() async {
       clock = _Clock();
+      doubleRetryAfter = false;
       saved = trackerQuotas[Tracker.tr4ker]!;
       trackerQuotas[Tracker.tr4ker] = clock.quota(100);
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((req) async {
         final status = statuses.removeAt(0);
         req.response.statusCode = status;
-        if (status == 429) req.response.headers.set('Retry-After', '7');
+        if (status == 429) {
+          req.response.headers.add('Retry-After', '7');
+          if (doubleRetryAfter) req.response.headers.add('Retry-After', '9');
+        }
         req.response.write('ok');
         await req.response.close();
       });
@@ -130,6 +144,15 @@ void main() {
           type: ResponseType.plain);
       expect(res.data, 'ok');
       expect(clock.slept, [const Duration(seconds: 7)]);
+    });
+
+    test('429 avec Retry-After répété : attente puis nouvel essai', () async {
+      statuses = [429, 200];
+      doubleRetryAfter = true;
+      final res = await trackerGet<String>(dio(), Tracker.tr4ker, '/',
+          type: ResponseType.plain);
+      expect(res.data, 'ok');
+      expect(clock.slept, [const Duration(seconds: 9)]);
     });
 
     test('429 deux fois : erreur explicite', () async {

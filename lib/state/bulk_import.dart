@@ -644,6 +644,10 @@ class BulkImportNotifier extends Notifier<BulkState> {
       } on FormatException catch (e) {
         _patch(item.key, (i) =>
             i.copyWith(failed: true, detail: '.torrent illisible : ${e.message}'));
+      } on Object catch (e) {
+        // Imprévu : la ligne échoue, l'envoi continue et le bouton se
+        // libère (sinon « Envoi… » reste affiché pour toujours).
+        _patch(item.key, (i) => i.copyWith(failed: true, detail: '$e'));
       }
     }
     if (!ref.mounted) return added;
