@@ -60,10 +60,24 @@ enum BulkOrder {
       };
 
   /// Zen par jour que rapporterait la sortie une fois partagée (0 hors
-  /// C411).
-  static double zenOf(Release r) => r.tracker != Tracker.c411
+  /// C411), avec le [bonus] du compte, après [seedDays] jours de seed.
+  static double zenOf(Release r, {double bonus = 0.25, double seedDays = 0}) => r.tracker != Tracker.c411
       ? 0
-      : estimateZen(bytes: r.size, seeders: r.seeders, joining: true).perDay;
+      : estimateZen(bytes: r.size, seeders: r.seeders, seedDays: seedDays, bonus: bonus, joining: true).perDay;
+}
+
+/// Ce que rapporterait une sélection une fois partagée toute la journée :
+/// tout de suite, et après six mois de seed (note +0,50) ; [counted] : les
+/// sorties C411, les seules qui rapportent du Zen.
+({double now, double later, int counted}) selectionZen(Iterable<Release> releases, {double bonus = 0.25}) {
+  var now = 0.0, later = 0.0, counted = 0;
+  for (final r in releases) {
+    if (r.tracker != Tracker.c411) continue;
+    counted++;
+    now += BulkOrder.zenOf(r, bonus: bonus);
+    later += BulkOrder.zenOf(r, bonus: bonus, seedDays: 180);
+  }
+  return (now: now, later: later, counted: counted);
 }
 
 /// Ce qu'on cherche. Toutes les bornes sont facultatives.

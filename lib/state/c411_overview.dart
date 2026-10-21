@@ -16,5 +16,13 @@ final c411OverviewProvider = FutureProvider<C411Overview?>((ref) async {
   return api.overview();
 });
 
+/// Bonus Zen du compte (grille et arbre) que le site applique aujourd'hui,
+/// sinon au dernier versement ; null : inconnu (pas de cookie de session).
+final zenBonusProvider = Provider<double?>((ref) {
+  final o = ref.watch(c411OverviewProvider).value;
+  final bp = o?.forecast?.today.bonusBp ?? o?.history?.latest?.bonusBp;
+  return bp == null ? null : bp / 10000;
+});
+
 /// Le site recalcule la journée en cours régulièrement ; inutile d'insister.
 const refreshEvery = Duration(minutes: 10);

@@ -1,7 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:c411_remote/api/tracker.dart';
+import 'package:c411_remote/ui/c411_account.dart' show frNumber;
 import 'package:c411_remote/state/bulk_import.dart';
+import 'package:c411_remote/state/c411_overview.dart';
 import 'package:c411_remote/state/torrents.dart';
 import 'package:c411_remote/ui/bulk_import_page.dart';
 import 'package:c411_remote/ui/theme.dart';
@@ -92,6 +94,8 @@ Future<void> _settle() async {
 
 ProviderContainer _container(Map<Tracker, TrackerApi> trackers) {
   final c = ProviderContainer(overrides: [
+    // Pas de compte C411 : bonus Zen supposé.
+    c411OverviewProvider.overrideWith((ref) async => null),
     trackersProvider.overrideWithValue(trackers),
     torrentsProvider.overrideWith(_Torrents.new),
   ]);
@@ -253,6 +257,11 @@ void main() {
     expect(find.textContaining('50 résultats sur 50 examinés'), findsOneWidget);
     expect(find.text('DANS TRANSMISSION'), findsOneWidget);
     expect(find.textContaining('Envoyer à Transmission (49 ·'), findsOneWidget);
+    // Le gain en Zen de la sélection (sorties C411, bonus supposé de 25 %).
+    final zen = selectionZen([for (final i in container.read(bulkImportProvider).selected) i.release]);
+    expect(zen.counted, 49);
+    expect(find.textContaining('+${frNumber(zen.now, zen.now < 10 ? 2 : 1)} Zen/j'), findsOneWidget);
+    expect(find.textContaining('(${frNumber(zen.later, 1)} après 6 mois)'), findsOneWidget);
     expect(c411.pages, [1]);
     // La page 2 (51 et 52 Mo) reste à prendre.
     expect(find.text('Encore'), findsOneWidget);

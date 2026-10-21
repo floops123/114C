@@ -243,6 +243,16 @@ void main() {
       ..sort(BulkOrder.zen.compare);
     expect(list.map((x) => x.id), ['b', 'a', 'c']);
     expect(BulkOrder.zenOf(list.last), 0, reason: 'Zen : C411 seulement');
+
+    // Gain de la sélection : les sorties C411 seulement, avec le bonus du
+    // compte ; après six mois, la note gagne 0,50.
+    final gain = selectionZen(list, bonus: 0.2);
+    expect(gain.counted, 2);
+    final b = estimateZen(bytes: 12 * _go, seeders: 3, joining: true, bonus: 0.2);
+    final a = estimateZen(bytes: 300 * _mo, seeders: 30, joining: true, bonus: 0.2);
+    expect(gain.now, closeTo(a.perDay + b.perDay, 1e-9));
+    expect(gain.later, closeTo((a.weight * (a.note + 0.5) + b.weight * (b.note + 0.5)) * 1.2 / 7, 1e-9));
+    expect(selectionZen([list.last]).counted, 0);
   });
 
   group('opportunités : recherche et ajout', () {

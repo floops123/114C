@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/tracker.dart';
 import '../core/format.dart';
 import '../state/bulk_import.dart';
+import '../state/c411_overview.dart';
 import '../state/palliative.dart';
 import 'c411_account.dart';
 import 'quota_notice.dart';
@@ -909,6 +910,10 @@ class _Results extends ConsumerWidget {
     final c = context.colors;
     final notifier = ref.read(bulkImportProvider.notifier);
     final selected = state.selected;
+    // Bonus du compte s'il est connu, sinon celui d'un compte actif (25 %).
+    final siteBonus = ref.watch(zenBonusProvider);
+    final bonus = siteBonus ?? 0.25;
+    final zen = selectionZen([for (final i in selected) i.release], bonus: bonus);
     final pending = state.pending;
     final all = pending.isNotEmpty && selected.length == pending.length;
 
@@ -985,6 +990,7 @@ class _Results extends ConsumerWidget {
             }
             final item = state.items[i];
             return _BulkRow(
+              bonus: bonus,
               item: item,
               onToggle: (v) => notifier.toggle(item.key, v),
             );
@@ -1077,22 +1083,45 @@ class _Results extends ConsumerWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text:
-                                  '${selected.length} sélectionné'
-                                  '${selected.length > 1 ? 's' : ''}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                      child: Tooltip(
+                        message: zen.counted == 0
+                            ? 'Seules les sorties C411 rapportent du Zen.'
+                            : 'Zen par jour une fois les ${zen.counted} sorties C411 partagées '
+                                'toute la journée (classe Swarm Keeper, bonus '
+                                '${frNumber(bonus * 100)} %${siteBonus == null ? ' supposé' : ' du compte'}) ; '
+                                'la note monte avec la durée de seed : '
+                                '≈ ${frNumber(zen.later, 1)} Zen/j après 6 mois.',
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text:
+                                    '${selected.length} sélectionné'
+                                    '${selected.length > 1 ? 's' : ''}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                            TextSpan(
-                              text: '  ·  ${formatBytes(state.selectedSize)}',
-                              style: TextStyle(color: c.muted),
-                            ),
-                          ],
+                              TextSpan(
+                                text: '  ·  ${formatBytes(state.selectedSize)}',
+                                style: TextStyle(color: c.muted),
+                              ),
+                              if (zen.counted > 0) ...[
+                                TextSpan(
+                                  text: '  ·  +${frNumber(zen.now, zen.now < 10 ? 2 : 1)} Zen/j',
+                                  style: TextStyle(
+                                    color: c.success,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (MediaQuery.sizeOf(context).width >= 600)
+                                  TextSpan(
+                                    text: '  (${frNumber(zen.later, 1)} après 6 mois)',
+                                    style: TextStyle(color: c.muted),
+                                  ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1253,9 +1282,10 @@ class _BoundField extends StatelessWidget {
 
 /// Une sortie : case, titre et nom, étiquettes ; taille et pairs à droite.
 class _BulkRow extends StatelessWidget {
-  const _BulkRow({required this.item, required this.onToggle});
+  const _BulkRow({required this.item, required this.onToggle, this.bonus = 0.25});
   final BulkItem item;
   final ValueChanged<bool> onToggle;
+  final double bonus;
 
   @override
   Widget build(BuildContext context) {
@@ -1361,8 +1391,8 @@ class _BulkRow extends StatelessWidget {
                 if (r.tracker == Tracker.c411)
                   Tooltip(
                     message: 'Zen par jour une fois partagé (classe Swarm Keeper, '
-                        'bonus 25 %, en te comptant parmi les seeders)',
-                    child: Text('≈ ${frNumber(BulkOrder.zenOf(r), 2)} Zen/j',
+                        'bonus ${frNumber(bonus * 100)} %, en te comptant parmi les seeders)',
+                    child: Text('≈ ${frNumber(BulkOrder.zenOf(r, bonus: bonus), 2)} Zen/j',
                         style: small.copyWith(color: c.success)),
                   ),
                   ],

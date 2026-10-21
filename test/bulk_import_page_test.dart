@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/core/settings.dart';
+import 'package:c411_remote/state/c411_overview.dart';
 import 'package:c411_remote/state/catalog.dart';
 import 'package:c411_remote/state/media_library.dart';
 import 'package:c411_remote/ui/bulk_import_page.dart';
@@ -47,6 +48,8 @@ void main() {
       (tester) async {
     final store = MemoryMediaLibraryStore();
     final container = ProviderContainer(overrides: [
+    // Pas de compte C411 : bonus Zen supposé.
+    c411OverviewProvider.overrideWith((ref) async => null),
       settingsProvider.overrideWith(_SettingsEmpty.new),
       trackersProvider.overrideWithValue({
         Tracker.c411: _C411([
