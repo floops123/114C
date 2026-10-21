@@ -307,10 +307,30 @@ const resumeLabel = (t) => progress.resumable().some((p) => state.fileOwner.get(
 // ---------------------------------------------------------------------------
 // Lecteur
 
+/**
+ * Comment lire un fichier, d'après ce que CE navigateur sait décoder :
+ * - direct : le fichier tel quel (MKV compris), si la vidéo et la piste audio
+ *   voulue se lisent, et que cette piste est celle que le navigateur jouera ;
+ * - stream + copy : ffmpeg copie la vidéo (le navigateur la décode) et ne
+ *   convertit que l'audio — quasiment sans calcul ;
+ * - stream : vidéo réencodée en H.264 (le navigateur ne la décode pas).
+ */
+function choose(info, audioIndex) {
+  const probe = document.createElement('video');
+  const can = (mime) => Boolean(mime) && probe.canPlayType(mime) !== '';
+  const video = can(info.videoMime);
+  const track = (info.audio || []).find((a) => a.index === audioIndex);
+  const audio = !track || can(track.mime);
+  const sameTrack = !track || track.index === info.browserAudio;
+  const container = /mp4|mov|matroska|webm/.test(info.container || '');
+  if (container && video && audio && sameTrack) return { mode: 'direct', copy: false };
+  return { mode: 'stream', copy: video };
+}
+
 const player = {
   el: $('#player'), video: $('#video'),
   file: null, title: null, info: null,
-  mode: 'direct', offset: 0, duration: 0, audio: null,
+  mode: 'direct', copy: false, offset: 0, duration: 0, audio: null, stallTimer: 0,
   idleTimer: 0, saveTimer: 0, dragging: false,
 
   async open(fileId) {
@@ -338,13 +358,15 @@ const player = {
     }
     if (this.file !== f) return; // Autre fichier entre-temps.
     this.info = info;
-    this.mode = info.mode;
     this.duration = info.duration || 0;
     this.audio = info.preferredAudio ?? null;
+    ({ mode: this.mode, copy: this.copy } = info.videoMime === undefined
+      ? { mode: info.mode, copy: false } // Serveur sans ffprobe : son avis.
+      : choose(info, this.audio));
 
     const audio = $('#audio');
     const tracks = info.audio || [];
-    audio.hidden = this.mode !== 'stream' || tracks.length < 2;
+    audio.hidden = tracks.length < 2;
     audio.innerHTML = tracks.map((a) => `<option value="${a.index}"${a.index === this.audio ? ' selected' : ''}>${esc(
       [a.language ? a.language.toUpperCase() : `Piste ${a.index}`, a.title, a.codec?.toUpperCase(), a.channels > 2 ? `${a.channels} canaux` : ''].filter(Boolean).join(' · '))}</option>`).join('');
 
@@ -361,17 +383,37 @@ const player = {
   load(at) {
     const v = this.video;
     $('#player-spinner').hidden = false;
+    clearTimeout(this.stallTimer);
     if (this.mode === 'stream') {
       this.offset = at;
       const params = new URLSearchParams({ t: at.toFixed(1) });
       if (this.audio != null) params.set('audio', this.audio);
-      v.src = `${this.info.url}?${params}`;
+      if (this.copy) params.set('copy', '1');
+      v.src = `${this.info.streamUrl || this.info.url}?${params}`;
     } else {
       this.offset = 0;
-      if (!v.src.endsWith(this.info.url)) v.src = this.info.url;
-      v.addEventListener('loadedmetadata', () => { v.currentTime = at; }, { once: true });
+      const url = this.info.directUrl || this.info.url;
+      if (!v.src.endsWith(url)) v.src = url;
+      v.addEventListener('loadedmetadata', () => {
+        // Conteneur lu mais image non décodée : on passe par ffmpeg.
+        if (this.mode === 'direct' && v.videoWidth === 0) return this.fallback(at);
+        v.currentTime = at;
+      }, { once: true });
+      // Rien au bout de 20 s : le navigateur cale sur ce fichier.
+      this.stallTimer = setTimeout(() => {
+        if (this.file && this.mode === 'direct' && v.readyState < 2) this.fallback(at);
+      }, 20000);
     }
     v.play().catch(() => { /* lecture auto refusée : le bouton reste */ });
+  },
+
+  /** La lecture directe a échoué : conversion à la volée, même position. */
+  fallback(at) {
+    if (this.mode !== 'direct' || !this.info.streamUrl) return false;
+    this.mode = 'stream';
+    this.copy = false;
+    this.load(at ?? this.now());
+    return true;
   },
 
   now() { return this.offset + (this.video.currentTime || 0); },
@@ -398,6 +440,7 @@ const player = {
   },
 
   close() {
+    clearTimeout(this.stallTimer);
     this.save();
     this.video.pause();
     this.video.removeAttribute('src');
@@ -445,9 +488,13 @@ function bindPlayer() {
   v.addEventListener('canplay', () => { $('#player-spinner').hidden = true; });
   v.addEventListener('error', () => {
     if (!player.file || !v.getAttribute('src')) return;
-    player.fail(player.mode === 'direct'
-      ? 'Ce navigateur ne sait pas lire ce fichier.'
-      : 'La conversion a échoué (ffmpeg).');
+    if (player.mode === 'direct' && player.fallback(player.now())) return;
+    // Vidéo copiée mais finalement pas décodée : réencodage complet.
+    if (player.mode === 'stream' && player.copy) {
+      player.copy = false;
+      return player.load(player.now());
+    }
+    player.fail('Lecture impossible, même convertie (ffmpeg).');
   });
   v.addEventListener('ended', () => {
     // En conversion, « ended » peut venir d'une coupure : on ne passe à la
@@ -466,7 +513,14 @@ function bindPlayer() {
   $('#next-episode').onclick = () => { const n = player.nextEpisode(); if (n) { player.save(); player.open(n.id); } };
   $('#fullscreen').onclick = () => (document.fullscreenElement
     ? document.exitFullscreen() : player.el.requestFullscreen()).catch(() => {});
-  $('#audio').onchange = (e) => { player.audio = Number(e.target.value); player.load(player.now()); };
+  $('#audio').onchange = (e) => {
+    // Une autre piste : en lecture directe, le navigateur ne sait jouer que
+    // celle par défaut ; on choisit à nouveau (souvent : vidéo copiée).
+    const at = player.now();
+    player.audio = Number(e.target.value);
+    ({ mode: player.mode, copy: player.copy } = choose(player.info, player.audio));
+    player.load(at);
+  };
   v.onclick = () => (v.paused ? v.play() : v.pause());
   v.ondblclick = () => $('#fullscreen').click();
 

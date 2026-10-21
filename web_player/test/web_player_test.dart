@@ -134,6 +134,30 @@ void main() {
       expect(args, contains('-c:a aac'));
     });
 
+    test('codecs décrits pour que le navigateur tranche', () {
+      final info = MediaInfo.parse(jsonEncode(probeJson('matroska,webm', [
+        {'index': 0, 'codec_type': 'video', 'codec_name': 'hevc', 'profile': 'Main 10', 'level': 150, 'pix_fmt': 'yuv420p10le'},
+        {'index': 1, 'codec_type': 'audio', 'codec_name': 'eac3', 'channels': 6, 'tags': {'language': 'eng'}},
+        {'index': 2, 'codec_type': 'audio', 'codec_name': 'aac', 'channels': 2, 'tags': {'language': 'fre'}, 'disposition': {'default': 1}},
+      ])));
+      expect(info.videoMime, 'video/mp4; codecs="hvc1.2.4.L150.B0"');
+      expect(info.browserAudio?.index, 2, reason: 'la piste marquée par défaut');
+      expect(info.audio.map((a) => a.mime),
+          ['audio/mp4; codecs="ec-3"', 'audio/mp4; codecs="mp4a.40.2"']);
+      // Le navigateur décode le H.265 : vidéo copiée (étiquette hvc1).
+      final copied = info.ffmpegArgs('u', copyVideo: true).join(' ');
+      expect(copied, contains('-c:v copy -tag:v hvc1'));
+      expect(copied, isNot(contains('libx264')));
+      expect(info.ffmpegArgs('u').join(' '), contains('libx264'));
+
+      final h264 = MediaInfo.parse(jsonEncode(probeJson('matroska,webm', [
+        {'index': 0, 'codec_type': 'video', 'codec_name': 'h264', 'profile': 'High', 'level': 41, 'pix_fmt': 'yuv420p'},
+        {'index': 1, 'codec_type': 'audio', 'codec_name': 'dts', 'channels': 6},
+      ])));
+      expect(h264.videoMime, 'video/mp4; codecs="avc1.640029"');
+      expect(h264.audio.single.mime, isNull, reason: 'aucun navigateur ne lit le DTS');
+    });
+
     test('MP4 H.264 AAC : lu tel quel', () {
       final info = MediaInfo.parse(jsonEncode(probeJson('mov,mp4,m4a,3gp,3g2,mj2', [
         {'index': 0, 'codec_type': 'video', 'codec_name': 'h264', 'pix_fmt': 'yuv420p'},
@@ -245,6 +269,8 @@ void main() {
       final play = jsonDecode(utf8.decode(body)) as Map;
       expect(play['mode'], 'stream');
       expect(play['url'], '/stream/$id');
+      expect(play['directUrl'], '/media/$id');
+      expect(play['streamUrl'], '/stream/$id');
       expect(play['duration'], 60);
     });
 
@@ -266,6 +292,10 @@ void main() {
       final args = utf8.decode(body);
       expect(args, contains('-ss 42.00 -i http://127.0.0.1:'));
       expect(args, contains('VisionQuest.S01E03.MULTi.1080p.WEB.H265-GL0P.mkv'));
+      expect(args, contains('libx264'));
+      // Le navigateur a dit décoder la vidéo : copiée.
+      final (_, _, copied) = await get('stream/$id?t=0&copy=1');
+      expect(utf8.decode(copied), contains('-c:v copy -tag:v hvc1'));
     });
 
     test('bout à bout avec le vrai ffmpeg : MKV H.265 à deux pistes audio',
@@ -303,6 +333,13 @@ void main() {
       expect(status, 200);
       expect(mp4.length, greaterThan(1000));
       expect(ascii.decode(mp4.sublist(4, 8)), 'ftyp', reason: 'MP4 lisible');
+
+      // Vidéo copiée (navigateur qui décode le H.265) : MP4 aussi.
+      final (copyStatus, _, copied) = await get('stream/$id?t=0&copy=1');
+      expect(copyStatus, 200);
+      expect(ascii.decode(copied.sublist(4, 8)), 'ftyp');
+      expect(utf8.decode(copied, allowMalformed: true), contains('hvc1'),
+          reason: 'H.265 copié tel quel, étiqueté hvc1');
     }, skip: Process.runSync('which', ['ffmpeg']).exitCode != 0 ? 'ffmpeg absent' : false,
         timeout: const Timeout(Duration(minutes: 2)));
   });

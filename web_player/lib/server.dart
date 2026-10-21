@@ -194,9 +194,13 @@ class WebPlayerServer {
     } on Object catch (e) {
       return _json(response, {'error': 'Fichier illisible : $e'}, status: 502);
     }
+    // Le navigateur tranche (il sait ce qu'il lit) : `mode` n'est que l'avis
+    // prudent du serveur, pour un client qui ne teste rien.
     await _json(response, {
       'mode': info.direct ? 'direct' : 'stream',
       'url': info.direct ? '/media/$id' : '/stream/$id',
+      'directUrl': '/media/$id',
+      'streamUrl': '/stream/$id',
       ...info.toJson(),
     });
   }
@@ -235,9 +239,13 @@ class WebPlayerServer {
     final info = await _info(file);
     final start = double.tryParse(request.uri.queryParameters['t'] ?? '') ?? 0;
     final audio = int.tryParse(request.uri.queryParameters['audio'] ?? '');
+    // Le navigateur sait décoder la vidéo : copiée, seul l'audio est converti.
+    final copy = request.uri.queryParameters['copy'] == '1';
     final url = await relay.urlFor(file.path);
     final process = await Process.start(
-        ffmpeg, info.ffmpegArgs(url.toString(), start: start, audioIndex: audio));
+        ffmpeg,
+        info.ffmpegArgs(url.toString(),
+            start: start, audioIndex: audio, copyVideo: copy));
     unawaited(process.stderr.drain<void>());
     response.headers
       ..contentType = ContentType('video', 'mp4')

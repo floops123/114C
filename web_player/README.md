@@ -55,16 +55,29 @@ un identifiant opaque.
 
 ## Lecture
 
-`/api/play/<fichier>` interroge le fichier avec `ffprobe` :
+C'est **le navigateur qui décide**, car lui seul sait ce qu'il décode (le
+lecteur de l'application, mpv, lit tout ; un navigateur, non).
+`/api/play/<fichier>` décrit le fichier avec `ffprobe` (codecs précis,
+pistes audio, piste par défaut), puis le navigateur teste ces codecs
+(`canPlayType`) :
 
-- **lu tel quel** (`/media/…`, avance rapide native) : MP4 ou WebM en H.264
-  8 bits, VP9 ou AV1, audio AAC, MP3 ou Opus ;
-- **converti à la volée** (`/stream/…?t=<secondes>`) sinon, en MP4
-  fragmenté : vidéo **copiée** si elle est déjà en H.264 8 bits (peu
-  coûteux), sinon **réencodée** en H.264 (1080p au plus : le H.265 4K
-  sollicite le processeur) ; audio en AAC stéréo, **piste française** par
-  défaut, au choix dans le lecteur. L'avance rapide relance la conversion à
-  la bonne position.
+- **lecture directe** (`/media/…`, avance rapide native, **sans ffmpeg**)
+  si la vidéo et la piste audio voulue se décodent et que cette piste est
+  celle marquée par défaut — **MKV compris** (Chrome lit les MKV H.264) ;
+- **ffmpeg, vidéo copiée** (`/stream/…?copy=1`) si la vidéo se décode mais
+  pas l'audio, ou si la piste voulue n'est pas celle par défaut : seul
+  l'audio est converti, quasiment sans calcul. Cas courant : l'**E-AC3 /
+  AC3** (DD+, DD) et le **DTS**, que Chrome ne décode pas — un MKV H.264 +
+  AC3 y serait lu **sans le son** ;
+- **ffmpeg, vidéo réencodée** en H.264 (1080p au plus) si le navigateur ne
+  décode pas la vidéo : typiquement le **H.265** sous Chrome Linux (Edge,
+  Safari, Chrome avec décodage matériel le décodent : vidéo copiée).
+
+L'audio converti est en AAC stéréo, **piste française** par défaut, au
+choix dans le lecteur. Si une lecture directe échoue malgré tout (erreur,
+image non décodée, rien au bout de 20 s), le lecteur bascule tout seul sur
+ffmpeg, à la même position. En conversion, l'avance rapide relance ffmpeg à
+la bonne position.
 
 Raccourcis du lecteur : Espace (lecture/pause), ← / → (10 s), F (plein
 écran), Échap (retour). Les positions de reprise sont gardées dans le
