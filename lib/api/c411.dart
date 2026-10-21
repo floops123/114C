@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import 'c411_profile.dart';
 import 'quota.dart';
 import 'tracker.dart';
 
@@ -101,6 +102,57 @@ class C411SiteApi {
       _ => throw TrackerException(
           'Réponse C411 inattendue (HTTP ${res.statusCode})'),
     };
+  }
+
+  /// GET d'un endpoint JSON du site, dans le budget du cookie.
+  Future<Map<String, dynamic>> _json(String path, [Map<String, Object>? query]) async {
+    final Response<Object> res;
+    try {
+      res = await trackerRequest(Tracker.c411, quota: c411SessionQuota,
+          () => _dio.get<Object>(path, queryParameters: query));
+    } on DioException catch (e) {
+      throw TrackerException('C411 injoignable : ${e.message ?? e.type.name}');
+    }
+    if (res.statusCode == 401 || res.statusCode == 403) {
+      throw const TrackerException('Cookie de session C411 refusé');
+    }
+    final data = res.data;
+    if (res.statusCode != 200 || data is! Map) {
+      throw TrackerException('Réponse C411 inattendue (HTTP ${res.statusCode})');
+    }
+    return data.cast<String, dynamic>();
+  }
+
+  /// Compte, niveau, Zen (solde, versements des [days] derniers jours,
+  /// journée en cours), en parallèle. Une partie en échec manque ; un cookie
+  /// refusé est une erreur.
+  Future<C411Overview> overview({int days = 30}) async {
+    Future<T?> part<T>(Future<T?> Function() load) async {
+      try {
+        return await load();
+      } on TrackerException catch (e) {
+        if (e.message.contains('refusé')) rethrow;
+        return null;
+      } on Object {
+        return null; // Format inattendu : la partie manque.
+      }
+    }
+
+    final results = await Future.wait<Object?>([
+      part(() async => C411Account.parse(await _json('/api/auth/me'))),
+      part(() async => C411Level.parse(await _json('/api/ic/level'))),
+      part(() async => ZenBalance.parse(await _json('/api/tokens/balance'))),
+      part(() async => ZenHistory.parse(
+          await _json('/api/tokens/daily-stats', {'days': days}))),
+      part(() async => ZenForecast.parse(await _json('/api/tokens/forecast'))),
+    ]);
+    return C411Overview(
+      account: results[0] as C411Account?,
+      level: results[1] as C411Level?,
+      balance: results[2] as ZenBalance?,
+      history: results[3] as ZenHistory?,
+      forecast: results[4] as ZenForecast?,
+    );
   }
 
   void close() => _dio.close();

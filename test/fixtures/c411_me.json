@@ -1,0 +1,52 @@
+{
+ "authenticated": true,
+ "user": {
+  "id": 1,
+  "username": "moi",
+  "roles": [
+   "user"
+  ],
+  "badge": {
+   "type": "user",
+   "label": "Membre",
+   "icon": "i-heroicons-user",
+   "color": "gray"
+  },
+  "reputation": 0,
+  "warnings": 0,
+  "isWarned": false,
+  "isDonor": false,
+  "isFreeleech": false,
+  "isPersonalFreeleech": false,
+  "activeEffects": [
+   {
+    "type": "free_dl_units",
+    "expiresAt": null,
+    "remainingCount": 3,
+    "multiplierBp": null,
+    "armed": false,
+    "durationSeconds": null
+   }
+  ],
+  "uploaded": 1024897929290,
+  "downloaded": 958604757127,
+  "uploadCredit": 193273528320,
+  "downloadCredit": 0,
+  "ratio": 1.0691558973290356,
+  "canDownload": true,
+  "canDownloadReason": null,
+  "minRatioForDownload": 0.8,
+  "createdAt": "2026-03-08T13:46:00.000Z",
+  "gamificationClass": {
+   "slug": "swarm_keeper",
+   "effectiveSlug": "swarm_keeper",
+   "foundation": "seed",
+   "emblem": {
+    "tier": "bronze",
+    "level": 4,
+    "stars": 0,
+    "src": "/images/class-emblems/swarm-keeper/bronze-4.webp"
+   }
+  }
+ }
+}

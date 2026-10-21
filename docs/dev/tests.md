@@ -23,6 +23,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `catalog_test.dart` | regroupement par titre (français et original), disponibilité (un tracker suffit, mémorisée), pages fusionnées, vue Trackers et ses filtres |
 | `parsing_test.dart` | noms de release, dates RFC 822, tri local, tailles d'affiches ; année choisie comme sur C411, éditions et plateforme |
 | `release_profile_test.dart` | profils de qualité C411 sur des sorties réelles ; créneaux de la grille lus dans le nom, bornes de canaux et replis |
+| `c411_overview_test.dart` | compte, niveau et Zen lus sur le site (réponses réelles anonymisées) : les chiffres du site retrouvés (part de la journée, coefficient de poids, contribution, avant bonus, versé, moyennes) ; les cinq endpoints avec le cookie, un en panne, cookie refusé |
 | `release_quality_test.dart` | langues résumées comme sur C411 (listes réelles de l'API, tables exactes du site), descriptions techniques, équipe, BONUS ; profils (libellés du site, champ `quality` prioritaire), DTS:X sans perte |
 | `content_art_test.dart` | type de contenu d'une sortie, pictos des catégories |
 | `row_layout_test.dart` | lignes sans débordement (390 / 1 705 px, police × 1 et × 1,3) |

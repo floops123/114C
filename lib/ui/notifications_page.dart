@@ -4,8 +4,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../api/c411_socket.dart';
 import '../core/format.dart';
+import '../state/c411_overview.dart';
 import '../state/notifications.dart';
 import '../state/torrents.dart';
+import 'c411_account.dart';
 import 'chat_page.dart';
 import 'day_label.dart';
 import 'theme.dart';
@@ -47,7 +49,10 @@ class NotificationsPage extends ConsumerWidget {
                 IconButton(
                   tooltip: 'Rafraîchir',
                   icon: const Icon(Icons.refresh_rounded),
-                  onPressed: notifier.refreshNotifications,
+                  onPressed: () {
+                    notifier.refreshNotifications();
+                    ref.invalidate(c411OverviewProvider);
+                  },
                 ),
             ],
           ),
@@ -95,6 +100,8 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
     final c = context.colors;
     final shown = state.items.take(_shown).toList();
     final remaining = state.items.length - shown.length;
+    final overview = ref.watch(c411OverviewProvider);
+    final o = overview.value;
 
     final top = <Widget>[
       if (!state.configured)
@@ -107,12 +114,21 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
         alignment: Alignment.centerLeft,
         child: _ConnectionTile(status: state.status),
       ),
+      if (o != null && (o.account != null || o.level != null))
+        C411ProfileCard(account: o.account, level: o.level),
       if (state.account != null) _AccountCard(state.account!),
       if (state.counters != null) _Counters(state.counters!),
+      if (o != null && (o.balance != null || o.forecast != null || o.history != null))
+        ZenSection(balance: o.balance, forecast: o.forecast, history: o.history),
+      if (overview.hasError)
+        ErrorBanner('Compte C411 : ${overview.error}'),
     ];
 
     return RefreshIndicator(
-      onRefresh: notifier.refreshNotifications,
+      onRefresh: () => Future.wait([
+        notifier.refreshNotifications(),
+        ref.refresh(c411OverviewProvider.future).catchError((Object _) => null),
+      ]),
       child: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [

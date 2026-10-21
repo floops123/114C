@@ -1,0 +1,33 @@
+{
+ "enabled": true,
+ "forecast": {
+  "kind": "seed",
+  "classId": 2,
+  "vmtr": 1.12,
+  "br": 123.46,
+  "brf": 154.325,
+  "rq": 22,
+  "ponderationBonusBp": 2500,
+  "releasesConcerned": 1532,
+  "releasesWeightBp": 1102390,
+  "releasesShareBp": 5809180,
+  "bonusParts": {
+   "gridBp": 2500,
+   "treeBp": 0,
+   "badgeBp": 0,
+   "roleBp": 0
+  },
+  "ponderationCapBp": 3000,
+  "projected": {
+   "rq": 33,
+   "releasesWeightBp": 1642108,
+   "releasesShareBp": 8670464
+  },
+  "prorating": true,
+  "window": {
+   "secs": 56490,
+   "measurable": true
+  },
+  "computedAt": 1792592322822
+ }
+}

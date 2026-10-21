@@ -90,6 +90,25 @@ Repris du bundle JavaScript du site (`lib/core/release_quality.dart`,
   l'audio (infobulles des étiquettes et de la fiche d'une sortie) ;
   **équipe** (après le dernier tiret) et **BONUS**.
 
+### Compte, niveau et Zen (cookie de session)
+
+| Endpoint | Ce qu'on en tire |
+|---|---|
+| `GET /api/auth/me` | pseudo, rang (`badge.label`), classe (`gamificationClass` : slug, emblème `tier`/`level`/`src`), envoyé, reçu, crédits, ratio, `minRatioForDownload`, `canDownload`, avertissements, freeleech, `activeEffects` (`free_dl_units` : téléchargements gratuits) |
+| `GET /api/ic/level` | niveau, XP, `xpToNext`, série de jours |
+| `GET /api/tokens/balance` | solde de Zen, total gagné, total dépensé, dernier versement |
+| `GET /api/tokens/daily-stats?days=30` | un calcul par jour versé (`entries`), plafond du bonus |
+| `GET /api/tokens/forecast` | la journée en cours (`rq` acquis jusqu'ici, `projected.rq` estimé ce soir) |
+
+Versement d'une journée : `arrondi( T × P × S × I ÷ 7 × (1 + B) )`. Les
+champs : T = `releasesConcerned` ; Σ P = `releasesShareBp` et Σ P × S =
+`releasesWeightBp`, en points de base ; I = `vmtr` (2,00 au plus dans la
+classe) ; B = `ponderationBonusBp`. D'où P = Σ P ÷ T ÷ 10 000,
+S = Σ P × S ÷ Σ P, avant bonus = Σ P × S ÷ 10 000 × I ÷ 7 ; `br` vaut
+Σ P × S × I, `brf` = `br` × (1 + B), `rq` = arrondi(`brf` ÷ 7). Les
+moyennes « par jour / heure / mois » du site sont la moyenne des `rq`
+versés. Requêtes dans le budget du cookie (`c411SessionQuota`).
+
 ## C411 : WebSocket et discussion
 
 - `wss://c411.org/ws/?EIO=4&transport=websocket` : Socket.IO, transport
