@@ -205,14 +205,36 @@ class BulkImportNotifier extends Notifier<BulkState> {
   var _pages = <Tracker, int>{};
   var _more = <Tracker, bool>{};
 
+  /// Vrai après le premier déclenchement de chargement des catégories.
+  /// Conservé en champ privé pour persister d'un build à l'autre : lire
+  /// `state` depuis `build()` est interdit en Riverpod 3.
+  bool _categoriesRequested = false;
+
+  /// Critères saisis par l'utilisateur. Conservés ici pour survivre au
+  /// rebuild déclenché par un changement de la liste des trackers.
+  BulkCriteria _criteria = const BulkCriteria();
+
+  /// Catégories déjà chargées depuis les `categories()` des trackers. Vides
+  /// tant que `_loadAvailableCategories` n'a pas tourné ; conservées ici
+  /// pour ne pas re-solliciter les trackers à chaque rebuild.
+  List<String> _availableCategories = const [];
+
   @override
   BulkState build() {
     // Les clients sont recréés quand les réglages changent : on repart de zéro.
-    final trackers = ref.watch(trackersProvider);
-    if (trackers.isNotEmpty && !state.loadingCategories && state.availableCategories.isEmpty) {
+    // On n'utilise pas `state` ici (interdit en Riverpod 3) : les champs
+    // privés ci-dessus conservent ce qui doit l'être, et la liste des
+    // résultats, la sélection et les flags de chargement repartent à zéro.
+    ref.watch(trackersProvider);
+    if (!_categoriesRequested) {
+      _categoriesRequested = true;
       Future.microtask(_loadAvailableCategories);
     }
-    return state;
+    return BulkState(
+      criteria: _criteria,
+      availableCategories: _availableCategories,
+      loadingCategories: false,
+    );
   }
 
   /// Récupère les sous-catégories de chaque tracker configuré et alimente
@@ -221,7 +243,6 @@ class BulkImportNotifier extends Notifier<BulkState> {
   /// les résultats de recherche.
   Future<void> _loadAvailableCategories() async {
     final trackers = ref.read(trackersProvider);
-    state = state.copyWith(loadingCategories: true);
     final names = <String>{};
     await Future.wait([
       for (final t in trackers.keys)
@@ -239,13 +260,15 @@ class BulkImportNotifier extends Notifier<BulkState> {
         }(),
     ]);
     if (!ref.mounted) return;
-    state = state.copyWith(
-      availableCategories: (names.toList()..sort()),
-      loadingCategories: false,
-    );
+    final sorted = (names.toList()..sort());
+    _availableCategories = sorted;
+    state = state.copyWith(availableCategories: sorted, loadingCategories: false);
   }
 
-  void update(BulkCriteria criteria) => state = state.copyWith(criteria: criteria);
+  void update(BulkCriteria criteria) {
+    _criteria = criteria;
+    state = state.copyWith(criteria: criteria);
+  }
 
   void clear() {
     _generation++;
