@@ -320,6 +320,49 @@ class FtpClient {
     return controller.stream;
   }
 
+  /// Crée [path] et les dossiers au-dessus (`MKD`) ; ceux qui existent déjà
+  /// ne gênent pas.
+  Future<void> makeDirs(String path) async {
+    final parts = path.split('/').where((p) => p.isNotEmpty).toList();
+    var current = '';
+    for (final part in parts) {
+      current = '$current/$part';
+      await _send('MKD ${_path(current)}');
+      final r = await _reply();
+      // 257 : créé ; 550/521 : existe déjà (ou refusé, vu à l'envoi).
+      if (r.code != 257 && r.code != 550 && r.code != 521) {
+        throw FtpException('Création du dossier refusée : ${r.code} ${r.text}');
+      }
+    }
+  }
+
+  /// Écrit [data] dans [path] (`STOR`, remplace le fichier existant) ;
+  /// [onProgress] reçoit le nombre d'octets envoyés.
+  Future<void> write(String path, Stream<List<int>> data, {void Function(int sent)? onProgress}) async {
+    final socket = await _data();
+    await _send('STOR ${_path(path)}');
+    final r = await _reply();
+    if (r.code != 125 && r.code != 150) {
+      _drop(socket);
+      throw FtpException('Envoi refusé : ${r.code} ${r.text}');
+    }
+    final out = await _secureData(socket);
+    var sent = 0;
+    try {
+      await for (final chunk in data) {
+        out.add(chunk);
+        sent += chunk.length;
+        onProgress?.call(sent);
+        // Laisse le tampon se vider : pas tout le fichier en mémoire.
+        await out.flush();
+      }
+      await out.close();
+    } finally {
+      _drop(out);
+    }
+    await _expect([226, 250]);
+  }
+
   String _path(String p) => p.isEmpty ? '/' : p;
 
   Future<void> close() async {

@@ -23,6 +23,9 @@ class FakeFtpServer {
   /// `MLSD` refusé : le client doit se rabattre sur `LIST`.
   bool noMlsd = false;
 
+  /// Dossiers créés par `MKD`.
+  final made = <String>{};
+
   int get port => _server.port;
 
   static SecurityContext get context => SecurityContext()
@@ -169,6 +172,23 @@ class _Session {
           reply('426 Interrompu');
         }
         offset = 0;
+      case 'MKD':
+        if (server.dirs().contains(arg) || server.made.contains(arg)) {
+          reply('550 Existe déjà');
+        } else {
+          server.made.add(arg);
+          reply('257 "$arg" créé');
+        }
+      case 'STOR':
+        reply('150 Réception');
+        await socket.flush();
+        final s = await data();
+        final bytes = <int>[];
+        await for (final chunk in s) {
+          bytes.addAll(chunk);
+        }
+        files[arg] = bytes;
+        reply('226 Reçu');
       case 'QUIT':
         reply('221 Au revoir');
         await socket.flush();

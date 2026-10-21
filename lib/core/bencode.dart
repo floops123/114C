@@ -57,10 +57,15 @@ Object? bdecode(Uint8List data) {
 /// Fichiers décrits par un .torrent, avec les chemins tels que Transmission
 /// les nomme : `nom` (torrent à un fichier) ou `nom/dossier/fichier`.
 class TorrentContent {
-  const TorrentContent(this.name, this.files);
+  const TorrentContent(this.name, this.files, {this.pieceLength = 0, this.pieces});
 
   final String name;
   final List<(String path, int length)> files;
+
+  /// Taille d'un morceau, et les empreintes SHA-1 des morceaux (20 octets
+  /// chacune, bout à bout) : de quoi vérifier des données sans le client.
+  final int pieceLength;
+  final Uint8List? pieces;
 
   int get totalSize => files.fold(0, (sum, f) => sum + f.$2);
 
@@ -75,8 +80,10 @@ class TorrentContent {
     // `name.utf-8` prime quand il existe (anciens torrents).
     final name = text(info['name.utf-8'] ?? info['name']);
     final files = info['files'];
+    final pieceLength = info['piece length'] is int ? info['piece length'] as int : 0;
+    final pieces = info['pieces'] is Uint8List ? info['pieces'] as Uint8List : null;
     if (files is List) {
-      return TorrentContent(name, [
+      return TorrentContent(name, pieceLength: pieceLength, pieces: pieces, [
         for (final f in files.whereType<Map<String, Object?>>())
           (
             [
@@ -87,6 +94,7 @@ class TorrentContent {
           ),
       ]);
     }
-    return TorrentContent(name, [(name, info['length'] as int)]);
+    return TorrentContent(name, [(name, info['length'] as int)],
+        pieceLength: pieceLength, pieces: pieces);
   }
 }

@@ -1,16 +1,21 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/c411.dart';
+import '../api/ftp.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/bencode.dart';
 import '../core/preferences.dart';
 import '../core/settings.dart';
 import 'cross_seed.dart';
+import 'media_library.dart';
+import 'palliative_match.dart';
+import 'releases.dart';
 import 'torrents.dart';
 
 // Soins palliatifs : la liste officielle de C411 des sorties sans seeder
@@ -23,6 +28,14 @@ import 'torrents.dart';
 // Logique calquée sur `lib/state/revive.dart` (sans seeder), mais :
 //   - la liste source vient d'un endpoint C411 dédié (cookie de session) ;
 //   - la catégorie n'est pas filtrée (paramétrable côté site).
+//
+// Deux autres sources, sans tracker (voir palliative_match.dart) :
+//   - un dossier de l'ordinateur : les fichiers trouvés partent sur le
+//     serveur (FTP), dans le dossier de Transmission, puis le .torrent C411
+//     y est ajouté ; Transmission vérifie et repart en partage. Avec un
+//     Transmission local, pas d'envoi : il partage depuis le dossier ;
+//   - les torrents déjà dans Transmission : la sortie C411 s'ajoute en
+//     cross-seed sur les mêmes fichiers.
 
 /// Statut d'une sortie palliative, de la lecture C411 au cross-seed.
 enum PalliativeStatus {
@@ -34,6 +47,8 @@ enum PalliativeStatus {
   noSeeders('Sans seeder ailleurs non plus'),
   notFound('Introuvable ailleurs'),
   present('Déjà dans Transmission'),
+  uploading('Envoi vers le serveur'),
+  noMatch('Aucune correspondance'),
   mismatch('Fichiers différents'),
   error('Erreur');
 
@@ -91,10 +106,15 @@ class PalliativeState {
     this.listing = false,
     this.done = 0,
     this.error,
+    this.step,
   });
 
   final List<PalliativeItem> items;
   final bool running;
+
+  /// Étape en cours d'une recherche sur le disque ou dans Transmission
+  /// (« Dossier : 1 200 fichiers », « Comparaison 3/40 »).
+  final String? step;
 
   /// Lecture de la liste palliative en cours (avant les recherches).
   final bool listing;
@@ -109,6 +129,7 @@ class PalliativeState {
     bool? listing,
     int? done,
     String? Function()? error,
+    String? Function()? step,
   }) =>
       PalliativeState(
         items: items ?? this.items,
@@ -116,6 +137,7 @@ class PalliativeState {
         listing: listing ?? this.listing,
         done: done ?? this.done,
         error: error != null ? error() : this.error,
+        step: step != null ? step() : this.step,
       );
 }
 
@@ -246,33 +268,7 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
     }
     _stop = false;
     state = const PalliativeState(running: true, listing: true);
-
-    // Lecture paginée de la liste palliative (par bounty décroissant).
-    final palliative = <Release>[];
-    try {
-      for (var page = 1;; page++) {
-        if (_stop || !ref.mounted) break;
-        final result = await api.palliative(page: page, perPage: perPage);
-        if (!ref.mounted) return;
-        palliative.addAll(result.items);
-        state = state.copyWith(items: [
-          for (final r in palliative.take(limit ?? palliative.length))
-            PalliativeItem(release: r),
-        ]);
-        if ((limit != null && palliative.length >= limit) ||
-            result.items.isEmpty ||
-            page >= result.totalPages) {
-          break;
-        }
-      }
-    } on TrackerException catch (e) {
-      if (ref.mounted) {
-        state = state.copyWith(
-            running: false, listing: false, error: () => e.message);
-      }
-      return;
-    }
-    state = state.copyWith(listing: false);
+    if (!await _loadList(api, limit: limit)) return;
 
     final present = ref.read(torrentsProvider).hashes;
     final delay = ref.read(crossSeedDelayProvider);
@@ -303,6 +299,38 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
       await Future<void>.delayed(delay);
     }
     if (ref.mounted) state = state.copyWith(running: false);
+  }
+
+  /// Lecture paginée de la liste palliative (par bounty décroissant), dans
+  /// [state]. Faux si elle a échoué (l'erreur est dans [state]).
+  Future<bool> _loadList(C411SiteApi api, {int? limit}) async {
+    final palliative = <Release>[];
+    try {
+      for (var page = 1;; page++) {
+        if (_stop || !ref.mounted) break;
+        final result = await api.palliative(page: page, perPage: perPage);
+        if (!ref.mounted) return false;
+        palliative.addAll(result.items);
+        state = state.copyWith(items: [
+          for (final r in palliative.take(limit ?? palliative.length))
+            PalliativeItem(release: r),
+        ]);
+        if ((limit != null && palliative.length >= limit) ||
+            result.items.isEmpty ||
+            page >= result.totalPages) {
+          break;
+        }
+      }
+    } on TrackerException catch (e) {
+      if (ref.mounted) {
+        state = state.copyWith(
+            running: false, listing: false, error: () => e.message);
+      }
+      return false;
+    }
+    if (!ref.mounted) return false;
+    state = state.copyWith(listing: false);
+    return true;
   }
 
   /// Copies de même taille sur chaque tracker, dans l'ordre des résultats.
@@ -382,6 +410,208 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
     } on FormatException catch (e) {
       return '.torrent illisible : ${e.message}';
     }
+  }
+
+  /// Ce qu'il faut pour les recherches sans tracker : la liste (cookie de
+  /// session), les .torrent C411, Transmission. Null : l'erreur est posée.
+  ({C411SiteApi site, TrackerApi c411, TransmissionClient client})? _sources() {
+    final site = ref.read(c411SiteApiProvider);
+    final c411 = ref.read(trackersProvider)[Tracker.c411];
+    final client = ref.read(transmissionProvider);
+    if (site == null || c411 == null || client == null) {
+      state = state.copyWith(
+          error: () => 'Configure le cookie de session et la clé API C411, et '
+              'Transmission, dans les Réglages');
+      return null;
+    }
+    return (site: site, c411: c411, client: client);
+  }
+
+  /// Transmission tourne sur cet ordinateur : il lit ses fichiers en place.
+  static bool isLocalClient(TransmissionClient client) {
+    final host = Uri.tryParse(client.url)?.host ?? '';
+    return const {'localhost', '127.0.0.1', '::1', '[::1]'}.contains(host);
+  }
+
+  /// Pour chaque sortie palliative (liste relue), [maybe] dit si ça vaut la
+  /// peine de télécharger son .torrent, puis [found] le compare et l'ajoute ;
+  /// il renvoie le détail de l'ajout, ou null si rien ne correspond.
+  Future<void> _matchAll({
+    required C411SiteApi site,
+    required TrackerApi c411,
+    required bool Function(Release) maybe,
+    required Future<String?> Function(PalliativeItem, TorrentContent, Uint8List) found,
+  }) async {
+    if (!await _loadList(site)) return;
+    final present = ref.read(torrentsProvider).hashes;
+    final total = state.items.length;
+    for (final (n, item) in state.items.toList().indexed) {
+      if (_stop || !ref.mounted) break;
+      state = state.copyWith(done: n, step: () => 'Comparaison ${n + 1}/$total');
+      final hash = item.release.infoHash;
+      if (hash != null && present.contains(hash)) {
+        _set(item.key, (i) => i.copyWith(status: PalliativeStatus.present));
+        continue;
+      }
+      // Rien de cette taille : pas la peine de télécharger le .torrent.
+      if (!maybe(item.release)) {
+        _set(item.key, (i) => i.copyWith(status: PalliativeStatus.noMatch));
+        continue;
+      }
+      _set(item.key, (i) => i.copyWith(status: PalliativeStatus.searching));
+      try {
+        final metainfo = await fetchTorrentFile(c411, site, item.release);
+        final detail = await found(item, TorrentContent.parse(metainfo), metainfo);
+        if (!ref.mounted) return;
+        _set(
+            item.key,
+            (i) => detail == null
+                ? i.copyWith(status: PalliativeStatus.noMatch)
+                : i.copyWith(status: PalliativeStatus.seeding, detail: detail));
+      } on Object catch (e) {
+        if (!ref.mounted) return;
+        final message = switch (e) {
+          TrackerException(:final message) => message,
+          TransmissionException(:final message) => message,
+          FtpException(:final message) => message,
+          _ => '$e',
+        };
+        _set(item.key, (i) => i.copyWith(status: PalliativeStatus.error, detail: message));
+      }
+    }
+    if (!ref.mounted) return;
+    state = state.copyWith(running: false, done: total, step: () => null);
+    await ref.read(torrentsProvider.notifier).refresh(full: true);
+  }
+
+  /// Cherche les sorties palliatives dans les torrents de Transmission :
+  /// mêmes fichiers (chemins et tailles) qu'un torrent terminé → la sortie
+  /// C411 s'ajoute en cross-seed dans son dossier.
+  Future<void> scanClient() async {
+    if (state.running) return;
+    final sources = _sources();
+    if (sources == null) return;
+    final (:site, :c411, :client) = sources;
+    _stop = false;
+    state = const PalliativeState(running: true, listing: true, step: 'Torrents de Transmission…');
+    final List<Map<String, dynamic>> torrents;
+    try {
+      torrents = (await client.torrentGet(['id', 'hashString', 'name', 'downloadDir', 'percentDone', 'files'])).torrents;
+    } on TransmissionException catch (e) {
+      state = state.copyWith(running: false, listing: false, error: () => e.message, step: () => null);
+      return;
+    }
+    int sizeOf(Map<String, dynamic> t) =>
+        (t['files'] as List? ?? const []).whereType<Map>().fold(0, (n, f) => n + ((f['length'] as num?)?.toInt() ?? 0));
+    final sizes = {
+      for (final t in torrents)
+        if (((t['percentDone'] as num?) ?? 0) >= 1) sizeOf(t),
+    };
+    await _matchAll(
+      site: site,
+      c411: c411,
+      maybe: (r) => sizes.contains(r.size),
+      found: (item, content, metainfo) async {
+        final match = matchClient(content, torrents);
+        if (match == null) return null;
+        await client.addTorrent(
+          metainfo: metainfo,
+          options: AddOptions(downloadDir: match['downloadDir'] as String?, labels: const [CrossSeedNotifier.label]),
+        );
+        return 'Cross-seed sur « ${match['name']} »';
+      },
+    );
+  }
+
+  /// Cherche les sorties palliatives dans le dossier [dir] de l'ordinateur :
+  /// fichiers retrouvés (tailles, chemins, empreintes) → envoyés sur le
+  /// serveur dans le dossier de Transmission, puis le .torrent C411 ajouté.
+  /// Avec un Transmission sur cet ordinateur, rien n'est envoyé.
+  Future<void> scanFolder(String dir) async {
+    if (state.running) return;
+    final sources = _sources();
+    if (sources == null) return;
+    final (:site, :c411, :client) = sources;
+    _stop = false;
+    state = const PalliativeState(running: true, listing: true, step: 'Lecture du dossier…');
+    final index = await LocalIndex.scan(dir, onCount: (n) {
+      if (ref.mounted) state = state.copyWith(step: () => 'Dossier : $n fichiers');
+    });
+    if (!ref.mounted) return;
+    final local = isLocalClient(client);
+    await _matchAll(
+      site: site,
+      c411: c411,
+      maybe: (r) => index.mayHold(r.size),
+      found: (item, content, metainfo) async {
+        final match = await matchLocal(content, index);
+        if (match == null) return null;
+        return local
+            ? _addInPlace(client, content, metainfo, match)
+            : _upload(item, client, content, metainfo, match);
+      },
+    );
+  }
+
+  /// Transmission local : ajouté en pause dans le dossier parent, renommé si
+  /// le fichier ou le dossier n'a pas le nom du torrent, vérifié, relancé.
+  Future<String> _addInPlace(
+      TransmissionClient client, TorrentContent content, Uint8List metainfo, LocalMatch match) async {
+    final root = File(match.root);
+    final name = root.uri.pathSegments.where((p) => p.isNotEmpty).last;
+    final added = await client.addTorrentWithHash(
+        metainfo: metainfo, options: AddOptions(downloadDir: root.parent.path, paused: true));
+    final ids = (await client.torrentGet(['id'], ids: [?added.hash])).torrents
+        .map((t) => (t['id'] as num).toInt())
+        .toList();
+    if (ids.isEmpty) throw const TransmissionException('Torrent ajouté introuvable');
+    if (name != content.name) await client.renamePath(ids.first, content.name, name);
+    await client.action('torrent-verify', ids);
+    await client.action('torrent-start', ids);
+    return 'Partagé depuis ${match.root}';
+  }
+
+  /// Transmission sur le serveur : les fichiers partent par FTP dans son
+  /// dossier de téléchargement (aux chemins du torrent), puis le .torrent
+  /// est ajouté ; Transmission vérifie les données et repart en partage.
+  Future<String> _upload(PalliativeItem item, TransmissionClient client, TorrentContent content,
+      Uint8List metainfo, LocalMatch match) async {
+    final settings = ref.read(settingsProvider).value;
+    final library = ref.read(mediaLibraryProvider).library;
+    final (from, to) = (library.pathFrom, library.pathTo);
+    if (settings == null || !settings.hasFtp) {
+      throw const FtpException('Renseigne l’accès FTP dans les Réglages pour envoyer les fichiers');
+    }
+    if (from == null || to == null) {
+      throw const FtpException('Chemins du serveur inconnus : lance d’abord un parcours '
+          'de la vidéothèque (Films & séries › Sur le disque)');
+    }
+    final downloadDir = '${(await client.sessionGet())['download-dir'] ?? ''}';
+    if (!downloadDir.startsWith(from)) {
+      throw FtpException('Le dossier de Transmission ($downloadDir) n’est pas visible sur le FTP');
+    }
+    final ftpDir = '$to${downloadDir.substring(from.length)}';
+    final ftp = await ref.read(ftpConnectProvider)(ftpConfigOf(settings));
+    final total = match.files.fold(0, (n, f) => n + f.$3);
+    var done = 0, shown = -1;
+    try {
+      for (final (path, local, size) in match.files) {
+        final target = '$ftpDir/$path';
+        await ftp.makeDirs(target.substring(0, target.lastIndexOf('/')));
+        await ftp.write(target, File(local).openRead(), onProgress: (sent) {
+          final percent = total == 0 ? 100 : (done + sent) * 100 ~/ total;
+          if (percent != shown && ref.mounted) {
+            shown = percent;
+            _set(item.key, (i) => i.copyWith(status: PalliativeStatus.uploading, detail: '$percent %'));
+          }
+        });
+        done += size;
+      }
+    } finally {
+      await ftp.close();
+    }
+    await client.addTorrent(metainfo: metainfo, options: AddOptions(downloadDir: downloadDir));
+    return 'Envoyé depuis ${match.root}';
   }
 
   /// Ajoute toutes les copies disponibles ; renvoie le nombre d'envois.

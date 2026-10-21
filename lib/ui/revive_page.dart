@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +32,7 @@ const _reviveOrder = [
 /// Ordre d'affichage des résultats de l'onglet « Soins palliatif ».
 const _palliativeOrder = [
   PalliativeStatus.available,
+  PalliativeStatus.uploading,
   PalliativeStatus.downloading,
   PalliativeStatus.seeding,
   PalliativeStatus.searching,
@@ -37,6 +41,7 @@ const _palliativeOrder = [
   PalliativeStatus.error,
   PalliativeStatus.noSeeders,
   PalliativeStatus.notFound,
+  PalliativeStatus.noMatch,
   PalliativeStatus.present,
 ];
 
@@ -459,6 +464,9 @@ class _PalliativeTab extends ConsumerStatefulWidget {
   ConsumerState<_PalliativeTab> createState() => _PalliativeTabState();
 }
 
+/// Dossiers de l'ordinateur : version de bureau seulement.
+final _desktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+
 class _PalliativeTabState extends ConsumerState<_PalliativeTab> {
   Set<Tracker>? _searchOn;
   final _limit = TextEditingController();
@@ -481,6 +489,19 @@ class _PalliativeTabState extends ConsumerState<_PalliativeTab> {
     final limit = int.tryParse(_limit.text.trim());
     ref.read(palliativeProvider.notifier).scan(
         limit: limit != null && limit > 0 ? limit : null);
+  }
+
+  /// Un dossier de l'ordinateur (version de bureau seulement).
+  Future<void> _scanFolder() async {
+    final dir = await getDirectoryPath(confirmButtonText: 'Chercher ici');
+    if (dir == null || !mounted) return;
+    setState(() => _filter = null);
+    ref.read(palliativeProvider.notifier).scanFolder(dir);
+  }
+
+  void _scanClient() {
+    setState(() => _filter = null);
+    ref.read(palliativeProvider.notifier).scanClient();
   }
 
   Future<void> _addAll() async {
@@ -516,7 +537,11 @@ class _PalliativeTabState extends ConsumerState<_PalliativeTab> {
           '(même nom, même taille). La copie la plus seedée se télécharge '
           'depuis son tracker ; une fois terminée, la sortie C411 s’ajoute '
           'dans le même dossier et repart en partage '
-          '(étiquette « ${CrossSeedNotifier.label} »).',
+          '(étiquette « ${CrossSeedNotifier.label} »). '
+          '${_desktop ? '« Sur mon ordinateur » cherche les fichiers dans un dossier : '
+              'trouvés, ils partent sur le serveur et la sortie C411 y est ajoutée. ' : ''}'
+          '« Dans Transmission » cherche les mêmes fichiers dans tes torrents '
+          'et ajoute la sortie C411 en cross-seed.',
           style: TextStyle(color: c.muted, fontSize: 12.5, height: 1.4),
         ),
       ),
@@ -586,6 +611,29 @@ class _PalliativeTabState extends ConsumerState<_PalliativeTab> {
           ),
         ]),
       ),
+      // Sans tracker : les fichiers déjà là, sur l'ordinateur ou dans
+      // Transmission.
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Wrap(spacing: 8, runSpacing: 8, children: [
+          if (_desktop)
+            OutlinedButton.icon(
+              onPressed: idle ? _scanFolder : null,
+              icon: const Icon(Icons.folder_open_rounded, size: 18),
+              label: const Text('Sur mon ordinateur'),
+            ),
+          OutlinedButton.icon(
+            onPressed: idle ? _scanClient : null,
+            icon: const Icon(Icons.join_inner_rounded, size: 18),
+            label: const Text('Dans Transmission'),
+          ),
+        ]),
+      ),
+      if (state.step != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(state.step!, style: TextStyle(color: c.muted, fontSize: 12.5)),
+        ),
       if (available > 0 && !state.running)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -652,6 +700,7 @@ class _PalliativeTile extends ConsumerWidget {
     final (Color color, IconData icon) = switch (item.status) {
       PalliativeStatus.available => (c.accent, Icons.download_rounded),
       PalliativeStatus.downloading => (c.info, Icons.downloading_rounded),
+      PalliativeStatus.uploading => (c.info, Icons.upload_rounded),
       PalliativeStatus.seeding => (c.success, Icons.check_circle_rounded),
       PalliativeStatus.present => (c.success, Icons.check_rounded),
       PalliativeStatus.searching => (c.info, Icons.manage_search_rounded),

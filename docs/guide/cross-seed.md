@@ -90,3 +90,35 @@ vient du site, classée par *bounty* décroissant.
 3. Pour chaque palliative, les copies trouvées sont listées sous le titre
    (une ligne par tracker, avec le nombre de seeders) ; la copie la plus
    seedée est téléchargeable par **Télécharger**.
+
+Deux autres boutons cherchent les palliatifs **sans passer par un autre
+tracker**, là où leurs fichiers sont peut-être déjà. Ce qui correspond est
+ajouté tout de suite.
+
+- **Dans Transmission** : compare chaque palliative aux torrents terminés
+  de Transmission. Si l'un a exactement les mêmes fichiers (chemins et
+  tailles), le `.torrent` C411 est ajouté en **cross-seed** dans le même
+  dossier (étiquette « cross-seed »). Rien n'est téléchargé.
+- **Sur mon ordinateur** (version de bureau) : choisis un dossier ;
+  l'application y cherche les fichiers de chaque palliative.
+  - **Comparaison** : même taille, mêmes chemins sous un dossier (son nom
+    peut différer), puis les empreintes du premier et du dernier morceau,
+    comme le ferait le client. Un fichier de même taille mais différent est
+    donc écarté.
+  - **Transmission sur le serveur** (cas d'une seedbox) : les fichiers
+    partent par **FTP** dans le dossier de téléchargement de Transmission,
+    aux chemins du torrent. Le `.torrent` C411 est ensuite ajouté :
+    Transmission vérifie les données et repart en partage. La ligne affiche
+    la progression de l'envoi.
+  - **Transmission sur cet ordinateur** (adresse `localhost` ou
+    `127.0.0.1`) : rien n'est envoyé. Le torrent est ajouté dans le dossier
+    où sont les fichiers, renommé s'ils ont un autre nom, vérifié puis
+    relancé.
+
+Dans les deux cas, le `.torrent` C411 n'est téléchargé que pour les
+palliatives dont la taille correspond à un fichier, un dossier ou un torrent
+déjà là. Les autres passent en *Aucune correspondance* sans requête.
+
+L'envoi par FTP demande l'accès FTP dans les Réglages et la correspondance
+des chemins Transmission → FTP. Celle-ci est établie par un premier parcours
+de la vidéothèque (*Films & séries › Sur le disque › Actualiser*).
