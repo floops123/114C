@@ -45,7 +45,7 @@ Principes visuels :
 | `Tag`, `Poster`, `EmptyState`, `ErrorBanner` | `widgets.dart` | étiquette, affiche avec repli, états vides et erreurs |
 | `ContentArt`, `categoryIcon` | `content_art.dart` | image d'un type de contenu, picto d'une catégorie |
 | `ReleaseCard`, `ReleaseTile`, `ReleaseRow`, `releaseGrid` | `releases_page.dart` | une sortie en carte, tuile PC, ligne ; la grille commune |
-| `_InfoCard`, `_InfoRow` | `wishlist_page.dart` | encadrés de la fiche d'un titre |
+| `_InfoCard`, `_InfoRow` | `title_detail_page.dart` | encadrés de la fiche d'un titre |
 | `AvailabilityBadge`, `DiskFilterChips` | `wishlist_page.dart` | pastille ▶ / ⬇ d'une affiche, filtre Tout / Sur le disque / À télécharger |
 | `GroupCard`, `GroupVersionsPage` | `trackers_page.dart` | un titre des trackers, ses versions par tracker |
 | `RoundAction` | `widgets.dart` | pastille ronde d'action sur une affiche |

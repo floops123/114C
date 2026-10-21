@@ -11,6 +11,8 @@ import 'package:c411_remote/state/wishlist.dart';
 import 'package:c411_remote/ui/releases_page.dart';
 import 'package:c411_remote/ui/theme.dart';
 import 'package:c411_remote/ui/wishlist_page.dart';
+import 'package:c411_remote/ui/title_detail_page.dart';
+import 'package:c411_remote/ui/wish_search_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

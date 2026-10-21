@@ -71,7 +71,9 @@ lib/
 │   └── bulk_import.dart        import en masse : critères, page par tracker, envoi
 └── ui/
     ├── home_shell.dart        navigation : barre en bas, rail latéral ≥ 720 px
-    ├── wishlist_page.dart     Films & séries : Découvrir, Ma liste, fiche, recherche par tracker
+    ├── wishlist_page.dart     Films & séries : Découvrir, Ma liste, affiches, rangées
+    ├── title_detail_page.dart fiche d'un titre : infos, dates, déjà chez toi, trackers
+    ├── wish_search_page.dart  recherche d'un titre, un onglet par tracker
     ├── trackers_page.dart     Trackers : sorties regroupées par titre, versions
     ├── releases_page.dart     une sortie en carte, tuile ou ligne ; grille commune
     ├── disk_page.dart         vidéothèque : cartes, épisodes de la base, lecture
