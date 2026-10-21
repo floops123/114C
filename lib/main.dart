@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit/media_kit.dart';
 
 import 'core/preferences.dart';
 import 'ui/home_shell.dart';
@@ -13,9 +12,14 @@ import 'ui/widgets.dart';
 Future<void> main() async {
   // Défilement fluide à la molette (version PC).
   SmoothWheelBinding.ensureInitialized();
-  // Lecteur vidéo intégré (libmpv).
-  MediaKit.ensureInitialized();
-  // Licence de la police Inter, visible dans l'écran des licences.
+  // Images décodées gardées en mémoire : 50 Mo au lieu de 100 par défaut.
+  // Les affiches sont décodées à leur taille d'affichage ; un écran en
+  // montre une quarantaine, soit une vingtaine de Mo.
+  PaintingBinding.instance.imageCache
+    ..maximumSizeBytes = 50 << 20
+    ..maximumSize = 400;
+  // Le lecteur (libmpv, ~40 Mo) n'est chargé qu'à la première lecture :
+  // voir PlayerPage.  // Licence de la police Inter, visible dans l'écran des licences.
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks(
         ['Inter'], await rootBundle.loadString('assets/fonts/OFL.txt'));

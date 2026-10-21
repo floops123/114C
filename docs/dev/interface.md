@@ -87,3 +87,25 @@ Principes visuels :
   si le titre est déjà là.
 - **Vidéo** : l'image est produite à la taille de l'écran (pas de 4K pour un
   écran 1080p) ; sous Linux, le module vidéo corrigé garde le rendu sur le GPU.
+
+## Rester léger en mémoire
+
+- **Lecteur chargé à la demande** : `MediaKit.ensureInitialized()` ouvre
+  libmpv et sa pile ffmpeg, soit environ 40 Mo de mémoire résidente
+  (mesuré sur Linux avec la libmpv du système). Il est appelé à la création
+  du premier `Player` (`PlayerPage`), pas dans `main()`.
+- **Onglets construits à leur première visite** : l'`IndexedStack` de
+  `HomeShell` ne construit un onglet qu'une fois ouvert, puis le garde.
+  Au lancement, seul l'onglet affiché charge ses données et décode ses
+  images. Les tâches de fond (veille, notifications, revive, historique
+  des vitesses) restent écoutées par `HomeShell`, indépendamment des
+  onglets.
+- **Cache d'images plafonné** à 50 Mo de pixels décodés (400 images) au
+  lieu de 100 Mo par défaut (`main.dart`). Les affiches sont décodées à
+  leur taille d'affichage (`Poster`, `memCacheWidth`), l'image de fond du
+  détail d'une sortie à la largeur de l'écran.
+- Les données persistées (`shared_preferences`) tiennent en un peu plus
+  d'un Mo, gardées en mémoire par `SharedPreferencesWithCache` : les plus
+  grosses sont `tmdbMatches`, `mediaLibrary` et `crossSeed`.
+
+Pour mesurer, l'application ouverte : `grep -E '^(Rss|Pss)' /proc/$(pgrep -x c411_remote)/smaps_rollup`.

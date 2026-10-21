@@ -57,6 +57,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
   bool _routed = false;
 
+  /// Onglets déjà ouverts, par nom (les index bougent avec Draupnirr). Un
+  /// onglet n'est construit qu'à sa première visite, puis gardé : au
+  /// lancement, seul l'onglet affiché charge ses données et ses images.
+  final _visited = <String>{};
+
   /// Construit la liste des onglets : Draupnirr est inséré entre Transferts
   /// (index 2) et Notifications si la clé API est saisie.
   List<(IconData, IconData, String)> _destinations() {
@@ -156,10 +161,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.listen(draupnirrProvider, (_, _) {});
 
     final c = context.colors;
-    // Onglets masqués : gardés en mémoire, mais leurs animations à l'arrêt.
+    _visited.add(destinations[_index].$3);
+    // Onglets masqués : gardés en mémoire une fois visités, mais leurs
+    // animations à l'arrêt ; jamais visités : pas construits du tout.
     final body = IndexedStack(index: _index, children: [
       for (final (i, page) in pages.indexed)
-        TickerMode(enabled: i == _index, child: page),
+        TickerMode(
+          enabled: i == _index,
+          child: _visited.contains(destinations[i].$3)
+              ? page
+              : const SizedBox.shrink(),
+        ),
     ]);
 
     return LayoutBuilder(builder: (context, constraints) {

@@ -7,6 +7,8 @@ import 'package:c411_remote/core/preferences.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:c411_remote/state/notifications.dart';
 import 'package:c411_remote/state/torrents.dart';
+import 'package:c411_remote/ui/chat_page.dart';
+import 'package:c411_remote/ui/downloads_page.dart';
 import 'package:c411_remote/ui/home_shell.dart';
 import 'package:c411_remote/ui/theme.dart';
 import 'package:c411_remote/ui/widgets.dart';
@@ -169,4 +171,49 @@ void main() {
       },
     );
   }
+
+  testWidgets('onglets construits à leur première visite, puis gardés',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c = ProviderContainer(
+      overrides: [
+        settingsProvider.overrideWith(_S.new),
+        uiPrefsProvider.overrideWith(_P.new),
+        notificationsProvider.overrideWith(_N.new),
+        torrentsProvider.overrideWith(_T.new),
+        trackersProvider.overrideWithValue({Tracker.c411: _Tr()}),
+        transmissionProvider.overrideWithValue(
+          TransmissionClient(url: 'http://x'),
+        ),
+      ],
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          theme: buildTheme(Brightness.dark),
+          home: const HomeShell(),
+        ),
+      ),
+    );
+    await tester.pump();
+    Finder all(Type t) => find.byType(t, skipOffstage: false);
+    expect(all(DownloadsPage), findsNothing);
+    expect(all(ChatPage), findsNothing);
+
+    tester.widget<NavigationRail>(find.byType(NavigationRail))
+        .onDestinationSelected!(2);
+    await tester.pump();
+    expect(all(DownloadsPage), findsOneWidget);
+
+    tester.widget<NavigationRail>(find.byType(NavigationRail))
+        .onDestinationSelected!(0);
+    await tester.pump();
+    expect(all(DownloadsPage), findsOneWidget, reason: 'gardé une fois visité');
+    expect(all(ChatPage), findsNothing);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+  });
 }

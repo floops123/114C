@@ -144,7 +144,12 @@ class ReleaseDetailPage extends ConsumerWidget {
               : FlexibleSpaceBar(
                   background: Stack(fit: StackFit.expand, children: [
                     CachedNetworkImage(
-                        imageUrl: r.backdropUrl!, fit: BoxFit.cover),
+                        imageUrl: r.backdropUrl!,
+                        fit: BoxFit.cover,
+                        // Décodée à la largeur de l'écran, pas au-delà.
+                        memCacheWidth: (MediaQuery.sizeOf(context).width *
+                                MediaQuery.devicePixelRatioOf(context))
+                            .round()),
                     // Fondu vers la couleur de fond pour enchaîner sur le contenu.
                     DecoratedBox(
                       decoration: BoxDecoration(

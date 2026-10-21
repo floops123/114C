@@ -41,8 +41,14 @@ class PlayerPage extends ConsumerStatefulWidget {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
-  late final Player _player = Player(
-      configuration: PlayerConfiguration(title: widget.title));
+  late final Player _player = _newPlayer(widget.title);
+
+  /// libmpv (et ffmpeg, ~40 Mo) n'est chargée qu'à la première lecture,
+  /// pas au démarrage de l'application.
+  static Player _newPlayer(String title) {
+    MediaKit.ensureInitialized();
+    return Player(configuration: PlayerConfiguration(title: title));
+  }
 
   /// Image produite à la taille de l'écran (pas d'image 4K pour un écran
   /// 1080p : moins de pixels à rendre et à copier à chaque image).
