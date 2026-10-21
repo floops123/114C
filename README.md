@@ -69,9 +69,10 @@ cd web_player && dart pub get && dart run bin/web_player.dart ../personal.json
 ## C411 Music : la musique dans le navigateur
 
 Le dossier [`web_music/`](web_music/README.md) fait de même pour la musique.
-Il parcourt les torrents terminés et les dossiers du FTP, identifie chaque
-album sur [MusicBrainz](https://musicbrainz.org/) (pochettes de la Cover Art
-Archive) et le propose dans un lecteur avec file d'attente.
+Il lit la musique que le parcours de l'application relève (torrents terminés
+et dossiers du FTP), identifie chaque album sur
+[MusicBrainz](https://musicbrainz.org/) (pochettes de la Cover Art Archive)
+et le propose dans un lecteur avec file d'attente.
 
 ```sh
 cd web_music && dart pub get && dart run bin/web_music.dart ../personal.json

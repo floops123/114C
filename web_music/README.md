@@ -11,18 +11,17 @@ le navigateur. On y trouve :
 - un lecteur permanent : aléatoire, répétition, file d'attente, reprise
   là où on s'était arrêté.
 
-Contrairement à C411 TV, qui lit la base de l'application, il **parcourt
-lui-même** le serveur, de la même manière que l'application pour les films
-et séries :
+Comme C411 TV, il ne parcourt rien lui-même. Il lit **la base de
+l'application** : le parcours de sa vidéothèque (*Films & séries › Sur le
+disque › Actualiser*, et l'ajout automatique des torrents terminés) relève
+aussi les fichiers audio. Les sources sont les mêmes que pour les vidéos :
+les torrents terminés de Transmission, puis les *Dossiers à parcourir* du
+FTP. Le serveur relit la base quand elle change.
 
-1. **les torrents terminés** de Transmission (une requête), retrouvés sur le
-   FTP par une correspondance des chemins. Il reprend celle que
-   l'application a déjà établie, sinon il la cherche lui-même ;
-2. puis **les dossiers** à parcourir sur le FTP.
-
-Chaque album est ensuite identifié sur **[MusicBrainz](https://musicbrainz.org/)**
-(titre, artistes, date, label, genres, pistes et durées), avec sa pochette
-de la **[Cover Art Archive](https://coverartarchive.org/)**.
+Il identifie ensuite chaque album sur
+**[MusicBrainz](https://musicbrainz.org/)** : titre, artistes, date, label,
+genres, pistes et durées. La pochette vient de la
+**[Cover Art Archive](https://coverartarchive.org/)**.
 
 ## Lancer
 
@@ -39,20 +38,20 @@ dart run bin/web_music.dart ../personal.json
 puis ouvrir <http://127.0.0.1:8412/>.
 
 `../personal.json` : le même fichier que pour la
-[compilation personnalisée](../docs/dev/build.md). Il fournit le FTP
-(`ftpHost`, `ftpPort`, `ftpUser`, `ftpPassword`, `ftpTls`), Transmission
-(`rpcUrl`, `rpcUser`, `rpcPassword`) et les dossiers de l'application
-(`mediaFolders`).
+[compilation personnalisée](../docs/dev/build.md). Il fournit l'accès au FTP
+(`ftpHost`, `ftpPort`, `ftpUser`, `ftpPassword`, `ftpTls`). La base de
+l'application est lue dans ses préférences
+(`~/.local/share/fr.c411remote.c411_remote/shared_preferences.json` sous
+Linux), comme pour C411 TV ; ailleurs, `--library <fichier>`.
 
 ### Section `music` (facultative) du fichier de réglages
 
 ```json
 "music": {
-  "folders": ["/musique"],
   "host": "127.0.0.1",
   "port": 8412,
   "password": "",
-  "scanEvery": 180,
+  "library": "/chemin/vers/shared_preferences.json",
   "state": "/chemin/vers/library.json",
   "contact": "https://exemple.org/moi"
 }
@@ -60,21 +59,21 @@ puis ouvrir <http://127.0.0.1:8412/>.
 
 | Clé | Rôle |
 |---|---|
-| `folders` | dossiers du FTP à parcourir, **en plus** des `mediaFolders` de l'application |
-| `scanEvery` | minutes entre deux parcours (180 par défaut ; 0 : au démarrage et sur demande) |
-| `state` | la discothèque (fichiers, fiches MusicBrainz) ; `~/.local/share/c411_music/library.json` par défaut, pochettes dans `covers/` à côté |
+| `library` | la base de l'application (ses préférences) |
+| `state` | les fiches MusicBrainz ; `~/.local/share/c411_music/library.json` par défaut, pochettes dans `covers/` à côté |
 | `contact` | envoyé à MusicBrainz dans le User-Agent, qu'il exige ; l'adresse du dépôt par défaut |
 
-Les options `--folder`, `--state`, `--library`, `--host`, `--port`,
-`--password` et `--scan-every` passent avant. `--library` désigne les
-préférences de l'application, dont on reprend la correspondance des chemins.
+Les options `--library`, `--state`, `--host`, `--port` et `--password`
+passent avant.
 
-Le bouton ⟳ en haut à droite relance un parcours. Pendant le travail, il
-affiche l'étape en cours (« Parcours… », « MusicBrainz 12/40 »).
+Le bouton ⓘ en haut à droite donne l'état : albums reconnus, heure du
+dernier parcours de l'application. Pendant l'identification, il affiche
+la progression (« MusicBrainz 12/40 »).
 
 ## Ce qui compte comme de la musique
 
-Comme pour les vidéos, il faut écarter les faux positifs :
+C'est l'application qui trie, pendant son parcours. Comme pour les vidéos,
+il faut écarter les faux positifs :
 
 - **un torrent** n'est retenu que si l'audio fait au moins **la moitié de
   ses octets**. La bande-son d'un jeu ou d'un film n'en fait pas partie ;
@@ -103,12 +102,14 @@ le titre correspond vraiment. Les pistes sont ensuite rattachées par disque
 et numéro, sinon dans l'ordre, sinon par titre.
 
 - **Rythme imposé** par MusicBrainz : une requête par seconde au plus, deux
-  ou trois par album. Un premier parcours de 500 albums prend donc une
+  ou trois par album. La première identification de 500 albums prend donc une
   demi-heure environ, en arrière-plan ; l'interface se remplit au fil de
   l'eau.
 - **Service saturé** : MusicBrainz répond souvent 503, même à ce rythme.
   On réessaie en attendant de plus en plus. S'il reste saturé, l'album est
   repris une minute plus tard, trois fois au plus.
+- **Nouveaux albums** : ils sont cherchés dès que la base de l'application
+  change. Le serveur la vérifie toutes les 30 secondes.
 - **Album non trouvé** : il garde les titres de ses fichiers, et la
   recherche est refaite au bout d'une semaine. « Chercher à nouveau sur
   MusicBrainz », sur sa fiche, la relance tout de suite.
@@ -153,18 +154,21 @@ chaque piste a un identifiant opaque.
 ```
 bin/web_music.dart    ligne de commande
 lib/config.dart       réglages (JSON de l'application + section music)
-lib/transmission.dart RPC Transmission minimal (torrents terminés)
-lib/scanner.dart      parcours : torrents, correspondance des chemins, dossiers
 lib/musicbrainz.dart  client MusicBrainz (rythme, choix de la parution)
-lib/library.dart      discothèque : fichiers, fiches, albums, artistes
-lib/service.dart      parcours réguliers, identification au fil de l'eau
+lib/library.dart      discothèque : musique de l'application, fiches,
+                      albums, artistes
+lib/service.dart      relecture de la base, identification au fil de l'eau
 lib/server.dart       HTTP : interface, API, /media, /stream, pochettes
 public/               interface (HTML, CSS, JS, sans étape de compilation)
 ```
 
-La reconnaissance des noms (`music_name.dart`), le client FTP et le relais
-HTTP viennent du paquet partagé [`packages/c411_core`](../packages/c411_core).
+La reconnaissance des noms et le tri de la musique (`music_name.dart`), le
+client FTP et le relais HTTP viennent du paquet partagé
+[`packages/c411_core`](../packages/c411_core). Le parcours est celui de
+l'application (`lib/state/media_library.dart`), qui range la musique dans
+sa base (`music`).
 
-Tests : `dart test`. Ils couvrent les noms, les faux positifs, le parcours
-avec un faux FTP et un faux Transmission, MusicBrainz sur un faux serveur
-(saturation comprise), le rattachement des pistes et l'API.
+Tests : `dart test`. Ils couvrent les noms, les faux positifs, MusicBrainz
+sur un faux serveur (saturation comprise), le rattachement des pistes, la
+relecture de la base et l'API. Le parcours est testé côté application
+(`test/media_library_test.dart`).

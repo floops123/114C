@@ -1,94 +1,93 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:c411_core/music_name.dart';
-
 import 'library.dart';
 import 'musicbrainz.dart';
-import 'scanner.dart';
 
-/// La discothèque vivante : lue au démarrage, reparcourue régulièrement et
-/// sur demande, puis complétée album par album par MusicBrainz.
+/// La discothèque vivante : la musique que l'application a relevée pendant
+/// son parcours (relue quand sa base change), complétée album par album par
+/// MusicBrainz.
 class MusicService {
   MusicService({
+    required this.appLibrary,
     required this.statePath,
-    required this.scanner,
     required this.musicBrainz,
-    this.scanEvery = Duration.zero,
+    this.checkEvery = const Duration(seconds: 30),
     this.busyPause = const Duration(minutes: 1),
-  }) : _library = MusicLibrary.read(statePath) {
+  }) : _library = MusicLibrary(mb: MusicLibrary.readMb(statePath)) {
     _catalog = Catalog.of(_library);
   }
 
+  /// Préférences de l'application (sa base).
+  final String appLibrary;
+
+  /// Fiches MusicBrainz (et pochettes à côté).
   final String statePath;
-  final Scanner scanner;
   final MusicBrainz musicBrainz;
-  final Duration scanEvery;
+
+  /// Intervalle de vérification de la base de l'application.
+  final Duration checkEvery;
 
   /// Pause quand MusicBrainz reste saturé.
   final Duration busyPause;
 
   MusicLibrary _library;
   late Catalog _catalog;
+  DateTime? _modified;
   Timer? _timer;
 
-  bool scanning = false;
   bool identifying = false;
 
-  /// Étape en cours (« Dossier /musique/… », « MusicBrainz 3/40 »).
+  /// Étape en cours (« MusicBrainz 3/40 : Moon Safari »).
   String? step;
-  String? warning;
   String? error;
 
   MusicLibrary get library => _library;
   Catalog get catalog => _catalog;
 
-  /// Parcours au démarrage, puis tous les [scanEvery].
+  /// Lit la base, puis la surveille.
   void start() {
-    unawaited(scan());
-    if (scanEvery > Duration.zero) {
-      _timer = Timer.periodic(scanEvery, (_) => unawaited(scan()));
+    refresh();
+    _timer = Timer.periodic(checkEvery, (_) => refresh());
+  }
+
+  /// Relit la base de l'application si elle a changé, et cherche les
+  /// nouveaux albums sur MusicBrainz. Vrai si elle a changé.
+  bool refresh() {
+    final file = File(appLibrary);
+    final modified = file.existsSync() ? file.lastModifiedSync() : null;
+    if (modified == null || modified == _modified) return false;
+    try {
+      final app = MusicLibrary.parseApp(file.readAsStringSync());
+      _modified = modified;
+      _library = _library.copyWith(files: app.files, scannedAt: app.scannedAt);
+      _catalog = Catalog.of(_library);
+      error = null;
+    } on Object catch (e) {
+      // Fichier en cours d'écriture : relu à la prochaine vérification.
+      error = 'Base de l’application illisible : $e';
+      return false;
     }
+    unawaited(identify());
+    return true;
   }
 
   Map<String, Object?> status() => {
-        'scanning': scanning,
         'identifying': identifying,
         'step': step,
-        'warning': warning,
         'error': error,
         'scannedAt': _library.scannedAt?.toIso8601String(),
         'albums': _catalog.albums.length,
         'identified': _catalog.albums.where((a) => a.release != null).length,
       };
 
-  void _set(MusicLibrary library) {
-    _library = library;
-    _catalog = Catalog.of(library);
+  void _save() {
+    _catalog = Catalog.of(_library);
     try {
-      library.write(statePath);
+      _library.writeMb(statePath);
     } on FileSystemException catch (e) {
-      error = 'Discothèque non enregistrée : ${e.message}';
+      error = 'Fiches non enregistrées : ${e.message}';
     }
-  }
-
-  /// Reparcourt le serveur, puis cherche les albums nouveaux sur
-  /// MusicBrainz. Sans effet si un parcours est en cours.
-  Future<void> scan() async {
-    if (scanning) return;
-    scanning = true;
-    error = null;
-    try {
-      final result = await scanner.scan(_library, onStatus: (s) => step = s);
-      warning = result.warning;
-      _set(result.library);
-    } on Object catch (e) {
-      error = 'Parcours impossible : $e';
-    } finally {
-      scanning = false;
-      step = null;
-    }
-    await identify();
   }
 
   /// Albums pas encore cherchés (ou cherchés en vain il y a plus d'une
@@ -121,22 +120,16 @@ class MusicService {
           }
         }
         if (failure != null) {
-          // Réseau ou service en panne : on reprendra au prochain parcours.
+          // Réseau ou service en panne : repris au prochain changement de
+          // la base, ou au redémarrage.
           error = 'MusicBrainz injoignable : $failure';
           break;
         }
-        final mb = {..._library.mb, album.dir: MbMatch(checked: DateTime.now(), release: release)};
-        _library = MusicLibrary(
-          files: _library.files,
-          mb: mb,
-          scannedAt: _library.scannedAt,
-          pathFrom: _library.pathFrom,
-          pathTo: _library.pathTo,
-        );
+        _library.mb[album.dir] = MbMatch(checked: DateTime.now(), release: release);
         // Enregistré et visible au fil de l'eau.
-        if (release != null || i == pending.length - 1 || i % 10 == 9) _set(_library);
+        if (release != null || i % 10 == 9) _save();
       }
-      _set(_library);
+      _save();
     } finally {
       identifying = false;
       step = null;
@@ -153,10 +146,6 @@ class MusicService {
 
   void close() {
     _timer?.cancel();
-    scanner.close();
     musicBrainz.close();
   }
 }
-
-/// Nombre de dossiers d'albums distincts parmi [files] (pour les messages).
-int albumCount(Iterable<MusicFile> files) => {for (final f in files) albumDirOf(f.path)}.length;

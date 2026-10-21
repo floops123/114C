@@ -135,9 +135,8 @@ function renderHome() {
   const albums = state.albums;
   if (!albums.length) {
     content.innerHTML = '';
-    statusLine.textContent = state.status.scanning || state.status.identifying
-      ? 'Premier parcours en cours : les albums arrivent…'
-      : 'Aucun album trouvé. Vérifie les dossiers à parcourir (section « music » des réglages).';
+    statusLine.textContent = 'Aucun album pour l’instant. La musique vient du parcours de la vidéothèque '
+      + 'de l’application (Films & séries › Actualiser) : torrents terminés et dossiers à parcourir.';
     return;
   }
   statusLine.textContent = '';
@@ -550,21 +549,27 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------------------
-// Parcours et MusicBrainz
+// MusicBrainz et base de l'application
+
+/** Texte d'état : identification en cours, dernier parcours de l'application. */
+function statusText(s) {
+  return [
+    s.step || (s.identifying ? 'Recherche sur MusicBrainz…' : `${s.identified ?? 0} albums sur ${s.albums ?? 0} reconnus par MusicBrainz.`),
+    s.scannedAt ? `Dernier parcours de l’application : ${new Date(s.scannedAt).toLocaleString('fr-FR')}.` : 'Pas encore de parcours dans l’application.',
+    s.error || '',
+  ].filter(Boolean).join('\n');
+}
 
 let polling = null;
 function showStatus(s) {
-  const busy = s.scanning || s.identifying;
+  const busy = Boolean(s.identifying);
   const button = $('#scan');
-  button.classList.toggle('busy', Boolean(busy));
-  $('#scan-label').textContent = s.scanning ? 'Parcours…' : s.identifying ? `MusicBrainz ${s.identified}/${s.albums}` : '';
-  button.title = [
-    s.step || (busy ? '' : 'Reparcourir le serveur'),
-    s.scannedAt ? `Dernier parcours : ${new Date(s.scannedAt).toLocaleString('fr-FR')}` : '',
-    s.warning || '', s.error || '',
-  ].filter(Boolean).join('\n');
-  if (busy && !polling) polling = setInterval(poll, 4000);
-  if (!busy && polling) { clearInterval(polling); polling = null; }
+  button.classList.toggle('busy', busy);
+  $('#scan-label').textContent = busy ? `MusicBrainz ${s.identified}/${s.albums}` : '';
+  button.title = statusText(s);
+  // Vérifié aussi au repos : la base de l'application change quand elle parcourt.
+  clearInterval(polling);
+  polling = setInterval(poll, busy ? 4000 : 30000);
 }
 
 let lastIdentified = -1;
@@ -574,9 +579,11 @@ async function poll() {
     const was = state.status;
     state.status = s;
     showStatus(s);
-    // Discothèque relue quand des albums arrivent ou que le travail finit.
-    const changed = s.albums !== was.albums || (s.identified !== lastIdentified && s.identified % 10 === 0);
-    if (changed || (!s.scanning && !s.identifying)) {
+    // Discothèque relue quand des albums arrivent, au fil de
+    // l'identification, et quand elle finit.
+    const changed = s.albums !== was.albums || s.scannedAt !== was.scannedAt
+      || (s.identified !== lastIdentified && (s.identified % 10 === 0 || !s.identifying));
+    if (changed) {
       lastIdentified = s.identified;
       await refresh();
     }
@@ -591,13 +598,7 @@ async function refresh() {
   if (current()) markCurrent();
 }
 
-$('#scan').addEventListener('click', async () => {
-  if (state.status.scanning || state.status.identifying) return toast(state.status.step || 'Parcours en cours…');
-  const s = await (await fetch('api/scan', { method: 'POST' })).json();
-  state.status = { ...s, scanning: true };
-  showStatus(state.status);
-  toast('Parcours du serveur lancé.');
-});
+$('#scan').addEventListener('click', () => toast(statusText(state.status)));
 
 async function identify(id) {
   await fetch(`api/identify/${id}`, { method: 'POST' });

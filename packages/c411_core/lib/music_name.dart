@@ -253,3 +253,53 @@ class TrackGuess {
     );
   }
 }
+
+/// Un fichier audio : chemin (sur le serveur ou le FTP), taille, et infohash
+/// du torrent d'origine s'il en vient.
+typedef AudioFile = ({String path, int size, String? hash});
+
+/// Part de l'audio, en octets, au-delà de laquelle un torrent est de la
+/// musique : un jeu ou un film avec sa bande-son n'en est pas.
+const musicShare = 0.5;
+
+/// Les fichiers audio des torrents terminés (réponse `torrent-get` avec
+/// `hashString`, `downloadDir`, `percentDone`, `files`) qui sont de la
+/// musique : chemins sur le serveur.
+List<AudioFile> musicOfTorrents(List<Map<String, dynamic>> torrents) {
+  final out = <AudioFile>[];
+  for (final t in torrents) {
+    if (((t['percentDone'] as num?) ?? 0) < 1) continue;
+    var total = 0, audio = 0;
+    final found = <AudioFile>[];
+    for (final f in (t['files'] as List? ?? const []).whereType<Map>()) {
+      final size = (f['length'] as num?)?.toInt() ?? 0;
+      final path = '${t['downloadDir']}/${f['name']}'.replaceAll(RegExp('/+'), '/');
+      total += size;
+      if (!isAudioPath(path)) continue;
+      audio += size;
+      if (size >= minTrackBytes) {
+        found.add((path: path, size: size, hash: '${t['hashString'] ?? ''}'.toLowerCase()));
+      }
+    }
+    if (total > 0 && audio / total >= musicShare) out.addAll(found);
+  }
+  return out;
+}
+
+/// Garde, parmi les fichiers audio trouvés dans des dossiers, les albums qui
+/// ressemblent à de la musique : au plus 100 pistes, de 1,5 Mo en moyenne au
+/// moins (les dossiers de bruitages d'un jeu en ont des centaines, toutes
+/// petites), sans les pistes de moins de [minTrackBytes].
+List<AudioFile> plausibleAlbums(Iterable<AudioFile> files) {
+  final byDir = <String, List<AudioFile>>{};
+  for (final f in files) {
+    if (f.size < minTrackBytes) continue;
+    (byDir[albumDirOf(f.path)] ??= []).add(f);
+  }
+  return [
+    for (final group in byDir.values)
+      if (group.length <= 100 &&
+          group.fold(0, (n, f) => n + f.size) / group.length >= 1.5 * 1024 * 1024)
+        ...group,
+  ];
+}

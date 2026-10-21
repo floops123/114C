@@ -75,7 +75,8 @@ svg { fill: currentColor; }
 }
 .scan:hover { color: var(--text); border-color: var(--muted); }
 .scan svg { width: 16px; height: 16px; }
-.scan.busy svg { animation: spin 1.1s linear infinite; }
+.scan.busy svg { animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
 .scan.busy { color: var(--accent); border-color: rgba(0, 212, 146, .4); }
 .scan span:empty { display: none; }
 
@@ -301,6 +302,7 @@ input[type="range"]:hover::-webkit-slider-runnable-track { background: linear-gr
 .q-sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .queue .dur { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
+.toast { white-space: pre-line; }
 .toast {
   position: fixed; z-index: 40; left: 50%; bottom: calc(var(--player) + 18px); transform: translateX(-50%);
   background: var(--surface-alt); border: 1px solid var(--border); border-radius: 10px;

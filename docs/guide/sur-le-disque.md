@@ -31,6 +31,16 @@ reconnu (S01E03, 1x03…). Les petites vidéos (vidéos de jeux, extraits,
 bandes-annonces) sont ignorées, y compris dans une base enregistrée avant
 cette règle, sans nouveau parcours.
 
+Le même parcours relève aussi **la musique**, pour
+[C411 Music](../../web_music/README.md) ; l'application ne l'affiche pas.
+Les règles :
+
+- un torrent terminé ne compte que si l'audio fait au moins la moitié de ses
+  octets. La bande-son d'un jeu ou d'un film n'en fait pas partie ;
+- un dossier parcouru ne compte que s'il a 100 pistes au plus, de 1,5 Mo en
+  moyenne. Les bruitages de jeux sont donc écartés ;
+- une piste de moins de 300 Ko est ignorée.
+
 ## Comment un fichier est reconnu
 
 Le nom du fichier **et** celui de ses dossiers sont analysés :

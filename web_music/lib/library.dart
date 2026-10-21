@@ -208,66 +208,67 @@ class MbMatch {
       };
 }
 
-/// La discothèque : les fichiers trouvés, et les fiches MusicBrainz par
-/// dossier d'album. Rangée dans un fichier JSON.
+/// La discothèque : les fichiers audio relevés par l'application, et les
+/// fiches MusicBrainz par dossier d'album.
 class MusicLibrary {
-  MusicLibrary({
-    this.files = const [],
-    Map<String, MbMatch>? mb,
-    this.scannedAt,
-    this.pathFrom,
-    this.pathTo,
-  }) : mb = mb ?? {};
-
-  factory MusicLibrary.fromJson(Map<String, dynamic> j) => MusicLibrary(
-        files: [
-          for (final f in (j['files'] as List? ?? const []).whereType<Map>())
-            MusicFile.fromJson(f.cast<String, dynamic>()),
-        ],
-        mb: {
-          for (final MapEntry(:key, :value) in ((j['mb'] as Map?) ?? const {}).entries)
-            if (value is Map) '$key': MbMatch.fromJson(value.cast<String, dynamic>()),
-        },
-        scannedAt: DateTime.tryParse(j['scannedAt'] as String? ?? ''),
-        pathFrom: j['pathFrom'] as String?,
-        pathTo: j['pathTo'] as String?,
-      );
+  MusicLibrary({this.files = const [], Map<String, MbMatch>? mb, this.scannedAt})
+      : mb = mb ?? {};
 
   final List<MusicFile> files;
 
-  /// Par dossier d'album.
+  /// Par dossier d'album ; seule partie enregistrée par le serveur.
   final Map<String, MbMatch> mb;
+
+  /// Dernier parcours de l'application.
   final DateTime? scannedAt;
 
-  /// Correspondance des chemins Transmission → FTP.
-  final String? pathFrom;
-  final String? pathTo;
+  MusicLibrary copyWith({List<MusicFile>? files, Map<String, MbMatch>? mb, DateTime? scannedAt}) =>
+      MusicLibrary(files: files ?? this.files, mb: mb ?? this.mb, scannedAt: scannedAt ?? this.scannedAt);
 
-  Map<String, dynamic> toJson() => {
-        'files': [for (final f in files) f.toJson()],
-        'mb': {for (final MapEntry(:key, :value) in mb.entries) key: value.toJson()},
-        'scannedAt': ?scannedAt?.toIso8601String(),
-        'pathFrom': ?pathFrom,
-        'pathTo': ?pathTo,
-      };
-
-  static MusicLibrary read(String path) {
+  /// Fiches MusicBrainz enregistrées à [path].
+  static Map<String, MbMatch> readMb(String path) {
     final file = File(path);
-    if (!file.existsSync()) return MusicLibrary();
+    if (!file.existsSync()) return {};
     try {
-      return MusicLibrary.fromJson(jsonDecode(file.readAsStringSync()) as Map<String, dynamic>);
+      final j = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      return {
+        for (final MapEntry(:key, :value) in ((j['mb'] as Map?) ?? const {}).entries)
+          if (value is Map) '$key': MbMatch.fromJson(value.cast<String, dynamic>()),
+      };
     } on Object {
-      return MusicLibrary(); // Illisible : on repart de zéro.
+      return {}; // Illisible : on recherchera.
     }
   }
 
-  /// Écrit d'un bloc (fichier temporaire renommé).
-  void write(String path) {
+  /// Écrit les fiches d'un bloc (fichier temporaire renommé).
+  void writeMb(String path) {
     final file = File(path);
     file.parent.createSync(recursive: true);
     final tmp = File('$path.tmp');
-    tmp.writeAsStringSync(jsonEncode(toJson()));
+    tmp.writeAsStringSync(jsonEncode({
+      'mb': {for (final MapEntry(:key, :value) in mb.entries) key: value.toJson()},
+    }));
     tmp.renameSync(path);
+  }
+
+  /// La musique de la base de l'application : son fichier de préférences
+  /// (clé `mediaLibrary`, une chaîne JSON), ou un export de la base seule.
+  static ({List<MusicFile> files, DateTime? scannedAt}) parseApp(String source) {
+    final json = jsonDecode(source);
+    if (json is! Map) throw const FormatException('Base de l’application illisible');
+    final raw = json['flutter.mediaLibrary'] ?? json['mediaLibrary'];
+    final library = raw == null
+        ? json
+        : raw is String
+            ? jsonDecode(raw) as Map
+            : raw as Map;
+    return (
+      files: [
+        for (final f in (library['music'] as List? ?? const []).whereType<Map>())
+          if (f['path'] is String) MusicFile.fromJson(f.cast<String, dynamic>()),
+      ],
+      scannedAt: DateTime.tryParse(library['scannedAt'] as String? ?? ''),
+    );
   }
 }
 

@@ -8,7 +8,6 @@ import 'package:c411_core/music_name.dart';
 import 'package:c411_web_music/config.dart';
 import 'package:c411_web_music/library.dart';
 import 'package:c411_web_music/musicbrainz.dart';
-import 'package:c411_web_music/scanner.dart';
 import 'package:c411_web_music/server.dart';
 import 'package:c411_web_music/service.dart';
 import 'package:test/test.dart';
@@ -76,7 +75,7 @@ void main() {
     });
   });
 
-  group('parcours', () {
+  group('ce qui est de la musique', () {
     test('torrents : la musique, pas la bande-son d’un jeu', () {
       final audio = musicOfTorrents([
         {
@@ -116,56 +115,15 @@ void main() {
     });
 
     test('dossiers : pas les bruitages', () {
-      final files = [
-        MusicFile(path: '/m/Album/01.mp3', size: 8 * _mo),
-        MusicFile(path: '/m/Album/02.mp3', size: 9 * _mo),
-        for (var i = 0; i < 150; i++) MusicFile(path: '/jeux/sfx/s$i.wav', size: 400 * 1024),
+      final files = <AudioFile>[
+        (path: '/m/Album/01.mp3', size: 8 * _mo, hash: null),
+        (path: '/m/Album/02.mp3', size: 9 * _mo, hash: null),
+        (path: '/m/Album/jingle.mp3', size: 100 * 1024, hash: null),
+        for (var i = 0; i < 150; i++) (path: '/jeux/sfx/s$i.wav', size: 400 * 1024, hash: null),
       ];
-      expect({for (final f in plausibleAlbums(files)) f.albumDir}, {'/m/Album'});
+      expect([for (final f in plausibleAlbums(files)) f.path], ['/m/Album/01.mp3', '/m/Album/02.mp3']);
     });
 
-    test('dossiers du FTP, correspondance des chemins Transmission', () async {
-      final ftp = _FakeFtp({
-        '/musique': [const FtpEntry('Air', isDir: true)],
-        '/musique/Air': [const FtpEntry('Moon Safari (1998)', isDir: true)],
-        '/musique/Air/Moon Safari (1998)': [
-          const FtpEntry('01 - La Femme d\'Argent.flac', isDir: false, size: 40 * _mo),
-          const FtpEntry('02 - Sexy Boy.flac', isDir: false, size: 30 * _mo),
-          const FtpEntry('folder.jpg', isDir: false, size: 200 * 1024),
-        ],
-      }, sizes: {
-        '/torrents/Justice - Hyperdrama/01 - Generator.flac': 30 * _mo,
-      });
-      final rpc = await _FakeTransmission.start([
-        {
-          'hashString': 'abc',
-          'downloadDir': '/APPBOX_DATA/torrents',
-          'percentDone': 1,
-          'files': [
-            {'name': 'Justice - Hyperdrama/01 - Generator.flac', 'length': 30 * _mo},
-          ],
-        },
-      ]);
-      addTearDown(rpc.close);
-      final config = _config(folders: ['/musique'], rpcUrl: rpc.url);
-      final scanner = Scanner(config, connect: () async => ftp);
-      addTearDown(scanner.close);
-      final result = await scanner.scan(MusicLibrary());
-      expect(result.warning, isNull);
-      expect(result.library.pathFrom, '/APPBOX_DATA');
-      expect(result.library.pathTo, '');
-      expect({for (final f in result.library.files) f.path}, {
-        '/torrents/Justice - Hyperdrama/01 - Generator.flac',
-        '/musique/Air/Moon Safari (1998)/01 - La Femme d\'Argent.flac',
-        '/musique/Air/Moon Safari (1998)/02 - Sexy Boy.flac',
-      });
-      expect(result.library.files.first.hash, 'abc');
-      expect(ftp.closed, isTrue);
-
-      // Un second parcours garde la date d'ajout.
-      final again = await scanner.scan(result.library);
-      expect(again.library.files.first.added, result.library.files.first.added);
-    });
   });
 
   group('MusicBrainz', () {
@@ -296,10 +254,10 @@ void main() {
         ],
         mb: {'/m/Air/Moon Safari': MbMatch(checked: DateTime(2026), release: MusicBrainz.parseRelease(_release))},
       );
-      library.write('${dir.path}/sub/library.json');
-      final back = MusicLibrary.read('${dir.path}/sub/library.json');
-      expect(back.files.first.added, DateTime(2026, 1, 2));
-      expect(back.mb['/m/Air/Moon Safari']!.release!.tracks, hasLength(2));
+      library.writeMb('${dir.path}/sub/library.json');
+      final mb = MusicLibrary.readMb('${dir.path}/sub/library.json');
+      expect(mb['/m/Air/Moon Safari']!.release!.tracks, hasLength(2));
+      final back = library.copyWith(mb: mb);
 
       final catalog = Catalog.of(back);
       expect(catalog.albums.map((a) => a.title), ['Cross', 'Moon Safari', 'Talkie Walkie']);
@@ -312,6 +270,40 @@ void main() {
       expect(artists, {'Justice': 1, 'Air': 2});
       final air = (json['artists'] as List).cast<Map>().firstWhere((a) => a['name'] == 'Air');
       expect(air['mbid'], 'air-id');
+    });
+
+    test('base de l’application relue quand elle change', () async {
+      final dir = Directory.systemTemp.createTempSync('c411_music');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final prefs = '${dir.path}/prefs.json';
+      MusicLibrary(mb: {
+        '/m/Air/Moon Safari': MbMatch(checked: DateTime.now(), release: MusicBrainz.parseRelease(_release)),
+        '/m/Inconnu': MbMatch(checked: DateTime.now()),
+      }).writeMb('${dir.path}/state.json');
+      _writeApp(prefs, [
+        {'path': '/m/Air/Moon Safari/01 - femme.flac', 'size': 9 * _mo},
+      ]);
+      final service = MusicService(
+        appLibrary: prefs,
+        statePath: '${dir.path}/state.json',
+        musicBrainz: MusicBrainz(contact: 't', base: 'http://127.0.0.1:9/ws/2', interval: Duration.zero),
+      );
+      addTearDown(service.close);
+      expect(service.refresh(), isTrue);
+      expect(service.refresh(), isFalse, reason: 'inchangée');
+      expect(service.catalog.albums.single.title, 'Moon Safari');
+      expect(service.status()['scannedAt'], '2026-10-20T08:00:00.000');
+
+      // L'application a reparcouru : un album de plus (déjà cherché, en vain).
+      _writeApp(prefs, [
+        {'path': '/m/Air/Moon Safari/01 - femme.flac', 'size': 9 * _mo},
+        {'path': '/m/Inconnu/01 - x.mp3', 'size': 9 * _mo},
+      ], scannedAt: '2026-10-21T08:00:00.000');
+      File(prefs).setLastModifiedSync(DateTime.now().add(const Duration(seconds: 5)));
+      expect(service.refresh(), isTrue);
+      expect(service.catalog.albums.map((a) => a.title), ['Inconnu', 'Moon Safari']);
+      await service.identify();
+      expect(service.error, isNull, reason: 'rien à chercher : aucune requête');
     });
 
     test('recherche infructueuse refaite au bout d’une semaine', () {
@@ -329,15 +321,17 @@ void main() {
     setUp(() async {
       dir = Directory.systemTemp.createTempSync('c411_music');
       MusicLibrary(
-        files: [MusicFile(path: '/m/Air/Moon Safari/01 - femme.flac', size: 9 * _mo)],
         mb: {'/m/Air/Moon Safari': MbMatch(checked: DateTime(2026), release: MusicBrainz.parseRelease(_release))},
-      ).write('${dir.path}/library.json');
+      ).writeMb('${dir.path}/library.json');
+      _writeApp('${dir.path}/prefs.json', [
+        {'path': '/m/Air/Moon Safari/01 - femme.flac', 'size': 9 * _mo, 'added': '2026-10-01T10:00:00.000'},
+      ]);
       final config = _config(password: 'secret', port: 0);
       service = MusicService(
+        appLibrary: '${dir.path}/prefs.json',
         statePath: '${dir.path}/library.json',
-        scanner: Scanner(config, connect: () async => _FakeFtp({})),
         musicBrainz: MusicBrainz(contact: 'test', interval: Duration.zero),
-      );
+      )..refresh();
       File('${dir.path}/index.html').writeAsStringSync('<title>C411 Music</title>');
       server = MusicServer(config,
           service: service,
@@ -400,8 +394,7 @@ void main() {
       final play = jsonDecode((await get('/api/play/${track['id']}')).$2) as Map;
       expect(play, {'type': 'audio/flac', 'directUrl': '/media/${track['id']}', 'streamUrl': null, 'duration': 427.0});
       expect((await get('/api/play/inconnu')).$1, 404);
-      expect((await get('/api/scan')).$1, 404, reason: 'GET : simple fichier introuvable');
-      expect((await get('/api/scan', method: 'POST')).$1, 202);
+      expect((await get('/api/scan', method: 'POST')).$1, 405, reason: 'le parcours est celui de l’application');
     });
   });
 
@@ -416,27 +409,30 @@ void main() {
     final file = File('${dir.path}/personal.json')
       ..writeAsStringSync(jsonEncode({
         'ftpHost': 'ftp.example.org',
-        'rpcUrl': 'seedbox:9091',
-        'mediaFolders': ['/films'],
-        'music': {'folders': ['/musique'], 'port': 9000, 'scanEvery': 0},
+        'music': {'port': 9000, 'library': '/prefs.json', 'contact': 'moi@example.org'},
       }));
-    final c = MusicConfig.load(file.path, overrides: {'folder': '/extra'});
-    expect(c.rpcUrl, 'http://seedbox:9091/transmission/rpc');
-    expect(c.folders, ['/extra', '/musique', '/films']);
-    expect((c.port, c.scanEvery, c.public), (9000, Duration.zero, false));
+    final c = MusicConfig.load(file.path, overrides: {'state': '/etat.json'});
+    expect((c.port, c.library, c.state, c.contact, c.public),
+        (9000, '/prefs.json', '/etat.json', 'moi@example.org', false));
+    expect(MusicConfig.load(file.path, overrides: {'host': '0.0.0.0'}).public, isTrue);
   });
 }
 
-MusicConfig _config({List<String> folders = const [], String rpcUrl = '', String password = '', int port = 8412}) =>
-    MusicConfig(
+MusicConfig _config({String password = '', int port = 8412}) => MusicConfig(
       ftp: const FtpConfig(host: 'ftp.invalid', port: 21, user: 'u', password: 'p', tls: false),
+      library: '/nonexistent',
       state: '/nonexistent',
-      folders: folders,
-      rpcUrl: rpcUrl,
-      appLibrary: '/nonexistent',
       password: password,
       port: port,
     );
+
+/// Préférences de l'application, comme shared_preferences les écrit : la
+/// base est une chaîne JSON.
+void _writeApp(String path, List<Map<String, Object?>> music, {String scannedAt = '2026-10-20T08:00:00.000'}) =>
+    File(path).writeAsStringSync(jsonEncode({
+      'flutter.themeMode': 'dark',
+      'flutter.mediaLibrary': jsonEncode({'files': [], 'music': music, 'scannedAt': scannedAt}),
+    }));
 
 final _release = <String, dynamic>{
   'id': 'rel',
@@ -469,51 +465,3 @@ final _release = <String, dynamic>{
     },
   ],
 };
-
-class _FakeFtp implements FtpClient {
-  _FakeFtp(this.dirs, {this.sizes = const {}});
-  final Map<String, List<FtpEntry>> dirs;
-  final Map<String, int> sizes;
-  bool closed = false;
-
-  @override
-  Future<List<FtpEntry>> list(String path) async =>
-      dirs[path] ?? (throw const FtpException('550 introuvable'));
-
-  @override
-  Future<int?> size(String path) async => sizes[path];
-
-  @override
-  Future<void> close() async => closed = true;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _FakeTransmission {
-  _FakeTransmission(this._server);
-  final HttpServer _server;
-  String get url => 'http://127.0.0.1:${_server.port}/transmission/rpc';
-
-  static Future<_FakeTransmission> start(List<Map<String, dynamic>> torrents) async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    server.listen((r) async {
-      await r.drain<void>();
-      // Premier appel sans jeton : 409, comme Transmission.
-      if (r.headers.value('X-Transmission-Session-Id') != 'jeton') {
-        r.response
-          ..statusCode = 409
-          ..headers.set('X-Transmission-Session-Id', 'jeton');
-      } else {
-        r.response.write(jsonEncode({
-          'result': 'success',
-          'arguments': {'torrents': torrents},
-        }));
-      }
-      await r.response.close();
-    });
-    return _FakeTransmission(server);
-  }
-
-  Future<void> close() => _server.close(force: true);
-}

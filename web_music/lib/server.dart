@@ -26,9 +26,8 @@ const browserTypes = {
 /// fichiers lus sur le FTP par le relais HTTP, tels quels ou convertis à
 /// la volée en AAC par ffmpeg.
 ///
-/// - `GET /api/library` : albums, artistes, état du parcours ;
-/// - `GET /api/status` : l'état du parcours seul ;
-/// - `POST /api/scan` : relance le parcours ;
+/// - `GET /api/library` : albums, artistes, état de l'identification ;
+/// - `GET /api/status` : l'état de l'identification seul ;
 /// - `POST /api/identify/<album>` : cherche à nouveau sa fiche MusicBrainz ;
 /// - `GET /api/cover/<album>` : sa pochette (Cover Art Archive), gardée sur
 ///   le disque à côté de la discothèque ;
@@ -102,12 +101,10 @@ class MusicServer {
       final post = request.method == 'POST';
       switch ((segments.firstOrNull ?? '', segments.length, post)) {
         case ('api', 2, false) when segments[1] == 'library':
+          service.refresh();
           await _json(response, {...service.catalog.toJson(), 'status': service.status()});
         case ('api', 2, false) when segments[1] == 'status':
           await _json(response, service.status());
-        case ('api', 2, true) when segments[1] == 'scan':
-          unawaited(service.scan());
-          await _json(response, service.status(), status: HttpStatus.accepted);
         case ('api', 3, true) when segments[1] == 'identify':
           unawaited(service.reidentify(segments[2]));
           await _json(response, service.status(), status: HttpStatus.accepted);

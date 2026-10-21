@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:c411_core/media_relay.dart';
 import 'package:c411_web_music/config.dart';
 import 'package:c411_web_music/musicbrainz.dart';
-import 'package:c411_web_music/scanner.dart';
 import 'package:c411_web_music/server.dart';
 import 'package:c411_web_music/service.dart';
 
@@ -14,20 +13,19 @@ fiches et pochettes de MusicBrainz.
   dart run bin/web_music.dart <réglages.json> [options]
 
 <réglages.json> : le JSON de réglages de l'application (voir
-personal.json.example) : accès FTP, Transmission, dossiers, et une section
-« music » facultative.
+personal.json.example) : accès FTP, et une section « music » facultative.
+La musique est celle que l'application relève pendant le parcours de sa
+vidéothèque (torrents terminés et dossiers à parcourir).
 
 Options (prioritaires sur la section « music ») :
-  --folder <dossier>    dossier du FTP à parcourir, en plus des autres
-  --state <fichier>     discothèque (défaut : ~/.local/share/c411_music/
-                        library.json)
-  --library <fichier>   préférences de l'application, pour la
-                        correspondance des chemins Transmission → FTP
+  --library <fichier>   base de l'application : ses préférences (défaut :
+                        ~/.local/share/fr.c411remote.c411_remote/
+                        shared_preferences.json)
+  --state <fichier>     fiches MusicBrainz (défaut : ~/.local/share/
+                        c411_music/library.json)
   --host <adresse>      adresse d'écoute (défaut : 127.0.0.1)
   --port <port>         port (défaut : 8412)
   --password <mot>      mot de passe (obligatoire hors de 127.0.0.1)
-  --scan-every <min>    minutes entre deux parcours (défaut : 180 ; 0 :
-                        au démarrage et sur demande)
 ''';
 
 Future<void> main(List<String> args) async {
@@ -56,18 +54,17 @@ Future<void> main(List<String> args) async {
         'Ajoute --password, ou « password » dans la section « music ».');
     exit(64);
   }
-  if (!config.hasTransmission && config.folders.isEmpty) {
-    stderr.writeln('Rien à parcourir : renseigne rpcUrl (Transmission) ou des '
-        'dossiers (« folders » de la section « music », ou --folder).');
-    exit(64);
+  if (!File(config.library).existsSync()) {
+    stderr.writeln('Base de l’application introuvable : ${config.library} '
+        '(--library pour en indiquer une autre)');
+    exit(66);
   }
 
   final transcode = await _available('ffmpeg') && await _available('ffprobe');
   final service = MusicService(
+    appLibrary: config.library,
     statePath: config.state,
-    scanner: Scanner(config),
     musicBrainz: MusicBrainz(contact: config.contact),
-    scanEvery: config.scanEvery,
   );
   final root = File.fromUri(Platform.script).parent.parent;
   final server = MusicServer(
@@ -81,12 +78,10 @@ Future<void> main(List<String> args) async {
   await server.start();
   service.start();
 
+  final albums = service.catalog.albums.length;
   stdout
-    ..writeln('${service.catalog.albums.length} albums, lus dans ${config.state} ; '
-        'parcours en cours (${[
-      if (config.hasTransmission) 'torrents terminés',
-      ...config.folders,
-    ].join(', ')})')
+    ..writeln('$albums albums, lus dans ${config.library}'
+        '${albums == 0 ? ' (lance un parcours de la vidéothèque dans l’application)' : ''}')
     ..writeln(transcode
         ? 'ffmpeg trouvé : WMA, APE, ALAC… sont convertis à la volée.'
         : 'ffmpeg absent : lecture directe seulement (MP3, FLAC, AAC, Ogg, WAV).')

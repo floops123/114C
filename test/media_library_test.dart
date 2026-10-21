@@ -42,6 +42,28 @@ class _Transmission extends TransmissionClient {
             ],
           },
           {
+            'id': 4,
+            'hashString': 'DDD',
+            'downloadDir': _dir,
+            'percentDone': 1.0,
+            'files': [
+              {'name': 'Air - Moon Safari (1998)/01 - La Femme d\'argent.flac', 'length': 40 << 20},
+              {'name': 'Air - Moon Safari (1998)/02 - Sexy Boy.flac', 'length': 30 << 20},
+              {'name': 'Air - Moon Safari (1998)/cover.jpg', 'length': 1 << 20},
+            ],
+          },
+          {
+            // Un jeu et sa bande-son : pas de la musique.
+            'id': 5,
+            'hashString': 'eee',
+            'downloadDir': _dir,
+            'percentDone': 1.0,
+            'files': [
+              {'name': 'Jeu/data.pak', 'length': 4 << 30},
+              {'name': 'Jeu/OST/01.ogg', 'length': 5 << 20},
+            ],
+          },
+          {
             'id': 3,
             'hashString': 'ccc',
             'downloadDir': _dir,
@@ -106,7 +128,16 @@ void main() {
       '/medias/Séries/MobLand/Saison 1/MobLand - S01E01.mkv': [1],
       // Vidéo de jeu : trop petite pour un film, écartée.
       '/medias/Jeux/vectrex/videos/Mine Storm-video.mp4': [1],
+      // Musique des dossiers (pour C411 Music), sans les bruitages de jeux.
+      '/medias/Musique/Justice - Cross/CD1/01 - Genesis.mp3': [1],
+      '/medias/Musique/Justice - Cross/CD2/01 - Stress.mp3': [1],
+      '/medias/Jeux/sfx/s1.wav': [1],
+      '/medias/Jeux/sfx/s2.wav': [1],
     }, sizes: {
+      '/medias/Musique/Justice - Cross/CD1/01 - Genesis.mp3': 8 << 20,
+      '/medias/Musique/Justice - Cross/CD2/01 - Stress.mp3': 9 << 20,
+      '/medias/Jeux/sfx/s1.wav': 400 << 10,
+      '/medias/Jeux/sfx/s2.wav': 400 << 10,
       '/torrents/Dune.Part.Two.2024.MULTi.2160p.WEB-GRP.mkv': _go2,
       '/torrents/The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E01.mkv': _mo600,
       '/torrents/The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E02.mkv': _mo700,
@@ -136,6 +167,12 @@ void main() {
       '/torrents/The.Bear.S03.MULTi.1080p-GRP/The.Bear.S03E02.mkv',
       '/medias/Films/Amélie (2001)/Amélie (2001).mkv',
       '/medias/Séries/MobLand/Saison 1/MobLand - S01E01.mkv',
+    });
+    expect({for (final f in library.music) f.path: f.hash}, {
+      '/torrents/Air - Moon Safari (1998)/01 - La Femme d\'argent.flac': 'ddd',
+      '/torrents/Air - Moon Safari (1998)/02 - Sexy Boy.flac': 'ddd',
+      '/medias/Musique/Justice - Cross/CD1/01 - Genesis.mp3': null,
+      '/medias/Musique/Justice - Cross/CD2/01 - Stress.mp3': null,
     });
     expect(tmdb.asked.toSet(), {
       'movie:Dune Part Two:2024', 'tv:The Bear:', 'movie:Amélie:2001', 'tv:MobLand:',
@@ -171,6 +208,8 @@ void main() {
     final reloaded = MediaLibrary.fromJson(library.toJson());
     expect(reloaded.titles.length, 4);
     expect(reloaded.files.every((f) => f.added != null), isTrue);
+    expect(reloaded.music.length, 4);
+    expect(reloaded.music.every((f) => f.added != null), isTrue);
   });
 
   test('parcours sans Transmission : FTP injoignable', () async {

@@ -10,6 +10,7 @@ import '../api/tmdb.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/media_name.dart';
+import '../core/music_name.dart';
 import '../core/preferences.dart';
 import '../core/release_name.dart';
 import '../core/settings.dart';
@@ -19,6 +20,8 @@ import 'torrents.dart';
 // Notre propre base de films et séries : les fichiers vidéo des torrents
 // terminés et des dossiers choisis, lus sur le FTP du serveur, reconnus
 // d'après leur nom puis rattachés à leur fiche TMDB. Rangée sur l'appareil.
+// Le même parcours relève aussi la musique, pour C411 Music (web_music/),
+// qui la lit ici comme C411 TV lit les vidéos.
 
 /// Un fichier vidéo du serveur, chemin FTP.
 class MediaFile {
@@ -108,6 +111,7 @@ class MediaTitle {
 class MediaLibrary {
   MediaLibrary({
     this.files = const [],
+    this.music = const [],
     this.tmdb = const {},
     this.scannedAt,
     this.pathFrom,
@@ -117,6 +121,10 @@ class MediaLibrary {
   factory MediaLibrary.fromJson(Map<String, dynamic> json) => MediaLibrary(
         files: [
           for (final f in (json['files'] as List? ?? const []).whereType<Map<String, dynamic>>())
+            MediaFile.fromJson(f),
+        ],
+        music: [
+          for (final f in (json['music'] as List? ?? const []).whereType<Map<String, dynamic>>())
             MediaFile.fromJson(f),
         ],
         tmdb: {
@@ -132,6 +140,10 @@ class MediaLibrary {
       );
 
   final List<MediaFile> files;
+
+  /// Fichiers audio (musique des torrents terminés et des dossiers), pour
+  /// C411 Music ; l'application ne les montre pas.
+  final List<MediaFile> music;
 
   /// Clé de regroupement → fiche TMDB ; null : cherchée, rien trouvé.
   final Map<String, TmdbTitle?> tmdb;
@@ -237,6 +249,7 @@ class MediaLibrary {
 
   MediaLibrary copyWith({
     List<MediaFile>? files,
+    List<MediaFile>? music,
     Map<String, TmdbTitle?>? tmdb,
     DateTime? scannedAt,
     String? pathFrom,
@@ -244,6 +257,7 @@ class MediaLibrary {
   }) =>
       MediaLibrary(
         files: files ?? this.files,
+        music: music ?? this.music,
         tmdb: tmdb ?? this.tmdb,
         scannedAt: scannedAt ?? this.scannedAt,
         pathFrom: pathFrom ?? this.pathFrom,
@@ -252,6 +266,7 @@ class MediaLibrary {
 
   Map<String, dynamic> toJson() => {
         'files': [for (final f in files) f.toJson()],
+        'music': [for (final f in music) f.toJson()],
         'tmdb': {
           for (final MapEntry(:key, :value) in tmdb.entries) key: value?.toJson(),
         },
@@ -330,9 +345,10 @@ final mediaRelayProvider = Provider<MediaRelay?>((ref) {
   return relay;
 });
 
-/// Parcours du FTP : fichiers vidéo sous [roots] (sans extraits ni bonus).
+/// Parcours du FTP : fichiers vidéo sous [roots] (sans extraits ni bonus) ;
+/// les fichiers audio vont dans [audio], s'il est donné.
 Future<List<MediaFile>> scanFolders(FtpClient ftp, List<String> roots,
-    {void Function(String path)? onFolder, int depth = 8}) async {
+    {void Function(String path)? onFolder, int depth = 8, List<MediaFile>? audio}) async {
   final found = <MediaFile>[];
   Future<void> walk(String dir, int left) async {
     onFolder?.call(dir);
@@ -349,6 +365,8 @@ Future<List<MediaFile>> scanFolders(FtpClient ftp, List<String> roots,
         if (left > 0) await walk(path, left - 1);
       } else if (isVideoPath(path) && !MediaGuess.isExtra(path)) {
         found.add(MediaFile(path: path, size: e.size));
+      } else if (audio != null && isAudioPath(path)) {
+        audio.add(MediaFile(path: path, size: e.size));
       }
     }
   }
@@ -463,7 +481,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     // inconnue (il faut d'abord un parcours) : rien à faire ici.
     if (state.scanning || library.pathFrom == null) return;
     final known = {
-      for (final f in library.files)
+      for (final f in [...library.files, ...library.music])
         if (f.hash case final h?) h.toLowerCase(),
     };
     final todo = [
@@ -484,7 +502,8 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     });
   }
 
-  /// Ajoute à la base les fichiers vidéo de torrents terminés, sans
+  /// Ajoute à la base les fichiers vidéo (et la musique) de torrents
+  /// terminés, sans
   /// repasser par le FTP : les chemins viennent de Transmission, la
   /// correspondance avec les chemins FTP est déjà connue du parcours.
   /// Renvoie le nombre de fichiers ajoutés (0 si rien de neuf).
@@ -510,32 +529,42 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       if (!ref.mounted) return 0;
       // Examinés, qu'ils apportent des vidéos ou non (livres, jeux…).
       _checked.addAll(hashes);
-      final videos = completedVideos(result.torrents);
-      final known = {for (final f in library.files) f.path};
+      final known = {for (final f in [...library.files, ...library.music]) f.path};
       final now = DateTime.now();
-      final fresh = <MediaFile>[];
-      for (final v in videos) {
-        final hash = v.hash.toLowerCase();
-        if (!hashes.contains(hash) || !v.path.startsWith(library.pathFrom!)) {
-          continue;
-        }
-        final path =
-            '${library.pathTo}${v.path.substring(library.pathFrom!.length)}';
-        if (known.add(path)) {
-          fresh.add(MediaFile(path: path, size: v.size, hash: hash, added: now));
-        }
-      }
-      if (fresh.isEmpty) {
+      List<MediaFile> fresh(Iterable<({String path, int size, String? hash})> found) => [
+            for (final v in found)
+              if (hashes.contains(v.hash?.toLowerCase()) &&
+                  v.path.startsWith(library.pathFrom!) &&
+                  known.add('${library.pathTo}${v.path.substring(library.pathFrom!.length)}'))
+                MediaFile(
+                  path: '${library.pathTo}${v.path.substring(library.pathFrom!.length)}',
+                  size: v.size,
+                  hash: v.hash?.toLowerCase(),
+                  added: now,
+                ),
+          ];
+      final videos = fresh([
+        for (final v in completedVideos(result.torrents)) (path: v.path, size: v.size, hash: v.hash),
+      ]);
+      final audio = fresh(musicOfTorrents(result.torrents));
+      if (videos.isEmpty && audio.isEmpty) {
         _set(MediaLibraryState(library));
         return 0;
       }
-      library = library.copyWith(files: [...library.files, ...fresh]);
+      library = library.copyWith(
+          files: [...library.files, ...videos], music: [...library.music, ...audio]);
+      if (videos.isEmpty) {
+        // Que de la musique : rien à chercher sur TMDB.
+        ref.read(mediaLibraryStoreProvider).save(library);
+        _set(MediaLibraryState(library));
+        return 0;
+      }
       _save(library);
       if (tmdb != null) library = await _identify(library, tmdb);
       if (!ref.mounted) return 0;
       ref.read(mediaLibraryStoreProvider).save(library);
       _set(MediaLibraryState(library));
-      return fresh.length;
+      return videos.length;
     } on TransmissionException catch (e) {
       if (ref.mounted) _set(MediaLibraryState(state.library, error: e.message));
       return 0;
@@ -560,14 +589,14 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   }
 
   /// Chemins Transmission → FTP établis (ou à établir) au vu des fichiers
-  /// vidéo des torrents terminés. Renvoie les fichiers ajoutés à [found],
-  /// les préfixes retenus et un avertissement si la correspondance est
-  /// introuvable.
+  /// vidéo (et audio) des torrents terminés. Renvoie les fichiers vidéo,
+  /// les fichiers audio des torrents de musique, les préfixes retenus et un
+  /// avertissement si la correspondance est introuvable.
   ///
   /// [ftp] n'est nécessaire que pour `detectPathMap` (et la vérification que
   /// la correspondance connue vaut encore) : quand [pathFrom] est déjà connu
   /// et que [check] n'est pas demandé, on n'ouvre aucune connexion.
-  Future<(List<MediaFile>, String?, String?, String?)> _fromTorrents(
+  Future<(List<MediaFile>, List<MediaFile>, String?, String?, String?)> _fromTorrents(
     TransmissionClient client,
     FtpClient? ftp,
     List<String> roots,
@@ -579,12 +608,15 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
             ['id', 'hashString', 'downloadDir', 'percentDone', 'files']))
         .torrents;
     final videos = completedVideos(torrents);
-    if (videos.isEmpty) {
-      return (const <MediaFile>[], previous.pathFrom, previous.pathTo, null);
+    final audio = musicOfTorrents(torrents);
+    if (videos.isEmpty && audio.isEmpty) {
+      return (const <MediaFile>[], const <MediaFile>[], previous.pathFrom, previous.pathTo, null);
     }
 
     var pathFrom = previous.pathFrom, pathTo = previous.pathTo;
-    final first = videos.first;
+    final first = videos.isNotEmpty
+        ? (path: videos.first.path, size: videos.first.size)
+        : (path: audio.first.path, size: audio.first.size);
     // Correspondance connue : encore valable ? (dossier déplacé, autre compte
     // FTP…). La vérification demande le FTP ; sans connexion, on lui fait
     // confiance — c'est le cas le plus courant, et c'est rapide.
@@ -596,7 +628,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     }
     if (pathFrom == null) {
       if (ftp == null) {
-        return (const <MediaFile>[], null, null,
+        return (const <MediaFile>[], const <MediaFile>[], null, null,
             'Correspondance des chemins inconnue : renseigne un dossier dans '
             'Dossiers à parcourir, ou lance un parcours complet');
       }
@@ -605,19 +637,25 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       if (map != null) (pathFrom, pathTo) = map;
     }
     if (pathFrom == null) {
-      return (const <MediaFile>[], null, null,
+      return (const <MediaFile>[], const <MediaFile>[], null, null,
           'Fichiers des torrents introuvables sur le FTP (${first.path})');
     }
-    final files = <MediaFile>[];
-    for (final v in videos) {
-      if (!v.path.startsWith(pathFrom)) continue;
-      files.add(MediaFile(
-        path: '$pathTo${v.path.substring(pathFrom.length)}',
-        size: v.size,
-        hash: v.hash,
-      ));
-    }
-    return (files, pathFrom, pathTo, null);
+    List<MediaFile> mapped(Iterable<({String path, int size, String? hash})> list) => [
+          for (final v in list)
+            if (v.path.startsWith(pathFrom!))
+              MediaFile(
+                path: '$pathTo${v.path.substring(pathFrom.length)}',
+                size: v.size,
+                hash: v.hash,
+              ),
+        ];
+    return (
+      mapped([for (final v in videos) (path: v.path, size: v.size, hash: v.hash)]),
+      mapped(audio),
+      pathFrom,
+      pathTo,
+      null,
+    );
   }
 
   Future<void> scan() async {
@@ -655,11 +693,12 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       var pathFrom = previous.pathFrom, pathTo = previous.pathTo;
       String? warning;
       final found = <String, MediaFile>{};
+      final music = <String, MediaFile>{};
 
       // D'abord les torrents : source principale, une seule requête.
       if (transmission != null) {
         status('Torrents terminés…');
-        final (files, from, to, problem) = await _fromTorrents(
+        final (files, audio, from, to, problem) = await _fromTorrents(
           transmission,
           ftp,
           roots,
@@ -675,23 +714,40 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
         for (final f in files) {
           found[f.path] = (found[f.path] ?? f).copyWith(hash: f.hash);
         }
+        for (final f in audio) {
+          music[f.path] = f;
+        }
       }
 
       // Puis les dossiers choisis, s'il y en a (c'est la partie lente :
       // un list() par dossier).
       if (roots.isNotEmpty && ftp != null) {
-        for (final f in await scanFolders(ftp, roots, onFolder: (d) => status('Dossier $d'))) {
+        final audio = <MediaFile>[];
+        for (final f in await scanFolders(ftp, roots,
+            onFolder: (d) => status('Dossier $d'), audio: audio)) {
           if (isMediaSize(f.path, f.size)) found.putIfAbsent(f.path, () => f);
+        }
+        // Musique : pas les bruitages de jeux ni les jingles.
+        final kept = {
+          for (final a in plausibleAlbums([for (final f in audio) (path: f.path, size: f.size, hash: null)]))
+            a.path,
+        };
+        for (final f in audio) {
+          if (kept.contains(f.path)) music.putIfAbsent(f.path, () => f);
         }
       }
 
-      final before = {for (final f in previous.files) f.path: f};
+      final before = {for (final f in [...previous.files, ...previous.music]) f.path: f};
       final now = DateTime.now();
       // Construite en entier : une correspondance abandonnée reste vide.
       var library = MediaLibrary(
         tmdb: previous.tmdb,
         files: [
           for (final f in found.values)
+            f.copyWith(added: before[f.path]?.added ?? now),
+        ],
+        music: [
+          for (final f in music.values)
             f.copyWith(added: before[f.path]?.added ?? now),
         ],
         scannedAt: now,
