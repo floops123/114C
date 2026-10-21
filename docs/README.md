@@ -17,7 +17,7 @@ et faire évoluer le code.
 | [Sur le disque et lecture](guide/sur-le-disque.md) | ta vidéothèque, le lecteur intégré |
 | [Transferts](guide/transferts.md) | piloter Transmission |
 | [Cross-seed et sans seeder](guide/cross-seed.md) | partager sur plusieurs trackers, relancer les torrents morts |
-| [Notifications et Salon](guide/notifications.md) | suivre C411 en direct |
+| [C411 et Salon](guide/notifications.md) | suivre C411 en direct : notifications, compte, salon |
 | [Dépannage](guide/depannage.md) | quand quelque chose ne marche pas |
 
 ## Notes de développement
@@ -36,7 +36,7 @@ et faire évoluer le code.
 ```
               ┌───────────────── C411 Remote ─────────────────┐
               │  Films & séries · Trackers · Transferts ·     │
-              │  Notifs · Salon · Réglages   + lecteur (mpv)  │
+              │  C411 · Salon · Réglages     + lecteur (mpv)  │
               └──┬──────────┬──────────┬──────────┬───────┬───┘
                  │          │          │          │       │
           Trackers      Transmission   TMDB     FTP(S)  Jellyfin

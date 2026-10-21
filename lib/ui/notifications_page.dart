@@ -27,11 +27,14 @@ class NotificationsPage extends ConsumerWidget {
       body: Column(
         children: [
           PageHeader(
-            title: 'Notifications',
+            title: 'C411',
             subtitle: state.unread > 0
-                ? Text('${state.unread} non lue${state.unread > 1 ? 's' : ''}',
+                ? Text(
+                    '${state.unread} notification${state.unread > 1 ? 's' : ''} '
+                    'non lue${state.unread > 1 ? 's' : ''}',
                     style: TextStyle(color: c.accent, fontSize: 12.5))
-                : null,
+                : Text('Notifications et compte',
+                    style: TextStyle(color: c.muted, fontSize: 12.5)),
             actions: [
               if (state.status == SocketStatus.unauthorized ||
                   state.status == SocketStatus.disconnected)

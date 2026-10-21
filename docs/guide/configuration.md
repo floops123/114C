@@ -46,7 +46,7 @@ Un champ par tracker ; laisse vide ceux que tu n'utilises pas.
 
 Chaque tracker renseigné rejoint la vue **Trackers** et la vérification de
 disponibilité des titres. Draupnirr ajoute en plus un onglet dédié
-(entre **Transferts** et **Notifications**) qui affiche ton compte (ratio,
+(entre **Transferts** et **C411**) qui affiche ton compte (ratio,
 crédits, seedtime, H&R), les missions en cours et la liste des badges.
 
 ## Cookie de session C411

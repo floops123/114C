@@ -1,11 +1,11 @@
-# Notifications et Salon
+# C411 et Salon
 
 [← Sommaire](../README.md)
 
-Ces deux onglets suivent **C411 en direct**. Ils demandent le
+Les onglets **C411** et **Salon** suivent **C411 en direct**. Ils demandent le
 [cookie de session](configuration.md#cookie-de-session-c411).
 
-## Notifications
+## L'onglet C411 : notifications et compte
 
 La connexion au site se fait dès le lancement et se rétablit seule en cas de
 coupure (de 2 s à 2 min d'attente).

@@ -39,7 +39,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     (Icons.movie_outlined, Icons.movie, 'Films & séries'),
     (Icons.hub_outlined, Icons.hub, 'Trackers'),
     (Icons.downloading_outlined, Icons.downloading, 'Transferts'),
-    (Icons.notifications_outlined, Icons.notifications, 'Notifications'),
+    // Notifications, compte et compteurs du site C411.
+    (Icons.notifications_outlined, Icons.notifications, _c411Label),
     (Icons.forum_outlined, Icons.forum, 'Salon'),
     (Icons.tune_outlined, Icons.tune, 'Réglages'),
   ];
@@ -53,6 +54,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   ];
 
   static const _draupnirrLabel = 'Draupnirr';
+  static const _c411Label = 'C411';
 
   int _index = 0;
   bool _routed = false;
@@ -88,7 +90,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   /// Index calculés à chaque build (les destinations peuvent changer si
   /// l'utilisateur saisit/retire sa clé Draupnirr).
-  int get _notificationsTab => _indexOf(_destinations(), 'Notifications');
+  int get _notificationsTab => _indexOf(_destinations(), _c411Label);
   int get _chatTab => _indexOf(_destinations(), 'Salon');
   int get _settingsTab => _indexOf(_destinations(), 'Réglages');
 
@@ -240,7 +242,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                       selectedIcon: _icon(destinations[i].$2, i, unread),
                       // Barre du bas : libellés courts quand ils débordent.
                       label: switch (destinations[i].$3) {
-                        'Notifications' => 'Notifs',
                         'Films & séries' => 'Films',
                         _ => destinations[i].$3,
                       },
