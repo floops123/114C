@@ -128,7 +128,8 @@ quasiment tous les formats (MKV, HEVC, AV1, HDR, DTS, TrueHD…) passent tels
 quels.
 
 - Commandes standard : barre de progression, volume, plein écran ; sur PC,
-  raccourcis clavier (espace, flèches, F…).
+  raccourcis clavier (espace, flèches, F pour le plein écran, Échap pour
+  en sortir puis pour fermer le lecteur).
 - Menus **pistes audio** et **sous-titres**.
 - **Reprise** : la position est enregistrée toutes les 10 s et retrouvée à la
   prochaine lecture (oubliée une fois la vidéo presque finie).

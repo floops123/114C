@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -135,6 +136,32 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     super.dispose();
   }
 
+  final _videoKey = GlobalKey<VideoState>();
+
+  /// Raccourcis du lecteur hors plein écran : ceux de media_kit, sauf Échap
+  /// qui ferme le lecteur (il ne servait qu'à quitter le plein écran).
+  Map<ShortcutActivator, VoidCallback> _shortcuts() {
+    void seekBy(Duration d) => _player.seek(_player.state.position + d);
+    void volumeBy(double d) =>
+        _player.setVolume((_player.state.volume + d).clamp(0.0, 100.0));
+    return {
+      const SingleActivator(LogicalKeyboardKey.mediaPlay): _player.play,
+      const SingleActivator(LogicalKeyboardKey.mediaPause): _player.pause,
+      const SingleActivator(LogicalKeyboardKey.mediaPlayPause): _player.playOrPause,
+      const SingleActivator(LogicalKeyboardKey.space): _player.playOrPause,
+      const SingleActivator(LogicalKeyboardKey.keyJ): () => seekBy(const Duration(seconds: -10)),
+      const SingleActivator(LogicalKeyboardKey.keyI): () => seekBy(const Duration(seconds: 10)),
+      const SingleActivator(LogicalKeyboardKey.arrowLeft): () => seekBy(const Duration(seconds: -2)),
+      const SingleActivator(LogicalKeyboardKey.arrowRight): () => seekBy(const Duration(seconds: 2)),
+      const SingleActivator(LogicalKeyboardKey.arrowUp): () => volumeBy(5),
+      const SingleActivator(LogicalKeyboardKey.arrowDown): () => volumeBy(-5),
+      const SingleActivator(LogicalKeyboardKey.keyF): () =>
+          _videoKey.currentState?.toggleFullscreen(),
+      const SingleActivator(LogicalKeyboardKey.escape): () =>
+          Navigator.of(context).maybePop(),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final bar = [
@@ -155,7 +182,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         onPressed: () => setState(() => _stats = !_stats),
       ),
     ];
-    final video = Video(controller: _video);
+    final video = Video(key: _videoKey, controller: _video);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -167,7 +194,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               .copyWith(topButtonBar: bar),
           child: MaterialDesktopVideoControlsTheme(
             normal: kDefaultMaterialDesktopVideoControlsThemeData.copyWith(
-                topButtonBar: bar),
+                topButtonBar: bar, keyboardShortcuts: _shortcuts()),
             fullscreen: kDefaultMaterialDesktopVideoControlsThemeDataFullscreen
                 .copyWith(topButtonBar: bar),
             child: video,
