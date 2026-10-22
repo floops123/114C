@@ -47,7 +47,7 @@ import 'dart:io';
 ///     "c411": "...",
 ///     "tr4ker": "...",
 ///     "nostradamus": "...",
-///     "astratorrent": "..."
+///     "astra": "..."
 ///   }
 /// }
 /// ```
@@ -148,7 +148,10 @@ List<String> personalJsonToFlags(Map<String, dynamic> json) {
       if (value == null) continue;
       final s = value.toString();
       if (s.isEmpty) continue;
-      out.add('--dart-define=C411_${entry.key.toString().toUpperCase()}_KEY=$s');
+      // AstraTorrent s'appelle `astra` dans l'application ; sa variable
+      // garde le nom complet, et l'ancienne clé `astratorrent` est acceptée.
+      final name = entry.key.toString() == 'astra' ? 'astratorrent' : entry.key.toString();
+      out.add('--dart-define=C411_${name.toUpperCase()}_KEY=$s');
     }
   }
 

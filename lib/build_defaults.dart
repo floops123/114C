@@ -40,6 +40,7 @@ class BuildDefaults {
       _has(_c411Key) ||
       _has(_tr4kerKey) ||
       _has(_nostradamusKey) ||
+      _has(_draupnirrKey) ||
       _has(_astratorrentKey);
 
   AppSettings toAppSettings() {
@@ -52,7 +53,9 @@ class BuildDefaults {
     if (_str(_c411Key) case final v?) apiKeys['c411'] = v;
     if (_str(_tr4kerKey) case final v?) apiKeys['tr4ker'] = v;
     if (_str(_nostradamusKey) case final v?) apiKeys['nostradamus'] = v;
-    if (_str(_astratorrentKey) case final v?) apiKeys['astratorrent'] = v;
+    if (_str(_draupnirrKey) case final v?) apiKeys['draupnirr'] = v;
+    // Clé rangée sous le nom du tracker dans l'application (`astra`).
+    if (_str(_astratorrentKey) case final v?) apiKeys['astra'] = v;
     return AppSettings(
       rpcUrl: _str(_rpcUrl) ?? '',
       rpcUser: _str(_rpcUser) ?? '',
@@ -99,6 +102,7 @@ class BuildDefaults {
     'C411_C411_KEY',
     'C411_TR4KER_KEY',
     'C411_NOSTRADAMUS_KEY',
+    'C411_DRAUPNIRR_KEY',
     'C411_ASTRATORRENT_KEY',
   ];
 }
@@ -128,6 +132,7 @@ const String _mediaFolders = String.fromEnvironment('C411_MEDIA_FOLDERS');
 const String _c411Key = String.fromEnvironment('C411_C411_KEY');
 const String _tr4kerKey = String.fromEnvironment('C411_TR4KER_KEY');
 const String _nostradamusKey = String.fromEnvironment('C411_NOSTRADAMUS_KEY');
+const String _draupnirrKey = String.fromEnvironment('C411_DRAUPNIRR_KEY');
 const String _astratorrentKey = String.fromEnvironment('C411_ASTRATORRENT_KEY');
 
 String? _str(String v) => v.isEmpty ? null : v;

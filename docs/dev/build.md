@@ -70,7 +70,8 @@ Les champs non renseignés prennent les valeurs par défaut.
     "c411": "abc",
     "tr4ker": "def",
     "nostradamus": "ghi",
-    "astratorrent": "passkey"
+    "draupnirr": "jkl",
+    "astra": "passkey"
   }
 }
 ```

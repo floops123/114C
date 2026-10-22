@@ -6,17 +6,41 @@
   "tmdbKey": "",
   "jellyfinUrl": "",
   "jellyfinKey": "",
+  "filesProtocol": "ftp",
   "ftpHost": "",
   "ftpPort": 21,
   "ftpUser": "",
   "ftpPassword": "",
   "ftpTls": true,
+  "webdavUrl": "",
+  "webdavUser": "",
+  "webdavPassword": "",
+  "localRoot": "",
   "mediaFolders": [],
   "apiKeys": {
     "c411": "",
     "tr4ker": "",
     "nostradamus": "",
     "draupnirr": "",
-    "astratorrent": ""
+    "astra": ""
+  },
+  "web": {
+    "host": "127.0.0.1",
+    "port": 8411,
+    "password": ""
+  },
+  "music": {
+    "host": "127.0.0.1",
+    "port": 8412,
+    "password": "",
+    "contact": ""
+  },
+  "books": {
+    "host": "127.0.0.1",
+    "port": 8413,
+    "password": "",
+    "googleBooksKey": "",
+    "cacheGb": 2,
+    "contact": ""
   }
 }

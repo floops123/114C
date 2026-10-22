@@ -36,7 +36,10 @@ class AppSettings {
           // Ancien format : une seule clé, celle de C411.
           if (json['apiKey'] is String) 'c411': json['apiKey'] as String,
           ...?(json['apiKeys'] as Map?)?.cast<String, String>(),
-        },
+        }.map((k, v) => MapEntry(
+            // Variantes compilées avant correction : AstraTorrent sous son
+            // nom complet, alors que l'application lit `astra`.
+            k == 'astratorrent' ? 'astra' : k, v)),
         sessionCookie: json['sessionCookie'] as String? ?? '',
         tmdbKey: json['tmdbKey'] as String? ?? '',
         jellyfinUrl: json['jellyfinUrl'] as String? ?? '',

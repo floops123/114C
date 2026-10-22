@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/build_defaults.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +37,8 @@ void main() {
     expect((round.useWebDav, round.webdavUrl, round.webdavUser, round.webdavPassword),
         (true, 'https://dav.x/', 'moi', 's'));
     expect(round.hasFiles, isTrue, reason: 'WebDAV suffit, sans FTP');
+    // Ancienne variante compilée : AstraTorrent rangé sous son nom complet.
+    expect(AppSettings.fromJson({'apiKeys': {'astratorrent': 'pk'}}).apiKeys, {'astra': 'pk'});
   });
 
   test('allVariables : liste non vide et stables', () {
@@ -46,6 +49,11 @@ void main() {
     // À chaque nouveau champ ajouté à AppSettings, il faut aussi ajouter
     // la variable correspondante ici ET dans `BuildDefaults.toAppSettings`.
     expect(BuildDefaults.allVariables, contains('C411_WEBDAV_URL'));
-    expect(BuildDefaults.allVariables.length, 22);
+    expect(BuildDefaults.allVariables.length, 23);
+    // Chaque tracker a sa variable (build_personal produit C411_<TRACKER>_KEY).
+    for (final t in Tracker.values) {
+      final name = t == Tracker.astra ? 'ASTRATORRENT' : t.name.toUpperCase();
+      expect(BuildDefaults.allVariables, contains('C411_${name}_KEY'));
+    }
   });
 }

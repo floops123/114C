@@ -1,11 +1,30 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/build_defaults.dart';
+import 'package:c411_remote/core/settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../tool/build_personal.dart' as tool;
 
 void main() {
+  test('personal.json.example : tous les réglages, et chacun reconnu au build', () {
+    final example = jsonDecode(File('personal.json.example').readAsStringSync()) as Map<String, dynamic>;
+    final settings = const AppSettings().toJson().keys.toSet();
+    expect(example.keys.toSet().containsAll(settings), isTrue,
+        reason: 'manquants : ${settings.difference(example.keys.toSet())}');
+    expect((example['apiKeys'] as Map).keys.toSet(), {for (final t in Tracker.values) t.name});
+    // Une valeur dans chaque champ : chacune donne une variable connue.
+    final filled = {
+      for (final k in settings) k: k == 'mediaFolders' ? ['/a'] : k == 'ftpPort' ? 21 : 'x',
+      'apiKeys': {for (final t in Tracker.values) t.name: 'k'},
+    };
+    final flags = tool.personalJsonToFlags(filled);
+    final vars = {for (final f in flags) f.substring('--dart-define='.length).split('=').first};
+    expect(vars, BuildDefaults.allVariables.toSet());
+  });
+
   test('JSON vide → aucun flag', () {
     expect(tool.personalJsonToFlags(const {}), isEmpty);
   });
@@ -60,6 +79,9 @@ void main() {
     expect(flags, contains('--dart-define=C411_TR4KER_KEY=k2'));
     expect(flags, contains('--dart-define=C411_NOSTRADAMUS_KEY=k3'));
     expect(flags, contains('--dart-define=C411_ASTRATORRENT_KEY=passkey'));
+    // Nom du tracker dans l'application : même variable.
+    expect(tool.personalJsonToFlags({'apiKeys': {'astra': 'pk', 'draupnirr': 'd'}}),
+        ['--dart-define=C411_ASTRATORRENT_KEY=pk', '--dart-define=C411_DRAUPNIRR_KEY=d']);
   });
 
   test('champs vides ou nuls : ignorés', () {
