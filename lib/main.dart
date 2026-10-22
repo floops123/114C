@@ -43,6 +43,19 @@ class App extends ConsumerWidget {
   static ThemeData _theme(AppFont font, Brightness brightness) =>
       _themes[(font, brightness)] ??= buildTheme(brightness, font: font.family);
 
+  static final _navigator = GlobalKey<NavigatorState>();
+
+  /// Échap revient en arrière (version PC), comme la flèche de retour.
+  /// Dialogues et lecteur traitent la touche avant : elle ne remonte jusqu'ici
+  /// que si rien d'autre ne s'en sert.
+  static Widget _escapeGoesBack(Widget child) => CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              _navigator.currentState?.maybePop(),
+        },
+        child: child,
+      );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(uiPrefsProvider.select((p) => p.themeMode));
@@ -56,14 +69,15 @@ class App extends ConsumerWidget {
       scrollBehavior: const AppScrollBehavior(),
       // Les polices n'ont pas la même taille apparente : on la corrige,
       // par-dessus le réglage du système.
+      navigatorKey: _navigator,
       builder: font.scale == 1
-          ? null
+          ? (context, child) => _escapeGoesBack(child!)
           : (context, child) {
               final media = MediaQuery.of(context);
               return MediaQuery(
                 data: media.copyWith(
                     textScaler: TextScaler.linear(media.textScaler.scale(1) * font.scale)),
-                child: child!,
+                child: _escapeGoesBack(child!),
               );
             },
       home: const HomeShell(),

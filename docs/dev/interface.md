@@ -63,10 +63,11 @@ Principes visuels :
 - `SmoothWheelBinding` (`smooth_wheel.dart`) adoucit la molette : un cran
   devient un court défilement fluide, au lieu d'un saut.
 - `AppScrollBehavior` autorise le glisser à la souris sur les listes.
-- Rangées horizontales (`HorizontalScroller`) : la molette fait défiler la
-  page, Maj + molette la rangée (Flutter s'en charge). Les rangées ne
-  retiennent plus la molette : avec plus de cent titres, la page ne
-  descendait presque plus.
+- `HorizontalScroller` : sur les rangées de pastilles, la molette verticale
+  les fait défiler de côté. Pas sur les rangées d'affiches
+  (`posterCarousel`, `wheel: false`) : elles couvrent l'écran, et une rangée
+  de cent titres retenait la molette. Maj + molette fait défiler n'importe
+  quelle rangée.
 
 ## Rester fluide
 

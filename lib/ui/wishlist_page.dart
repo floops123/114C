@@ -425,8 +425,10 @@ class SectionTitle extends StatelessWidget {
       );
 }
 
-/// Rangée horizontale de cartes, utilisable à la molette et à la souris.
+/// Rangée horizontale de cartes : glisser à la souris ou Maj + molette ; la
+/// molette seule fait défiler la page.
 Widget posterCarousel(int count, Widget Function(int i) item) => HorizontalScroller(
+      wheel: false,
       builder: (controller) => ListView.separated(
         controller: controller,
         scrollDirection: Axis.horizontal,

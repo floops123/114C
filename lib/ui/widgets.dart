@@ -481,14 +481,21 @@ class MouseSelectsText extends StatelessWidget {
   }
 }
 
-/// Liste horizontale avec son contrôleur. À la molette (version PC), Maj +
-/// molette la fait défiler de côté (géré par Flutter) ; la molette seule fait
-/// défiler la page : une rangée de plus de cent titres la retenait sinon.
+/// Liste horizontale utilisable à la molette (version PC).
+///
+/// Avec [wheel] (rangées de pastilles), la molette verticale la fait défiler
+/// de côté, puis rend la main à la page une fois au bout. Sans (rangées
+/// d'affiches, qui couvrent l'écran), la molette reste à la page : une rangée
+/// de cent titres la retenait sinon. Maj + molette fait défiler la rangée
+/// dans les deux cas (géré par Flutter).
 class HorizontalScroller extends StatefulWidget {
-  const HorizontalScroller({super.key, required this.builder});
+  const HorizontalScroller({super.key, required this.builder, this.wheel = true});
 
   /// Construit la liste horizontale avec le contrôleur à lui donner.
   final Widget Function(ScrollController controller) builder;
+
+  /// La molette verticale fait défiler la rangée.
+  final bool wheel;
 
   @override
   State<HorizontalScroller> createState() => _HorizontalScrollerState();
@@ -503,8 +510,22 @@ class _HorizontalScrollerState extends State<HorizontalScroller> {
     super.dispose();
   }
 
+  void _onSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_controller.hasClients) return;
+    final delta = event.scrollDelta;
+    // Pavé tactile ou molette horizontale : la liste s'en charge déjà.
+    if (delta.dy == 0 || delta.dx != 0) return;
+    final p = _controller.position;
+    final atEnd = delta.dy > 0 ? p.pixels >= p.maxScrollExtent : p.pixels <= p.minScrollExtent;
+    if (atEnd) return; // La page défile.
+    GestureBinding.instance.pointerSignalResolver.register(
+        event, (_) => p.pointerScroll(delta.dy));
+  }
+
   @override
-  Widget build(BuildContext context) => widget.builder(_controller);
+  Widget build(BuildContext context) => widget.wheel
+      ? Listener(onPointerSignal: _onSignal, child: widget.builder(_controller))
+      : widget.builder(_controller);
 }
 
 /// Rangée horizontale de pastilles sélectionnables.
