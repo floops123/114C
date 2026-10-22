@@ -6,6 +6,7 @@ import '../api/c411_socket.dart';
 import '../core/format.dart';
 import '../state/c411_overview.dart';
 import '../state/notifications.dart';
+import '../state/torrent_updates.dart';
 import '../state/torrents.dart';
 import 'c411_account.dart';
 import 'chat_page.dart';
@@ -515,6 +516,7 @@ IconData _iconFor(String type) => switch (type) {
   'token_attribution' => Icons.toll_outlined,
   'ic_level_up' => Icons.trending_up_rounded,
   'torrent_deleted' => Icons.delete_outline_rounded,
+  final t when isTorrentUpdateType(t) => Icons.published_with_changes_rounded,
   'channel_reply' || 'channel_mention' => Icons.forum_outlined,
   final t when t.contains('message') => Icons.mail_outline_rounded,
   final t when t.contains('torrent') => Icons.movie_outlined,

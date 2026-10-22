@@ -68,6 +68,14 @@ Transmission par son empreinte, le **met en pause** et lui ajoute l'étiquette
 Transferts (filtre par étiquette). Chaque notification n'est appliquée
 qu'une fois : un torrent remis en route n'est pas remis en pause.
 
+**Torrent modifié sur le site** : l'application télécharge le nouveau
+.torrent et le met à la place de l'ancien dans Transmission. Il est ajouté
+dans le même dossier, avec les mêmes étiquettes ; l'ancien est retiré **sans
+ses données**, puis le nouveau est vérifié : seules les parties qui ont
+changé se retéléchargent. Il repart s'il tournait et reste en pause s'il
+l'était. Si l'empreinte n'a pas changé, il n'y a rien à faire. Le cookie de
+session C411 est nécessaire pour télécharger le .torrent.
+
 La pastille de l'onglet compte les non lues **pas encore vues dans
 l'application** ; l'état « lu » du site n'est pas modifié.
 

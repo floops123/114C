@@ -11,6 +11,8 @@ import '../api/c411_socket.dart';
 import '../api/transmission.dart';
 import '../core/preferences.dart';
 import '../core/settings.dart';
+import 'palliative.dart' show c411SiteApiProvider;
+import 'torrent_updates.dart';
 import 'torrents.dart';
 
 // Événements observés sur le WebSocket de C411 :
@@ -508,36 +510,57 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
       }
       _loadedOnce = true;
       _persist();
-      await holdDeleted(fetched);
+      await applyTorrentEvents(fetched);
     } on ChatException catch (e) {
       if (ref.mounted) state = state.copyWith(notifError: () => e.message);
     }
   }
 
-  /// Torrents supprimés du site : en pause et étiquetés dans le client, une
-  /// seule fois par notification. Sans client joignable, on réessaiera au
-  /// prochain relevé.
-  Future<void> holdDeleted(List<AppNotification> notes) async {
-    final todo = [
-      for (final n in notes)
-        if (n.deletedHash != null && n.id != null && !_handled.contains(n.id))
-          n,
-    ];
+  /// Torrents supprimés ou modifiés sur le site, appliqués au client une
+  /// seule fois par notification : supprimé, il est mis en pause et
+  /// étiqueté ; modifié, son .torrent est remplacé. Sans client ou site
+  /// joignable, on réessaiera au prochain relevé.
+  Future<void> applyTorrentEvents(List<AppNotification> notes) async {
+    bool todo(AppNotification n) => n.id != null && !_handled.contains(n.id);
+    final deleted = [for (final n in notes) if (n.deletedHash != null && todo(n)) n];
+    final updates = [for (final n in notes) if (isTorrentUpdate(n) && todo(n)) n];
     final client = ref.read(transmissionProvider);
-    if (todo.isEmpty || client == null) return;
-    final List<String> held;
-    try {
-      held = await holdDeletedTorrents(client, todo);
-    } on Object {
-      return;
+    if ((deleted.isEmpty && updates.isEmpty) || client == null) return;
+    final done = <int>{};
+    final messages = <String>[];
+    if (deleted.isNotEmpty) {
+      try {
+        final held = await holdDeletedTorrents(client, deleted);
+        done.addAll(deleted.map((n) => n.id!));
+        if (held.isNotEmpty) {
+          messages.add(held.length == 1
+              ? 'Supprimé du site, mis en pause : ${held.first}'
+              : '${held.length} torrents supprimés du site mis en pause');
+        }
+      } on Object {
+        // Client injoignable : au prochain relevé.
+      }
     }
-    if (!ref.mounted) return;
-    _handled = {..._handled, for (final n in todo) n.id!};
+    final site = ref.read(c411SiteApiProvider);
+    // Plus ancienne d'abord : une suite de modifications s'applique dans
+    // l'ordre.
+    for (final n in updates.reversed) {
+      if (site == null || !ref.mounted) break;
+      try {
+        final (outcome, name) = await updateModifiedTorrent(client, site, n);
+        done.add(n.id!);
+        if (outcome == UpdateOutcome.updated) {
+          messages.add('Modifié sur le site, mis à jour : $name');
+        }
+      } on Object {
+        // Site ou client injoignable : au prochain relevé.
+      }
+    }
+    if (!ref.mounted || done.isEmpty) return;
+    _handled = {..._handled, ...done};
     ref.read(notificationStoreProvider).saveHandled(_handled);
-    if (held.isEmpty) return;
-    _arrive(held.length == 1
-        ? 'Supprimé du site, mis en pause : ${held.first}'
-        : '${held.length} torrents supprimés du site mis en pause');
+    if (messages.isEmpty) return;
+    _arrive(messages.length == 1 ? messages.first : messages.join(' · '));
     ref.read(torrentsProvider.notifier).refresh();
   }
 
