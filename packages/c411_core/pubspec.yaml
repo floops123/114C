@@ -8,4 +8,4 @@ environment:
 
 dependencies:
   # Réponses PROPFIND du client WebDAV.
-  xml: '>=6.6.1 <8.0.0'
+  xml: ^7.1.0
