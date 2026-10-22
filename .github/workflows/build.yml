@@ -70,7 +70,8 @@ jobs:
   linux:
     name: Linux
     needs: test
-    runs-on: ubuntu-latest
+    # Version fixe : l'AppImage exige au moins la glibc de cette image.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       # GTK pour Flutter, libmpv pour le lecteur (media_kit), libsecret pour
@@ -91,10 +92,15 @@ jobs:
       - run: flutter build linux --release
       - name: Archive
         run: tar -czf c411_remote-linux-x64.tar.gz -C build/linux/x64/release bundle
+      # Un seul fichier exécutable, libmpv comprise (voir le script).
+      - name: AppImage
+        run: tool/build_appimage.sh
       - uses: actions/upload-artifact@v4
         with:
           name: c411_remote-linux-${{ github.sha }}
-          path: c411_remote-linux-x64.tar.gz
+          path: |
+            c411_remote-linux-x64.tar.gz
+            build/appimage/C411_Remote-x86_64.AppImage
           retention-days: 14
 
   windows:

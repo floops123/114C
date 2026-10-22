@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=C411 Remote
+Comment=Trackers, Transmission et vidéothèque de ta seedbox
+Exec=c411_remote
+Icon=c411_remote
+Categories=Network;FileTransfer;P2P;
+Terminal=false
+StartupWMClass=c411_remote

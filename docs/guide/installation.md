@@ -3,7 +3,7 @@
 [← Sommaire](../README.md)
 
 C411 Remote est une application Flutter. Elle se compile depuis les sources ;
-il n'y a pas (encore) de paquet tout prêt.
+la CI GitHub produit aussi un APK, une AppImage Linux et une archive Windows.
 
 ## Ce qu'il faut
 
@@ -37,6 +37,22 @@ flutter build linux         # version optimisée : build/linux/x64/release/bundl
 
 Le dossier `bundle/` est autonome : copie-le où tu veux et lance
 `bundle/c411_remote`.
+
+### Un seul fichier : AppImage
+
+```sh
+flutter build linux --release
+tool/build_appimage.sh      # → build/appimage/C411_Remote-x86_64.AppImage
+```
+
+Le fichier se lance directement (`chmod +x` puis double-clic), sans rien
+installer : libmpv et ffmpeg sont embarqués (d'où ~100 Mo). GTK 3, le
+trousseau (libsecret) et OpenGL restent ceux du système, présents sur tout
+bureau Linux. Il faut une distribution au moins aussi récente que celle de la
+compilation (glibc) : Ubuntu 24.04, Debian 13, Fedora 40 ou plus récent pour
+l'AppImage de la CI GitHub, publiée avec chaque compilation à côté de
+l'archive. Les outils (linuxdeploy, appimagetool) sont téléchargés par le
+script au premier passage.
 
 > **Lecture fluide sous Linux.** Le projet embarque une copie corrigée du
 > module vidéo (`third_party/media_kit_video`) : sans elle, avec le moteur de
