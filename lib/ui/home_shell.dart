@@ -165,14 +165,19 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final c = context.colors;
     _visited.add(destinations[_index].$3);
     // Onglets masqués : gardés en mémoire une fois visités, mais leurs
-    // animations à l'arrêt ; jamais visités : pas construits du tout.
+    // animations à l'arrêt ; jamais visités : pas construits du tout. Leurs
+    // info-bulles sont retirées : animation gelée, une info-bulle ouverte
+    // restait affichée par-dessus l'onglet suivant.
     final body = IndexedStack(index: _index, children: [
       for (final (i, page) in pages.indexed)
         TickerMode(
           enabled: i == _index,
-          child: _visited.contains(destinations[i].$3)
-              ? page
-              : const SizedBox.shrink(),
+          child: TooltipVisibility(
+            visible: i == _index,
+            child: _visited.contains(destinations[i].$3)
+                ? page
+                : const SizedBox.shrink(),
+          ),
         ),
     ]);
 
