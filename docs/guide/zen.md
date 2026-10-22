@@ -72,7 +72,11 @@ surtout de la part de la journée réellement partagée.
   ces pages.
 - **À télécharger puis partager** : **Chercher** parcourt les sorties C411
   qui ont 1 à 50 seeders (les sorties sans seeder sont sautées) et estime
-  chacune **en te comptant parmi les seeders**. Classement **par torrent**
+  chacune **en te comptant parmi les seeders**. **Catégories** (repliées)
+  limite la recherche aux catégories ou sous-catégories cochées (aucune :
+  toutes). **Examiner** fixe le nombre de sorties lues : de 1 500 à 20 000,
+  partagées entre les catégories cochées, ou *Tout* pour aller jusqu'aux
+  sorties à 50 seeders. Classement **par torrent**
   (si c'est le nombre de torrents qui te limite), **par Go** (si c'est
   le disque) ou **par note** (ta note moyenne est ton indicateur de
   contribution, et l'arbre de progression compte les torrents bien notés ;

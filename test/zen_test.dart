@@ -318,9 +318,45 @@ void main() {
       final perDay = [for (final i in state.items) i.estimate.perDay];
       expect(perDay, [...perDay]..sort((a, b) => b.compareTo(a)));
 
+      expect(state.scanned, 600, reason: 'jusqu’à la page qui dépasse 50 seeders, sous le plafond de 1 500');
       expect(await notifier.send(), 3);
       expect(transmission.added, 3);
       expect(container.read(zenOpportunitiesProvider).items.where((i) => i.done), hasLength(3));
+    });
+
+    test('catégories cochées, plafond partagé entre elles, ou tout jusqu’à 50 seeders', () async {
+      final c411 = _Catalog();
+      final container = ProviderContainer(overrides: [
+        trackersProvider.overrideWithValue({Tracker.c411: c411}),
+        transmissionProvider.overrideWithValue(_Transmission()),
+        torrentsProvider.overrideWith(_Torrents.new),
+        c411SiteApiProvider.overrideWithValue(null),
+        c411OverviewProvider.overrideWith((ref) async => _overview),
+      ]);
+      addTearDown(container.dispose);
+      await container.read(c411OverviewProvider.future);
+      final notifier = container.read(zenOpportunitiesProvider.notifier);
+      await notifier.loadCategories();
+      expect(container.read(zenOpportunitiesProvider).categories.map((c) => c.name), ['Films & Vidéos', 'Jeux Vidéo']);
+
+      notifier
+        ..setFilter({(category: 1, subcategory: null), (category: 2, subcategory: null)})
+        ..setMaxScan(300);
+      await notifier.scan();
+      var state = container.read(zenOpportunitiesProvider);
+      expect({for (final f in c411.filters) f.$1}, {1, 2});
+      expect(state.scanned, inInclusiveRange(300, 400), reason: '150 chacune, à la page près');
+      expect({for (final i in state.items) int.parse(i.release.id) % 2}, {0, 1}, reason: 'les deux catégories');
+
+      c411.filters.clear();
+      notifier
+        ..setFilter({})
+        ..setMaxScan(null);
+      await notifier.scan();
+      state = container.read(zenOpportunitiesProvider);
+      expect(c411.filters.toSet(), {(null, null)}, reason: 'aucune cochée : toutes');
+      expect(state.items.every((i) => i.release.seeders <= 50), isTrue);
+      expect(state.items.length, 499, reason: 'les 500 sorties de 1 à 50 seeders, sauf celle déjà là');
     });
   });
 }
@@ -334,6 +370,9 @@ final _overview = C411Overview(
 /// seeder, puis 1, 2, 3… seeders.
 class _Catalog implements TrackerApi {
   final asked = <int>[];
+
+  /// Catégorie et sous-catégorie de chaque requête.
+  final filters = <(int?, int?)>[];
   late final all = [
     for (var i = 0; i < 2000; i++)
       Release(
@@ -356,7 +395,10 @@ class _Catalog implements TrackerApi {
   @override
   Set<ReleaseSort> get serverSorts => ReleaseSort.values.toSet();
   @override
-  Future<List<Category>> categories() async => const [];
+  Future<List<Category>> categories() async => [
+        Category(1, 'Films & Vidéos', [Subcategory(11, 'Film')]),
+        Category(2, 'Jeux Vidéo', const []),
+      ];
   @override
   Future<ReleasePage> releases(
       {int page = 1,
@@ -367,9 +409,16 @@ class _Catalog implements TrackerApi {
       ReleaseSort sort = ReleaseSort.date,
       bool ascending = false}) async {
     asked.add(page);
+    filters.add((categoryId, subcategoryId));
     expect((sort, ascending), (ReleaseSort.seeders, true));
-    final items = all.skip((page - 1) * perPage).take(perPage).toList();
-    return ReleasePage(items, page, (all.length / perPage).ceil(), all.length);
+    // Catégorie 1 : les numéros pairs ; 2 : les impairs.
+    final list = switch (categoryId) {
+      1 => all.where((r) => int.parse(r.id).isEven).toList(),
+      2 => all.where((r) => int.parse(r.id).isOdd).toList(),
+      _ => all,
+    };
+    final items = list.skip((page - 1) * perPage).take(perPage).toList();
+    return ReleasePage(items, page, (list.length / perPage).ceil(), list.length);
   }
 
   @override

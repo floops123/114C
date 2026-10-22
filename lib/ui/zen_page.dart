@@ -10,6 +10,7 @@ import '../state/palliative.dart';
 import '../state/zen_opportunities.dart';
 import '../state/zen_portfolio.dart';
 import 'c411_account.dart';
+import 'category_tree.dart';
 import 'charts.dart';
 import 'cross_seed_page.dart';
 import 'revive_page.dart';
@@ -467,8 +468,42 @@ class _OpportunitiesTab extends ConsumerWidget {
             selected: limits.freeleechOnly,
             onSelected: (v) => notifier.setLimits(limits.copyWith(freeleechOnly: v)),
           ),
+          _Choice<int?>(
+            label: 'Examiner',
+            value: state.maxScan,
+            options: const [1500, 3000, 5000, 10000, 20000, null],
+            text: (v) => v == null ? 'Tout (≤ 50 seeders)' : '${frNumber(v)} sorties',
+            onChanged: state.scanning ? (_) {} : notifier.setMaxScan,
+          ),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        // Catégories : repliées, chargées à la première ouverture.
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: 8),
+            dense: true,
+            title: Text(
+              state.filter.isEmpty
+                  ? 'Catégories : toutes'
+                  : 'Catégories : ${state.filter.length} cochée${state.filter.length > 1 ? 's' : ''}',
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+            ),
+            onExpansionChanged: (open) {
+              if (open) notifier.loadCategories();
+            },
+            children: [
+              CategoryTree(
+                categories: state.categories,
+                loading: state.loadingCategories,
+                selected: state.filter,
+                onChanged: notifier.setFilter,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
         Row(children: [
           if (state.scanning) ...[
             const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),

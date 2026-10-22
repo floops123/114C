@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/zen.dart';
+import 'bulk_import.dart' show CategoryRef;
 import 'c411_overview.dart';
 import 'palliative.dart';
 import 'releases.dart';
@@ -91,7 +92,22 @@ class ZenOpportunitiesState {
     this.sent = 0,
     this.toSend = 0,
     this.error,
+    this.categories = const [],
+    this.loadingCategories = false,
+    this.filter = const {},
+    this.maxScan = 1500,
   });
+
+  /// Catégories de C411, pour le filtre ; [filter] : celles cochées (aucune :
+  /// toutes).
+  final List<Category> categories;
+  final bool loadingCategories;
+  final Set<CategoryRef> filter;
+
+  /// Sorties avec des seeders à examiner au plus, toutes catégories cochées
+  /// confondues ; null : jusqu'à [ZenOpportunitiesNotifier.maxSeeders]
+  /// seeders.
+  final int? maxScan;
 
   /// Dans l'ordre du classement.
   final List<ZenOpportunity> items;
@@ -127,6 +143,10 @@ class ZenOpportunitiesState {
     int? sent,
     int? toSend,
     String? Function()? error,
+    List<Category>? categories,
+    bool? loadingCategories,
+    Set<CategoryRef>? filter,
+    int? Function()? maxScan,
   }) =>
       ZenOpportunitiesState(
         items: items ?? this.items,
@@ -140,6 +160,10 @@ class ZenOpportunitiesState {
         sent: sent ?? this.sent,
         toSend: toSend ?? this.toSend,
         error: error != null ? error() : this.error,
+        categories: categories ?? this.categories,
+        loadingCategories: loadingCategories ?? this.loadingCategories,
+        filter: filter ?? this.filter,
+        maxScan: maxScan != null ? maxScan() : this.maxScan,
       );
 }
 
@@ -191,9 +215,6 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
   /// Sorties demandées par page.
   static const perPage = 100;
 
-  /// Pages lues au plus après la première avec des seeders.
-  static const maxPages = 15;
-
   /// Au-delà, la taille × seeders ne rapporte plus rien (sous 100 Go).
   static const maxSeeders = 50;
 
@@ -217,6 +238,24 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
     _reselect();
   }
 
+  /// Catégories de C411 (une fois).
+  Future<void> loadCategories() async {
+    if (state.categories.isNotEmpty || state.loadingCategories) return;
+    final api = ref.read(trackersProvider)[Tracker.c411];
+    if (api == null) return;
+    state = state.copyWith(loadingCategories: true);
+    try {
+      final categories = await api.categories();
+      if (ref.mounted) state = state.copyWith(categories: categories, loadingCategories: false);
+    } on TrackerException catch (e) {
+      if (ref.mounted) state = state.copyWith(loadingCategories: false, error: () => e.message);
+    }
+  }
+
+  void setFilter(Set<CategoryRef> filter) => state = state.copyWith(filter: filter);
+
+  void setMaxScan(int? maxScan) => state = state.copyWith(maxScan: () => maxScan);
+
   void toggle(String key, bool selected) => state = state.copyWith(items: [
         for (final i in state.items) i.key == key ? i.copyWith(selected: selected) : i,
       ]);
@@ -226,8 +265,10 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
     state = state.copyWith(scanning: false);
   }
 
-  /// Parcourt les sorties C411 par seeders croissants : saute les sorties
-  /// sans seeder (dichotomie), puis lit jusqu'à [maxSeeders] seeders.
+  /// Parcourt les sorties C411 par seeders croissants, catégorie cochée par
+  /// catégorie cochée (toutes si aucune) : saute les sorties sans seeder
+  /// (dichotomie), puis lit jusqu'à [maxSeeders] seeders, ou jusqu'à
+  /// [ZenOpportunitiesState.maxScan] sorties examinées en tout.
   Future<void> scan() async {
     final api = ref.read(trackersProvider)[Tracker.c411];
     if (api == null) {
@@ -255,54 +296,69 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
       error: () => null,
     );
 
-    Future<ReleasePage> get(int page) => api.releases(
-        page: page, perPage: perPage, sort: ReleaseSort.seeders, ascending: true);
     final found = <String, ZenOpportunity>{};
     var scanned = 0;
+    final selections = state.filter.isEmpty ? <CategoryRef?>[null] : [...state.filter];
+    final maxScan = state.maxScan;
     try {
-      final first = await get(1);
-      if (generation != _generation || !ref.mounted) return;
-      var page = 1;
-      var current = first;
-      // Pages entières sans seeder : la première qui en a, par dichotomie.
-      if (first.items.isNotEmpty && first.items.last.seeders < 1 && first.totalPages > 1) {
-        var lo = 2, hi = first.totalPages;
-        final seen = <int, ReleasePage>{};
-        for (var probes = 0; lo < hi && probes < 14; probes++) {
-          final mid = (lo + hi) ~/ 2;
-          final r = seen[mid] = await get(mid);
-          if (generation != _generation || !ref.mounted) return;
-          if (r.items.isEmpty || r.items.last.seeders >= 1) {
-            hi = mid;
-          } else {
-            lo = mid + 1;
-          }
-        }
-        page = lo;
-        current = seen[lo] ?? await get(lo);
-      }
-      for (var read = 0; read < maxPages; read++) {
+      for (final (index, selection) in selections.indexed) {
+        // Ce qui reste à examiner, partagé entre les catégories restantes.
+        final quota =
+            maxScan == null ? null : ((maxScan - scanned) / (selections.length - index)).ceil();
+        if (quota != null && quota <= 0) break;
+        final before = scanned;
+        Future<ReleasePage> get(int page) => api.releases(
+            page: page,
+            perPage: perPage,
+            categoryId: selection?.category,
+            subcategoryId: selection?.subcategory,
+            sort: ReleaseSort.seeders,
+            ascending: true);
+        final first = await get(1);
         if (generation != _generation || !ref.mounted) return;
-        scanned += current.items.length;
-        for (final r in current.items) {
-          if (r.seeders < 1 || r.seeders > maxSeeders || r.size <= 0) continue;
-          if (r.infoHash != null && present.contains(r.infoHash)) continue;
-          found[r.id] = ZenOpportunity(
-            release: r,
-            estimate: estimateZen(bytes: r.size, seeders: r.seeders, bonus: bonus, joining: true),
-          );
+        var page = 1;
+        var current = first;
+        // Pages entières sans seeder : la première qui en a, par dichotomie.
+        if (first.items.isNotEmpty && first.items.last.seeders < 1 && first.totalPages > 1) {
+          var lo = 2, hi = first.totalPages;
+          final seen = <int, ReleasePage>{};
+          for (var probes = 0; lo < hi && probes < 14; probes++) {
+            final mid = (lo + hi) ~/ 2;
+            final r = seen[mid] = await get(mid);
+            if (generation != _generation || !ref.mounted) return;
+            if (r.items.isEmpty || r.items.last.seeders >= 1) {
+              hi = mid;
+            } else {
+              lo = mid + 1;
+            }
+          }
+          page = lo;
+          current = seen[lo] ?? await get(lo);
         }
-        state = state.copyWith(
-          scanned: scanned,
-          items: rankAndSelect(found.values.toList(),
-              ranking: state.ranking, limits: state.limits, ratioBudget: budget),
-        );
-        final more = page < current.totalPages &&
-            current.items.isNotEmpty &&
-            current.items.last.seeders <= maxSeeders;
-        if (!more) break;
-        page++;
-        current = await get(page);
+        while (true) {
+          if (generation != _generation || !ref.mounted) return;
+          scanned += current.items.where((r) => r.seeders >= 1).length;
+          for (final r in current.items) {
+            if (r.seeders < 1 || r.seeders > maxSeeders || r.size <= 0) continue;
+            if (r.infoHash != null && present.contains(r.infoHash)) continue;
+            found[r.id] = ZenOpportunity(
+              release: r,
+              estimate: estimateZen(bytes: r.size, seeders: r.seeders, bonus: bonus, joining: true),
+            );
+          }
+          state = state.copyWith(
+            scanned: scanned,
+            items: rankAndSelect(found.values.toList(),
+                ranking: state.ranking, limits: state.limits, ratioBudget: budget),
+          );
+          final more = page < current.totalPages &&
+              current.items.isNotEmpty &&
+              current.items.last.seeders <= maxSeeders &&
+              (quota == null || scanned - before < quota);
+          if (!more) break;
+          page++;
+          current = await get(page);
+        }
       }
     } on TrackerException catch (e) {
       if (ref.mounted) state = state.copyWith(error: () => e.message);
