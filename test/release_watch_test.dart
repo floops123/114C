@@ -56,10 +56,12 @@ class _Torrents extends TorrentsNotifier {
 class _Transmission extends TransmissionClient {
   _Transmission() : super(url: 'http://x');
   int added = 0;
+  final labels = <List<String>>[];
   @override
   Future<bool> addTorrent(
       {Uint8List? metainfo, String? filename, AddOptions options = const AddOptions()}) async {
     added++;
+    labels.add(options.labels);
     return true;
   }
 
@@ -434,6 +436,8 @@ void main() {
     await tester.tap(find.byTooltip('Envoyer à Transmission'));
     await tester.pumpAndSettle();
     expect(transmission.added, 3);
+    // Étiquette de catégorie posée sur chacun (1080p sans catégorie : film).
+    expect(transmission.labels, everyElement(['Films']));
     expect(find.text('3 ajoutés à Transmission'), findsOneWidget);
     // Sélection refermée après l'envoi.
     expect(find.text('Nouveautés'), findsOneWidget);
