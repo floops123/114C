@@ -51,33 +51,51 @@ class DraupnirrPage extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: notifier.refresh,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            if (state.error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: ErrorBanner(state.error!,
-                    onRetry: () => notifier.refresh()),
-              ),
-            if (state.loadedAt != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  'À jour ${formatAgo(state.loadedAt!)}',
-                  style: TextStyle(color: c.muted, fontSize: 12),
-                ),
-              ),
+        child: LayoutBuilder(builder: (context, box) {
+          // PC : le compte et les badges à gauche, les missions à droite.
+          final wide = box.maxWidth >= 1100;
+          final left = [
             if (account != null) _AccountSection(account: account),
             if (account == null && !state.loading)
               EmptyState(Icons.shield_outlined,
                   'Aucune donnée. Appuie sur « Actualiser ».'),
+            if (state.badges.isNotEmpty) _BadgesSection(items: state.badges),
+          ];
+          final right = [
             if (state.missions.isNotEmpty)
               _MissionsSection(items: state.missions),
-            if (state.badges.isNotEmpty)
-              _BadgesSection(items: state.badges),
-          ],
-        ),
+          ];
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              if (state.error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ErrorBanner(state.error!,
+                      onRetry: () => notifier.refresh()),
+                ),
+              if (state.loadedAt != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'À jour ${formatAgo(state.loadedAt!)}',
+                    style: TextStyle(color: c.muted, fontSize: 12),
+                  ),
+                ),
+              if (wide && right.isNotEmpty)
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(flex: 5, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: left)),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 6, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: right)),
+                ])
+              else ...[
+                ...left.take(left.length - (state.badges.isNotEmpty ? 1 : 0)),
+                ...right,
+                if (state.badges.isNotEmpty) left.last,
+              ],
+            ],
+          );
+        }),
       ),
     );
   }
@@ -90,36 +108,26 @@ class _AccountSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final tiles = <(String, String)>[
-      if (account.username != null && account.username!.isNotEmpty)
-        ('Pseudo',
-            account.userClass == null || account.userClass!.isEmpty
-                ? account.username!
-                : '${account.username!} · ${account.userClass}'),
-      if (account.ratio != null) ('Ratio', account.ratio!.toStringAsFixed(2)),
-      if (account.uploaded != null) ('Upload', formatBytes(account.uploaded!)),
-      if (account.downloaded != null)
-        ('Download', formatBytes(account.downloaded!)),
-      if (account.credits != null)
-        ('Crédits', formatBytes(account.credits!)),
-      if (account.buffer != null && account.buffer != account.credits)
-        ('Tampon', formatBytes(account.buffer!)),
-      if (account.invites != null)
-        ('Invitations', '${account.invites}'),
-      if (account.uploadsCount != null)
-        ('Uploads', '${account.uploadsCount}'),
-      if (account.seedtimeCumulativeHours != null)
-        ('Seedtime cumulé', '${account.seedtimeCumulativeHours} h'),
-      if (account.seedtimeCumulativeHours == null &&
-          account.seedtimeHours != null)
-        ('Seedtime', '${account.seedtimeHours} h'),
-      if (account.hnrCount != null) ('H&R', '${account.hnrCount}'),
-      if (account.freeleechGlobal == true)
-        ('Freeleech', 'Global activé'),
-      if (account.badges.isNotEmpty)
-        ('Badges', account.badges.join(', ')),
+    final a = account;
+    Color ratioColor(double r) => r < 1 ? c.danger : r < 2 ? c.warning : c.success;
+    final stats = <_Stat>[
+      if (a.uploaded != null) _Stat(Icons.north_rounded, c.upload, 'Upload', formatBytes(a.uploaded!)),
+      if (a.downloaded != null) _Stat(Icons.south_rounded, c.download, 'Download', formatBytes(a.downloaded!)),
+      if (a.ratio != null) _Stat(Icons.balance_rounded, ratioColor(a.ratio!), 'Ratio', a.ratio!.toStringAsFixed(2).replaceAll('.', ',')),
+      if (a.credits != null) _Stat(Icons.savings_rounded, c.accent, 'Crédits', formatBytes(a.credits!)),
+      if (a.buffer != null && a.buffer != a.credits)
+        _Stat(Icons.shield_rounded, c.info, 'Tampon', formatBytes(a.buffer!)),
+      if (a.seedtimeCumulativeHours != null)
+        _Stat(Icons.schedule_rounded, c.success, 'Seedtime cumulé', '${frInt(a.seedtimeCumulativeHours!)} h')
+      else if (a.seedtimeHours != null)
+        _Stat(Icons.schedule_rounded, c.success, 'Seedtime', '${frInt(a.seedtimeHours!)} h'),
+      if (a.uploadsCount != null) _Stat(Icons.cloud_upload_rounded, c.upload, 'Uploads', '${a.uploadsCount}'),
+      if (a.invites != null) _Stat(Icons.mail_rounded, c.muted, 'Invitations', '${a.invites}'),
+      if (a.hnrCount != null)
+        _Stat(Icons.warning_amber_rounded, a.hnrCount! > 0 ? c.danger : c.muted, 'H&R', '${a.hnrCount}'),
     ];
-    if (tiles.isEmpty) {
+    final name = a.username ?? '';
+    if (name.isEmpty && stats.isEmpty && a.badges.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Text(
@@ -130,59 +138,100 @@ class _AccountSection extends StatelessWidget {
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-          child: Text('Compte',
-              style: TextStyle(
-                  color: c.muted,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600)),
-        ),
-        Panel(
-          radius: 14,
-          child: Column(children: [
-            for (var i = 0; i < tiles.length; i++)
-              _Tile(
-                label: tiles[i].$1,
-                value: tiles[i].$2,
-                last: i == tiles.length - 1,
+      child: Panel(
+        radius: 16,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: c.accent.withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(Icons.person_rounded, color: c.accent),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  Text(name.isEmpty ? 'Mon compte' : name,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  if (a.userClass != null && a.userClass!.isNotEmpty)
+                    Tag(a.userClass!.replaceAll('_', ' ').toUpperCase(), color: c.accent),
+                  if (a.freeleechGlobal == true) Tag('FREELEECH GLOBAL', color: c.success),
+                ]),
+              ),
+            ]),
+            if (a.badges.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final b in a.badges)
+                  Chip(
+                    avatar: Icon(Icons.emoji_events_rounded, size: 16, color: c.warning),
+                    label: Text(b.replaceAll('-', ' ')),
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ]),
+            ],
+            if (stats.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              LayoutBuilder(builder: (context, box) {
+                // Tuiles de même largeur, 160 px au moins, rangées équilibrées
+                // (9 chiffres : 3 × 3 plutôt que 4 + 4 + 1).
+                final most = (box.maxWidth / 160).floor().clamp(2, 5);
+                final rows = (stats.length / most).ceil();
+                final perRow = (stats.length / rows).ceil().clamp(2, most);
+                final width = (box.maxWidth - (perRow - 1) * 10) / perRow;
+                return Wrap(spacing: 10, runSpacing: 10, children: [
+                  for (final t in stats) SizedBox(width: width, child: t),
+                ]);
+              }),
+            ],
           ]),
         ),
-      ]),
+      ),
     );
   }
 }
 
-class _Tile extends StatelessWidget {
-  const _Tile({required this.label, required this.value, required this.last});
+/// Entier avec espaces de milliers (« 2 644 »).
+String frInt(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '\u202f');
+
+/// Tuile d'un chiffre du compte : pastille colorée, valeur, libellé.
+class _Stat extends StatelessWidget {
+  const _Stat(this.icon, this.color, this.label, this.value);
+  final IconData icon;
+  final Color color;
   final String label;
   final String value;
-  final bool last;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
       decoration: BoxDecoration(
-        border: last
-            ? null
-            : Border(bottom: BorderSide(color: c.border, width: 0.5)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(children: [
-        Expanded(
-          child: Text(label,
-              style: TextStyle(color: c.muted, fontSize: 13)),
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.16), shape: BoxShape.circle),
+          child: Icon(icon, size: 17, color: color),
         ),
-        Flexible(
-          child: Text(value,
-              textAlign: TextAlign.end,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 13.5, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w800, fontFeatures: [FontFeature.tabularFigures()])),
+            Text(label,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: c.muted)),
+          ]),
         ),
       ]),
     );
@@ -215,18 +264,32 @@ class _MissionsSection extends StatelessWidget {
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600)),
         ),
-        Panel(
-          radius: 14,
-          child: Column(
-            children: [
-              for (var i = 0; i < sorted.length; i++)
-                _MissionTile(
-                  mission: sorted[i],
-                  last: i == sorted.length - 1,
-                ),
-            ],
-          ),
-        ),
+        LayoutBuilder(builder: (context, box) {
+          // Assez large : une grille de cartes plutôt qu'une longue liste.
+          final perRow = (box.maxWidth / 340).floor();
+          if (perRow < 2) {
+            return Panel(
+              radius: 14,
+              child: Column(
+                children: [
+                  for (var i = 0; i < sorted.length; i++)
+                    _MissionTile(
+                      mission: sorted[i],
+                      last: i == sorted.length - 1,
+                    ),
+                ],
+              ),
+            );
+          }
+          final width = (box.maxWidth - (perRow - 1) * 10) / perRow;
+          return Wrap(spacing: 10, runSpacing: 10, children: [
+            for (final m in sorted)
+              SizedBox(
+                width: width,
+                child: Panel(radius: 14, child: _MissionTile(mission: m, last: true)),
+              ),
+          ]);
+        }),
       ]),
     );
   }
