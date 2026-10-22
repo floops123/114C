@@ -11,7 +11,7 @@ indispensables ; chaque autre section ajoute une fonction et peut rester vide.
 | Trackers | au moins un | vue Trackers, téléchargements, disponibilité des titres |
 | Cookie de session C411 | non | Notifications, Salon, Mon compte |
 | TMDB | non | vue Films & séries, fiches, affiches des Trackers et de la base |
-| Serveur de fichiers (FTP) | non | ta vidéothèque, lecture directe |
+| Serveur de fichiers (FTP ou WebDAV) | non | ta vidéothèque, lecture directe |
 | Jellyfin | non | lecture depuis Jellyfin (secours) |
 
 Les boutons **Tester** vérifient chaque service ; **Tester et enregistrer**
@@ -73,7 +73,26 @@ Crée un compte gratuit sur [themoviedb.org](https://www.themoviedb.org/), puis
 ## Serveur de fichiers (FTP)
 
 C'est ce qui alimente ta propre vidéothèque ([Sur le disque](sur-le-disque.md)),
-et permet de lire les fichiers directement.
+et permet de lire les fichiers directement. Deux protocoles au choix, en tête
+de la section : **FTP** ou **WebDAV**.
+
+### WebDAV (le plus rapide)
+
+Un partage WebDAV sur HTTPS : une connexion gardée ouverte, les dossiers lus
+en parallèle pendant un parcours, et l'avance rapide sans reconnexion (une
+simple requête `Range`).
+
+| Champ | Exemple |
+|---|---|
+| Adresse du partage | `https://dav.<identifiant>.appbox.co/` |
+| Identifiant / mot de passe | ceux du partage (authentification Basic) |
+
+Le partage doit montrer **les mêmes dossiers que le FTP** (sa racine contient
+par exemple `torrents/`). N'importe quel serveur WebDAV convient, par exemple
+`rclone serve webdav /chemin --addr :8080 --user moi --pass …` derrière le
+HTTPS de la seedbox, ou nginx, Caddy, Nextcloud.
+
+### FTP
 
 | Champ | Exemple (Appbox) |
 |---|---|
@@ -92,7 +111,8 @@ dossiers indiqués qui sont vides ou introuvables.
 
 Les torrents terminés de Transmission sont toujours pris en compte, même sans
 dossier indiqué : l'application retrouve seule où leurs fichiers apparaissent
-sur le FTP.
+sur le FTP ou le partage WebDAV. Les dossiers à parcourir et le bouton
+**Tester** valent pour les deux protocoles.
 
 ## Jellyfin
 

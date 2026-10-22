@@ -60,6 +60,10 @@ Les champs non renseignés prennent les valeurs par défaut.
   "ftpUser": "ftpuser",
   "ftpPassword": "ftppwd",
   "ftpTls": true,
+  "filesProtocol": "ftp",
+  "webdavUrl": "",
+  "webdavUser": "",
+  "webdavPassword": "",
   "mediaFolders": ["/torrents/completed", "/data/media"],
   "apiKeys": {
     "c411": "abc",
@@ -69,6 +73,11 @@ Les champs non renseignés prennent les valeurs par défaut.
   }
 }
 ```
+
+`filesProtocol` vaut `ftp` (par défaut) ou `webdav` : dans ce cas, les
+fichiers du serveur sont lus sur le partage `webdavUrl` (voir
+[Configuration](../guide/configuration.md#serveur-de-fichiers-ftp)), et les
+serveurs web (C411 TV, Musique, Livres) font de même.
 
 ### Cibles supportées par `--build`
 

@@ -21,6 +21,10 @@ void main() {
       rpcUrl: 'http://x',
       apiKeys: {'c411': 'k'},
       ftpTls: false,
+      filesProtocol: 'webdav',
+      webdavUrl: 'https://dav.x/',
+      webdavUser: 'moi',
+      webdavPassword: 's',
       mediaFolders: ['/a'],
     );
     final round = AppSettings.fromJson(
@@ -29,6 +33,9 @@ void main() {
     expect(round.apiKeys['c411'], 'k');
     expect(round.ftpTls, isFalse);
     expect(round.mediaFolders, ['/a']);
+    expect((round.useWebDav, round.webdavUrl, round.webdavUser, round.webdavPassword),
+        (true, 'https://dav.x/', 'moi', 's'));
+    expect(round.hasFiles, isTrue, reason: 'WebDAV suffit, sans FTP');
   });
 
   test('allVariables : liste non vide et stables', () {
@@ -38,6 +45,7 @@ void main() {
     expect(BuildDefaults.allVariables, contains('C411_ASTRATORRENT_KEY'));
     // À chaque nouveau champ ajouté à AppSettings, il faut aussi ajouter
     // la variable correspondante ici ET dans `BuildDefaults.toAppSettings`.
-    expect(BuildDefaults.allVariables.length, 17);
+    expect(BuildDefaults.allVariables, contains('C411_WEBDAV_URL'));
+    expect(BuildDefaults.allVariables.length, 21);
   });
 }

@@ -1,29 +1,49 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'ftp.dart';
+import 'remote_files.dart';
 
-/// Relais HTTP local (`http://127.0.0.1:<port>/…`) vers les fichiers du FTP :
-/// le lecteur (mpv) ne sait pas lire en FTPS, mais lit très bien en HTTP avec
-/// des requêtes `Range`. Chaque requête ouvre sa propre connexion FTP et lit
-/// à partir de la position demandée (`REST`) : l'avance rapide reste possible.
+/// Relais HTTP local (`http://127.0.0.1:<port>/…`) vers les fichiers du
+/// serveur : le lecteur (mpv) ne sait pas lire en FTPS ni s'authentifier en
+/// WebDAV, mais lit très bien en HTTP avec des requêtes `Range`. En FTP,
+/// chaque requête ouvre sa propre connexion et lit à partir de la position
+/// demandée (`REST`) ; en WebDAV, un seul client garde sa connexion ouverte
+/// et chaque saut n'est qu'une requête `Range`.
 class MediaRelay {
   MediaRelay(this.config, {this.connect});
-  final FtpConfig config;
+  final FilesConfig config;
 
-  /// Remplace la connexion FTP (tests).
-  final Future<FtpClient> Function()? connect;
+  /// Remplace la connexion (tests).
+  final Future<RemoteFiles> Function()? connect;
+
+  /// Client partagé, quand le protocole le permet ([RemoteFiles.concurrent]).
+  Future<RemoteFiles>? _shared;
 
   HttpServer? _server;
   Future<HttpServer>? _starting;
   final _paths = <String>[];
   final _sizes = <String, int>{};
 
-  Future<FtpClient> _client() async {
+  Future<RemoteFiles> _open() async {
     if (connect != null) return connect!();
-    final ftp = FtpClient(config);
-    await ftp.connect();
-    return ftp;
+    final files = openFiles(config);
+    await files.connect();
+    return files;
+  }
+
+  /// Client pour une requête ; à rendre par [_done].
+  Future<RemoteFiles> _client() async {
+    if (_shared != null) return _shared!;
+    final files = await _open();
+    if (files.concurrent) {
+      _shared = Future.value(files);
+    }
+    return files;
+  }
+
+  void _done(RemoteFiles? files) {
+    if (files == null || files.concurrent) return;
+    unawaited(files.close());
   }
 
   /// Adresse locale du fichier [path] du FTP (le nom du fichier est gardé à
@@ -69,7 +89,7 @@ class MediaRelay {
       return;
     }
     final path = _paths[index];
-    FtpClient? ftp;
+    RemoteFiles? ftp;
     try {
       ftp = await _client();
       final size = _sizes[path] ??= await ftp.size(path) ?? -1;
@@ -117,8 +137,8 @@ class MediaRelay {
         // Connexion déjà coupée.
       }
     } finally {
-      // Connexion propre à cette requête : fermée quoi qu'il arrive.
-      unawaited(ftp?.close());
+      // Connexion propre à cette requête (FTP) : fermée quoi qu'il arrive.
+      _done(ftp);
     }
   }
 
@@ -153,6 +173,9 @@ class MediaRelay {
   Future<void> close() async {
     await _server?.close(force: true);
     _server = null;
+    final shared = _shared;
+    _shared = null;
+    if (shared != null) await (await shared).close();
     _starting = null;
   }
 }

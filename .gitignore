@@ -53,3 +53,6 @@ test/test.js
 # Fichier de réglages personnels pour `flutter build --dart-define=C411_DEFAULTS_FILE=…`
 # (l'exemple commité est `personal.json.example`).
 personal.json
+
+# Paquet partagé : ses versions sont fixées par les projets qui l’utilisent.
+packages/c411_core/pubspec.lock

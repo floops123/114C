@@ -5,3 +5,7 @@ version: 1.0.0
 
 environment:
   sdk: ^3.13.5
+
+dependencies:
+  # Réponses PROPFIND du client WebDAV.
+  xml: '>=6.6.1 <8.0.0'

@@ -24,7 +24,9 @@ puis ouvrir <http://127.0.0.1:8411/>.
 
 - `../personal.json` : le même fichier que pour la
   [compilation personnalisée](../docs/dev/build.md) (`ftpHost`, `ftpPort`,
-  `ftpUser`, `ftpPassword`, `ftpTls`, et `tmdbKey` pour les images de fond).
+  `ftpUser`, `ftpPassword`, `ftpTls` ; ou `filesProtocol: "webdav"` avec
+  `webdavUrl`, `webdavUser`, `webdavPassword` ; et `tmdbKey` pour les images
+  de fond).
 - La vidéothèque est lue dans les préférences de l'application
   (`~/.local/share/fr.c411remote.c411_remote/shared_preferences.json` sous
   Linux), et relue quand elle change. Ailleurs : `--library <fichier>`.

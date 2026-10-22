@@ -65,7 +65,7 @@ Future<void> main(List<String> args) async {
   }
 
   final tools = await Tools.detect();
-  final relay = MediaRelay(config.ftp);
+  final relay = MediaRelay(config.files);
   final service = BooksService(
     appLibrary: config.library,
     statePath: config.state,

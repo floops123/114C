@@ -333,36 +333,40 @@ final mediaLibraryStoreProvider = Provider<MediaLibraryStore>((ref) {
   }
 });
 
-FtpConfig ftpConfigOf(AppSettings s) => FtpConfig(
-    host: s.ftpHost,
-    port: s.ftpPort,
-    user: s.ftpUser,
-    password: s.ftpPassword,
-    tls: s.ftpTls);
+/// Accès aux fichiers du serveur, par le protocole choisi.
+FilesConfig filesConfigOf(AppSettings s) => s.useWebDav
+    ? WebDavConfig(
+        url: s.webdavUrl, user: s.webdavUser, password: s.webdavPassword)
+    : FtpConfig(
+        host: s.ftpHost,
+        port: s.ftpPort,
+        user: s.ftpUser,
+        password: s.ftpPassword,
+        tls: s.ftpTls);
 
-/// Ouvre une connexion FTP (remplacé dans les tests).
-final ftpConnectProvider = Provider<Future<FtpClient> Function(FtpConfig)>(
-    (ref) => (config) async {
-          final ftp = FtpClient(config);
-          await ftp.connect();
-          return ftp;
+/// Ouvre l'accès aux fichiers du serveur (remplacé dans les tests).
+final ftpConnectProvider =
+    Provider<Future<RemoteFiles> Function(FilesConfig)>((ref) => (config) async {
+          final files = openFiles(config);
+          await files.connect();
+          return files;
         });
 
-/// Relais local pour le lecteur ; null sans FTP configuré.
+/// Relais local pour le lecteur ; null sans accès aux fichiers.
 final mediaRelayProvider = Provider<MediaRelay?>((ref) {
   final s = ref.watch(settingsProvider).value;
-  if (s == null || !s.hasFtp) return null;
-  final config = ftpConfigOf(s);
+  if (s == null || !s.hasFiles) return null;
+  final config = filesConfigOf(s);
   final connect = ref.watch(ftpConnectProvider);
   final relay = MediaRelay(config, connect: () => connect(config));
   ref.onDispose(relay.close);
   return relay;
 });
 
-/// Parcours du FTP : fichiers vidéo sous [roots] (sans extraits ni bonus) ;
-/// les fichiers audio vont dans [audio], les livres dans [books], s'ils
-/// sont donnés.
-Future<List<MediaFile>> scanFolders(FtpClient ftp, List<String> roots,
+/// Parcours du serveur : fichiers vidéo sous [roots] (sans extraits ni
+/// bonus) ; les fichiers audio vont dans [audio], les livres dans [books],
+/// s'ils sont donnés. En WebDAV, les sous-dossiers sont lus en parallèle.
+Future<List<MediaFile>> scanFolders(RemoteFiles ftp, List<String> roots,
     {void Function(String path)? onFolder,
     int depth = 8,
     List<MediaFile>? audio,
@@ -370,17 +374,18 @@ Future<List<MediaFile>> scanFolders(FtpClient ftp, List<String> roots,
   final found = <MediaFile>[];
   Future<void> walk(String dir, int left) async {
     onFolder?.call(dir);
-    final List<FtpEntry> entries;
+    final List<RemoteEntry> entries;
     try {
       entries = await ftp.list(dir);
-    } on FtpException {
+    } on RemoteFilesException {
       return; // Dossier illisible : on passe.
     }
+    final subdirs = <String>[];
     for (final e in entries) {
       if (e.name.startsWith('.')) continue;
       final path = dir == '/' ? '/${e.name}' : '$dir/${e.name}';
       if (e.isDir) {
-        if (left > 0) await walk(path, left - 1);
+        if (left > 0) subdirs.add(path);
       } else if (isVideoPath(path) && !MediaGuess.isExtra(path)) {
         found.add(MediaFile(path: path, size: e.size));
       } else if (audio != null && isAudioPath(path)) {
@@ -388,6 +393,17 @@ Future<List<MediaFile>> scanFolders(FtpClient ftp, List<String> roots,
       } else if (books != null && isBookPath(path) && isBookSize(path, e.size)) {
         books.add(MediaFile(path: path, size: e.size));
       }
+    }
+    if (!ftp.concurrent) {
+      for (final d in subdirs) {
+        await walk(d, left - 1);
+      }
+      return;
+    }
+    // Par lots : assez pour masquer la latence, sans noyer le serveur.
+    for (var i = 0; i < subdirs.length; i += 6) {
+      await Future.wait(
+          [for (final d in subdirs.skip(i).take(6)) walk(d, left - 1)]);
     }
   }
 
@@ -422,7 +438,7 @@ List<({String path, int size, String hash})> completedVideos(
 /// le FTP montre en général la fin du chemin (`/APPBOX_DATA/apps/x/torrents/a.mkv`
 /// → `/torrents/a.mkv`). Retourne (préfixe à retirer, préfixe FTP).
 Future<(String, String)?> detectPathMap(
-    FtpClient ftp, String serverPath, int size, List<String> ftpRoots) async {
+    RemoteFiles ftp, String serverPath, int size, List<String> ftpRoots) async {
   final parts = serverPath.split('/').where((p) => p.isNotEmpty).toList();
   final prefixes = {
     '',
@@ -454,7 +470,8 @@ class MediaLibraryState {
 class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   /// Réglages qui changent le contenu de la base.
   static String _signature(AppSettings s) => [
-        s.ftpHost, s.ftpPort, s.ftpUser, s.ftpTls, ...s.mediaFolders,
+        s.filesProtocol, s.ftpHost, s.ftpPort, s.ftpUser, s.ftpTls,
+        s.webdavUrl, s.webdavUser, ...s.mediaFolders,
       ].join('|');
 
   /// Torrents terminés déjà examinés pendant la session (ajoutés, ou sans
@@ -477,7 +494,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     // reflète ses réglages, mais à rien d'autre.
     ref.listen(settingsProvider, (previous, next) {
       final before = previous?.value, now = next.value;
-      if (now == null || !now.hasFtp || before == null) return;
+      if (now == null || !now.hasFiles || before == null) return;
       if (_signature(before) != _signature(now)) Future(scan);
     });
     // Torrents terminés : leurs fichiers rejoignent la base sans repasser par
@@ -624,7 +641,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   /// et que [check] n'est pas demandé, on n'ouvre aucune connexion.
   Future<(List<MediaFile>, List<MediaFile>, List<MediaFile>, String?, String?, String?)> _fromTorrents(
     TransmissionClient client,
-    FtpClient? ftp,
+    RemoteFiles? ftp,
     List<String> roots,
     MediaLibrary previous, {
     required bool check,
@@ -692,9 +709,9 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   Future<void> scan() async {
     if (!ref.mounted || state.scanning) return;
     final settings = ref.read(settingsProvider).value;
-    if (settings == null || !settings.hasFtp) {
+    if (settings == null || !settings.hasFiles) {
       _set(MediaLibraryState(state.library,
-          error: 'Renseigne l’accès FTP dans les Réglages'));
+          error: 'Renseigne l’accès aux fichiers (FTP ou WebDAV) dans les Réglages'));
       return;
     }
     final connect = ref.read(ftpConnectProvider);
@@ -714,11 +731,11 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
     final needsFtp = roots.isNotEmpty ||
         transmission == null ||
         previous.pathFrom == null;
-    FtpClient? ftp;
+    RemoteFiles? ftp;
     try {
       if (needsFtp) {
         status('Connexion au FTP…');
-        ftp = await connect(ftpConfigOf(settings));
+        ftp = await connect(filesConfigOf(settings));
       }
 
       var pathFrom = previous.pathFrom, pathTo = previous.pathTo;

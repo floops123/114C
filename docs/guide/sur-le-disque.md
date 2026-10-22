@@ -6,7 +6,7 @@
 fichiers de ta seedbox, reconnaît les films et les épisodes, les illustre avec
 TMDB, et les lit directement — sans Jellyfin, sans transcodage.
 
-Il faut avoir renseigné le [serveur de fichiers (FTP)](configuration.md#serveur-de-fichiers-ftp).
+Il faut avoir renseigné le [serveur de fichiers (FTP ou WebDAV)](configuration.md#serveur-de-fichiers-ftp).
 Elle se consulte avec le filtre **Sur le disque**, dans l'onglet
 [Films & séries](films-et-series.md#filtrer) (rangée « Ta vidéothèque ») comme
 dans l'onglet [Trackers](trackers.md#trier-chercher-filtrer).
@@ -133,13 +133,17 @@ quels.
 - **Statistiques** (ⓘ) : décodage matériel, codec, résolution, HDR, images
   perdues — utile pour comprendre une lecture saccadée.
 
-### Comment il lit un fichier du FTP
+### Comment il lit un fichier du serveur
 
-mpv ne sait pas lire en FTPS. L'application ouvre donc un petit **relais HTTP
-local**, sur `127.0.0.1` uniquement : le lecteur lui demande des morceaux du
-fichier (requêtes `Range`), le relais les lit sur le FTP à partir de la
-position voulue. L'avance rapide fonctionne ; chaque saut ouvre une nouvelle
-connexion FTP, ce qui peut prendre une seconde.
+mpv ne sait ni lire en FTPS, ni s'authentifier en WebDAV. L'application ouvre
+donc un petit **relais HTTP local**, sur `127.0.0.1` uniquement : le lecteur
+lui demande des morceaux du fichier (requêtes `Range`), le relais les lit sur
+le serveur à partir de la position voulue. L'avance rapide fonctionne :
+
+- en **FTP**, chaque saut ouvre une nouvelle connexion, ce qui peut prendre
+  une seconde ;
+- en **WebDAV**, une seule connexion reste ouverte et chaque saut n'est
+  qu'une requête : quasi immédiat.
 
 ## Et Jellyfin ?
 

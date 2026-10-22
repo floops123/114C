@@ -239,7 +239,7 @@ void main() {
       mediaLibraryStoreProvider.overrideWithValue(store),
       ftpConnectProvider.overrideWithValue((config) async {
         connects++;
-        final ftp = FtpClient(config);
+        final ftp = FtpClient(config as FtpConfig);
         await ftp.connect();
         return ftp;
       }),

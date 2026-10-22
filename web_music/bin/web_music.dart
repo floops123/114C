@@ -70,7 +70,7 @@ Future<void> main(List<String> args) async {
   final server = MusicServer(
     config,
     service: service,
-    relay: MediaRelay(config.ftp),
+    relay: MediaRelay(config.files),
     publicDir: '${root.path}/public',
     fontsDir: '${root.parent.path}/assets/fonts',
     canTranscode: transcode,

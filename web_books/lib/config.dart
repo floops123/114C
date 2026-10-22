@@ -21,7 +21,7 @@ import 'package:c411_core/ftp.dart';
 /// ```
 class BooksConfig {
   BooksConfig({
-    required this.ftp,
+    required this.files,
     required this.library,
     required this.state,
     this.host = '127.0.0.1',
@@ -32,7 +32,7 @@ class BooksConfig {
     this.contact = defaultContact,
   });
 
-  final FtpConfig ftp;
+  final FilesConfig files;
 
   /// Préférences de l'application : sa base (clé `mediaLibrary`) contient les
   /// livres relevés par son parcours.
@@ -81,19 +81,9 @@ class BooksConfig {
     String option(String key, String fallback) =>
         overrides[key] ?? (text(books, key).isEmpty ? fallback : text(books, key));
 
-    final host = text(json, 'ftpHost');
-    if (host.isEmpty) {
-      throw const FormatException('ftpHost manquant dans le fichier de réglages');
-    }
     final cacheGb = double.tryParse(overrides['cache-gb'] ?? '') ?? (books['cacheGb'] as num?)?.toDouble() ?? 2;
     return BooksConfig(
-      ftp: FtpConfig(
-        host: host,
-        port: (json['ftpPort'] as num?)?.toInt() ?? 21,
-        user: text(json, 'ftpUser'),
-        password: (json['ftpPassword'] as String?) ?? '',
-        tls: json['ftpTls'] as bool? ?? true,
-      ),
+      files: filesConfigFromJson(json),
       library: option('library', defaultLibrary),
       state: option('state', defaultState),
       host: option('host', '127.0.0.1'),

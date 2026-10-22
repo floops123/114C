@@ -335,7 +335,7 @@ void main() {
       File('${dir.path}/index.html').writeAsStringSync('<title>C411 Music</title>');
       server = MusicServer(config,
           service: service,
-          relay: MediaRelay(config.ftp),
+          relay: MediaRelay(config.files),
           publicDir: dir.path,
           canTranscode: false);
       final http = await server.start();
@@ -419,7 +419,7 @@ void main() {
 }
 
 MusicConfig _config({String password = '', int port = 8412}) => MusicConfig(
-      ftp: const FtpConfig(host: 'ftp.invalid', port: 21, user: 'u', password: 'p', tls: false),
+      files: const FtpConfig(host: 'ftp.invalid', port: 21, user: 'u', password: 'p', tls: false),
       library: '/nonexistent',
       state: '/nonexistent',
       password: password,

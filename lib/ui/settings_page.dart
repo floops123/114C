@@ -49,6 +49,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _ftpPassword = TextEditingController();
   final _mediaFolders = TextEditingController();
   bool _ftpTls = true;
+  String _protocol = 'ftp';
+  final _webdavUrl = TextEditingController();
+  final _webdavUser = TextEditingController();
+  final _webdavPassword = TextEditingController();
   String? _ftpStatus;
 
   @override
@@ -56,6 +60,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     for (final c in [
       _url, _user, _password, _cookie, _tmdb, _jellyfinUrl, _jellyfinKey,
       _ftpHost, _ftpPort, _ftpUser, _ftpPassword, _mediaFolders,
+      _webdavUrl, _webdavUser, _webdavPassword,
       ..._apiKeys.values,
     ]) {
       c.dispose();
@@ -80,6 +85,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ftpUser: _ftpUser.text.trim(),
     ftpPassword: _ftpPassword.text,
     ftpTls: _ftpTls,
+    filesProtocol: _protocol,
+    webdavUrl: _webdavUrl.text.trim(),
+    webdavUser: _webdavUser.text.trim(),
+    webdavPassword: _webdavPassword.text,
     mediaFolders: [
       for (final line in _mediaFolders.text.split('\n'))
         if (line.trim().isNotEmpty)
@@ -90,12 +99,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   /// Connexion, puis liste de la racine : aide à choisir les dossiers.
   Future<void> _testFtp() async {
     final form = _form;
-    if (!form.hasFtp) {
-      _setStatus(() => _ftpStatus = '✗ Hôte ou identifiant manquant');
+    if (!form.hasFiles) {
+      _setStatus(() => _ftpStatus = form.useWebDav
+          ? '✗ Adresse WebDAV manquante'
+          : '✗ Hôte ou identifiant manquant');
       return;
     }
     _setStatus(() => _ftpStatus = 'Connexion…');
-    final ftp = FtpClient(ftpConfigOf(form));
+    final ftp = openFiles(filesConfigOf(form));
     try {
       await ftp.connect();
       final root = await ftp.list('/');
@@ -109,7 +120,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             if (dirs.isNotEmpty) 'dossiers à la racine : ${dirs.take(12).join(', ')}',
             if (missing.isNotEmpty) 'vides ou introuvables : ${missing.join(', ')}',
           ].join(' · '));
-    } on FtpException catch (e) {
+    } on RemoteFilesException catch (e) {
       _setStatus(() => _ftpStatus = '✗ ${e.message}');
     } finally {
       await ftp.close();
@@ -304,6 +315,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _ftpUser.text = saved.ftpUser;
       _ftpPassword.text = saved.ftpPassword;
       _ftpTls = saved.ftpTls;
+      _protocol = saved.filesProtocol;
+      _webdavUrl.text = saved.webdavUrl;
+      _webdavUser.text = saved.webdavUser;
+      _webdavPassword.text = saved.webdavPassword;
       _mediaFolders.text = saved.mediaFolders.join('\n');
     }
     final c = context.colors;
@@ -560,58 +575,102 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           ),
                           const SizedBox(height: 12),
                           Section(
-                            title: 'Serveur de fichiers (FTP)',
+                            title: 'Serveur de fichiers',
                             children: [
                               Text(
                                 'Notre base de films et séries : les fichiers '
                                 'des torrents terminés et des dossiers ci-dessous, '
-                                'lus directement par le lecteur. Appbox : installe '
-                                'l’application Pure-FTPd, hôte '
-                                'ftp.<identifiant>.appbox.co, port 21, TLS.',
+                                'lus directement par le lecteur. WebDAV (HTTPS) est '
+                                'plus rapide : une connexion gardée ouverte, les '
+                                'dossiers lus en parallèle, l’avance rapide sans '
+                                'reconnexion. Appbox en FTP : application Pure-FTPd, '
+                                'hôte ftp.<identifiant>.appbox.co, port 21, TLS.',
                                 style: TextStyle(fontSize: 12.5, color: c.muted),
                               ),
                               const SizedBox(height: 12),
-                              Row(children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: _ftpHost,
-                                    keyboardType: TextInputType.url,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Hôte',
-                                      hintText: 'ftp.moi.appbox.co',
+                              SegmentedButton<String>(
+                                segments: const [
+                                  ButtonSegment(value: 'ftp', label: Text('FTP')),
+                                  ButtonSegment(value: 'webdav', label: Text('WebDAV')),
+                                ],
+                                selected: {_protocol},
+                                onSelectionChanged: (v) => setState(() {
+                                  _protocol = v.first;
+                                  _ftpStatus = null;
+                                }),
+                              ),
+                              if (_protocol == 'webdav') ...[
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _webdavUrl,
+                                  keyboardType: TextInputType.url,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Adresse du partage',
+                                    hintText: 'https://dav.moi.appbox.co/',
+                                    helperMaxLines: 3,
+                                    helperText: 'Racine des fichiers, comme le FTP la '
+                                        'montre : rclone serve webdav, nginx, Caddy, '
+                                        'Nextcloud…',
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _webdavUser,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Identifiant'),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _webdavPassword,
+                                  obscureText: !_showSecrets,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Mot de passe'),
+                                ),
+                                const SizedBox(height: 12),
+                              ] else ...[
+                                const SizedBox(height: 12),
+                                Row(children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _ftpHost,
+                                      keyboardType: TextInputType.url,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Hôte',
+                                        hintText: 'ftp.moi.appbox.co',
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                SizedBox(
-                                  width: 90,
-                                  child: TextField(
-                                    controller: _ftpPort,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Port'),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: 90,
+                                    child: TextField(
+                                      controller: _ftpPort,
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(labelText: 'Port'),
+                                    ),
                                   ),
+                                ]),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _ftpUser,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Identifiant'),
                                 ),
-                              ]),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: _ftpUser,
-                                decoration: const InputDecoration(
-                                    labelText: 'Identifiant'),
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: _ftpPassword,
-                                obscureText: !_showSecrets,
-                                decoration: const InputDecoration(
-                                    labelText: 'Mot de passe'),
-                              ),
-                              SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('Chiffrement TLS'),
-                                subtitle: const Text('FTP sur TLS explicite (FTPES)'),
-                                value: _ftpTls,
-                                onChanged: (v) => setState(() => _ftpTls = v),
-                              ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _ftpPassword,
+                                  obscureText: !_showSecrets,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Mot de passe'),
+                                ),
+                                SwitchListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Chiffrement TLS'),
+                                  subtitle: const Text('FTP sur TLS explicite (FTPES)'),
+                                  value: _ftpTls,
+                                  onChanged: (v) => setState(() => _ftpTls = v),
+                                ),
+                              ],
                               TextField(
                                 controller: _mediaFolders,
                                 minLines: 2,

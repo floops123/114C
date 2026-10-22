@@ -269,7 +269,7 @@ void main() {
       }));
       File('${dir.path}/index.html').writeAsStringSync('<title>C411 Books</title>');
       final config = BooksConfig(
-        ftp: const FtpConfig(host: 'ftp.invalid', port: 21, user: 'u', password: 'p', tls: false),
+        files: const FtpConfig(host: 'ftp.invalid', port: 21, user: 'u', password: 'p', tls: false),
         library: '${dir.path}/prefs.json',
         state: '${dir.path}/state/books.json',
         port: 0,

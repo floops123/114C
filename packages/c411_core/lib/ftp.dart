@@ -2,9 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'remote_files.dart';
+
+export 'remote_files.dart';
+
 /// Accès aux fichiers du serveur (Appbox : application Pure-FTPd, FTP avec
 /// TLS explicite, `ftp.<identifiant>.appbox.co`).
-class FtpConfig {
+class FtpConfig implements FilesConfig {
   const FtpConfig({
     required this.host,
     this.port = 21,
@@ -21,23 +25,16 @@ class FtpConfig {
   /// TLS explicite (`AUTH TLS`, puis `PROT P` pour les données).
   final bool tls;
 
+  @override
   bool get isEmpty => host.isEmpty || user.isEmpty;
 }
 
-class FtpException implements Exception {
-  const FtpException(this.message);
-  final String message;
-  @override
-  String toString() => message;
+class FtpException extends RemoteFilesException {
+  const FtpException(super.message);
 }
 
 /// Élément d'un dossier (`MLSD`, sinon `LIST`).
-class FtpEntry {
-  const FtpEntry(this.name, {required this.isDir, this.size = 0});
-  final String name;
-  final bool isDir;
-  final int size;
-}
+typedef FtpEntry = RemoteEntry;
 
 /// Réponse FTP : code et texte (lignes jointes).
 typedef FtpReply = ({int code, String text});
@@ -45,7 +42,7 @@ typedef FtpReply = ({int code, String text});
 /// Client FTP minimal : une connexion de contrôle, des connexions de données
 /// passives (`EPSV`, sinon `PASV`), en TLS si demandé. Juste ce qu'il faut
 /// pour lister des dossiers et lire un fichier à partir d'une position.
-class FtpClient {
+class FtpClient implements RemoteFiles {
   FtpClient(this.config);
   final FtpConfig config;
 
@@ -61,6 +58,11 @@ class FtpClient {
 
   static const _timeout = Duration(seconds: 15);
 
+  /// Une seule commande à la fois sur la connexion de contrôle.
+  @override
+  bool get concurrent => false;
+
+  @override
   Future<void> connect() async {
     try {
       final socket = await Socket.connect(config.host, config.port,
@@ -219,6 +221,7 @@ class FtpClient {
   }
 
   /// Contenu d'un dossier.
+  @override
   Future<List<FtpEntry>> list(String path) async {
     final raw = await _socketData(socket: await _data(), command: 'MLSD ${_path(path)}');
     if (raw != null) return _parseMlsd(raw);
@@ -281,6 +284,7 @@ class FtpClient {
   }
 
   /// Taille d'un fichier, ou null s'il n'existe pas.
+  @override
   Future<int?> size(String path) async {
     await _send('SIZE ${_path(path)}');
     final r = await _reply();
@@ -289,6 +293,7 @@ class FtpClient {
 
   /// Lit [path] à partir de [offset] (`REST`). Le flux s'arrête quand on
   /// l'annule ; la connexion n'est alors plus réutilisable (on la ferme).
+  @override
   Future<Stream<List<int>>> read(String path, {int offset = 0}) async {
     final socket = await _data();
     if (offset > 0) await _command('REST $offset', [350]);
@@ -322,6 +327,7 @@ class FtpClient {
 
   /// Crée [path] et les dossiers au-dessus (`MKD`) ; ceux qui existent déjà
   /// ne gênent pas.
+  @override
   Future<void> makeDirs(String path) async {
     final parts = path.split('/').where((p) => p.isNotEmpty).toList();
     var current = '';
@@ -338,6 +344,7 @@ class FtpClient {
 
   /// Écrit [data] dans [path] (`STOR`, remplace le fichier existant) ;
   /// [onProgress] reçoit le nombre d'octets envoyés.
+  @override
   Future<void> write(String path, Stream<List<int>> data, {void Function(int sent)? onProgress}) async {
     final socket = await _data();
     await _send('STOR ${_path(path)}');
@@ -365,6 +372,7 @@ class FtpClient {
 
   String _path(String p) => p.isEmpty ? '/' : p;
 
+  @override
   Future<void> close() async {
     try {
       await _send('QUIT');

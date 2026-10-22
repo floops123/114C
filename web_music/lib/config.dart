@@ -19,7 +19,7 @@ import 'package:c411_core/ftp.dart';
 /// ```
 class MusicConfig {
   MusicConfig({
-    required this.ftp,
+    required this.files,
     required this.library,
     required this.state,
     this.host = '127.0.0.1',
@@ -28,7 +28,7 @@ class MusicConfig {
     this.contact = defaultContact,
   });
 
-  final FtpConfig ftp;
+  final FilesConfig files;
 
   /// Préférences de l'application : sa base (clé `mediaLibrary`) contient la
   /// musique relevée par son parcours, comme les vidéos pour C411 TV.
@@ -66,18 +66,8 @@ class MusicConfig {
     String option(String key, String fallback) =>
         overrides[key] ?? (text(music, key).isEmpty ? fallback : text(music, key));
 
-    final host = text(json, 'ftpHost');
-    if (host.isEmpty) {
-      throw const FormatException('ftpHost manquant dans le fichier de réglages');
-    }
     return MusicConfig(
-      ftp: FtpConfig(
-        host: host,
-        port: (json['ftpPort'] as num?)?.toInt() ?? 21,
-        user: text(json, 'ftpUser'),
-        password: (json['ftpPassword'] as String?) ?? '',
-        tls: json['ftpTls'] as bool? ?? true,
-      ),
+      files: filesConfigFromJson(json),
       library: option('library', defaultLibrary),
       state: option('state', defaultState),
       host: option('host', '127.0.0.1'),

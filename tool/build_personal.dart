@@ -37,6 +37,10 @@ import 'dart:io';
 ///   "ftpUser": "...",
 ///   "ftpPassword": "...",
 ///   "ftpTls": true,
+///   "filesProtocol": "webdav",
+///   "webdavUrl": "https://dav.seedbox.local/",
+///   "webdavUser": "...",
+///   "webdavPassword": "...",
 ///   "mediaFolders": ["/torrents/completed", "/data/media"],
 ///   "apiKeys": {
 ///     "c411": "...",
@@ -115,6 +119,10 @@ List<String> personalJsonToFlags(Map<String, dynamic> json) {
     'ftpUser': 'C411_FTP_USER',
     'ftpPassword': 'C411_FTP_PASSWORD',
     'ftpTls': 'C411_FTP_TLS',
+    'filesProtocol': 'C411_FILES_PROTOCOL',
+    'webdavUrl': 'C411_WEBDAV_URL',
+    'webdavUser': 'C411_WEBDAV_USER',
+    'webdavPassword': 'C411_WEBDAV_PASSWORD',
   }.entries) {
     final value = json[entry.key];
     if (value == null) continue;

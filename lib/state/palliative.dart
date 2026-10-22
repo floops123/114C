@@ -473,7 +473,7 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
         final message = switch (e) {
           TrackerException(:final message) => message,
           TransmissionException(:final message) => message,
-          FtpException(:final message) => message,
+          RemoteFilesException(:final message) => message,
           _ => '$e',
         };
         _set(item.key, (i) => i.copyWith(status: PalliativeStatus.error, detail: message));
@@ -579,19 +579,21 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
     final settings = ref.read(settingsProvider).value;
     final library = ref.read(mediaLibraryProvider).library;
     final (from, to) = (library.pathFrom, library.pathTo);
-    if (settings == null || !settings.hasFtp) {
-      throw const FtpException('Renseigne l’accès FTP dans les Réglages pour envoyer les fichiers');
+    if (settings == null || !settings.hasFiles) {
+      throw const RemoteFilesException(
+          'Renseigne l’accès aux fichiers (FTP ou WebDAV) dans les Réglages pour envoyer les fichiers');
     }
     if (from == null || to == null) {
-      throw const FtpException('Chemins du serveur inconnus : lance d’abord un parcours '
+      throw const RemoteFilesException('Chemins du serveur inconnus : lance d’abord un parcours '
           'de la vidéothèque (Films & séries › Sur le disque)');
     }
     final downloadDir = '${(await client.sessionGet())['download-dir'] ?? ''}';
     if (!downloadDir.startsWith(from)) {
-      throw FtpException('Le dossier de Transmission ($downloadDir) n’est pas visible sur le FTP');
+      throw RemoteFilesException(
+          'Le dossier de Transmission ($downloadDir) n’est pas visible sur le serveur de fichiers');
     }
     final ftpDir = '$to${downloadDir.substring(from.length)}';
-    final ftp = await ref.read(ftpConnectProvider)(ftpConfigOf(settings));
+    final ftp = await ref.read(ftpConnectProvider)(filesConfigOf(settings));
     final total = match.files.fold(0, (n, f) => n + f.$3);
     var done = 0, shown = -1;
     try {

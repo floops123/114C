@@ -386,7 +386,7 @@ class _LibraryRow extends ConsumerWidget {
         child: titles.isEmpty
             ? Center(
                 child: Text(
-                    ref.watch(settingsProvider.select((s) => s.value?.hasFtp ?? false))
+                    ref.watch(settingsProvider.select((s) => s.value?.hasFiles ?? false))
                         ? 'Aucun fichier vidéo trouvé pour le moment.'
                         : 'Renseigne l’accès FTP dans les Réglages.',
                     style: TextStyle(color: c.muted)))

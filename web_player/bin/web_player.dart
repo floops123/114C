@@ -62,7 +62,7 @@ Future<void> main(List<String> args) async {
   final server = WebPlayerServer(
     config,
     catalog: catalog,
-    relay: MediaRelay(config.ftp),
+    relay: MediaRelay(config.files),
     publicDir: '${File.fromUri(Platform.script).parent.parent.path}/public',
     fontsDir: '${File.fromUri(Platform.script).parent.parent.parent.path}/assets/fonts',
     canTranscode: transcode,

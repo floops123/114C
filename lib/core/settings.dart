@@ -20,6 +20,10 @@ class AppSettings {
     this.ftpUser = '',
     this.ftpPassword = '',
     this.ftpTls = true,
+    this.filesProtocol = 'ftp',
+    this.webdavUrl = '',
+    this.webdavUser = '',
+    this.webdavPassword = '',
     this.mediaFolders = const [],
   });
 
@@ -41,6 +45,10 @@ class AppSettings {
         ftpUser: json['ftpUser'] as String? ?? '',
         ftpPassword: json['ftpPassword'] as String? ?? '',
         ftpTls: json['ftpTls'] as bool? ?? true,
+        filesProtocol: json['filesProtocol'] as String? ?? 'ftp',
+        webdavUrl: json['webdavUrl'] as String? ?? '',
+        webdavUser: json['webdavUser'] as String? ?? '',
+        webdavPassword: json['webdavPassword'] as String? ?? '',
         mediaFolders: (json['mediaFolders'] as List? ?? const []).cast<String>(),
       );
 
@@ -70,10 +78,22 @@ class AppSettings {
   final String ftpPassword;
   final bool ftpTls;
 
-  /// Dossiers du FTP à parcourir, en plus des torrents terminés.
+  /// Protocole des fichiers du serveur : `ftp` ou `webdav`.
+  final String filesProtocol;
+
+  /// Partage WebDAV (HTTPS) : plus rapide que le FTP pour lire et parcourir.
+  final String webdavUrl;
+  final String webdavUser;
+  final String webdavPassword;
+
+  /// Dossiers du serveur à parcourir, en plus des torrents terminés.
   final List<String> mediaFolders;
 
   bool get hasFtp => ftpHost.isNotEmpty && ftpUser.isNotEmpty;
+  bool get useWebDav => filesProtocol == 'webdav';
+
+  /// Fichiers du serveur accessibles, par le protocole choisi.
+  bool get hasFiles => useWebDav ? webdavUrl.isNotEmpty : hasFtp;
 
   bool get hasTransmission => rpcUrl.isNotEmpty;
   bool get hasTracker => apiKeys.values.any((k) => k.isNotEmpty);
@@ -92,6 +112,10 @@ class AppSettings {
         'ftpUser': ftpUser,
         'ftpPassword': ftpPassword,
         'ftpTls': ftpTls,
+        'filesProtocol': filesProtocol,
+        'webdavUrl': webdavUrl,
+        'webdavUser': webdavUser,
+        'webdavPassword': webdavPassword,
         'mediaFolders': mediaFolders,
       };
 }

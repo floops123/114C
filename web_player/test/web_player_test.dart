@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:c411_core/ftp.dart';
 import 'package:c411_core/media_relay.dart';
+import 'package:c411_core/webdav.dart';
 import 'package:c411_web_player/config.dart';
 import 'package:c411_web_player/library.dart';
 import 'package:c411_web_player/server.dart';
@@ -96,10 +97,22 @@ void main() {
         'web': {'port': 9000, 'password': 'pw', 'library': '/lib.json'},
       });
       final c = WebConfig.load(file.path, overrides: {'host': '0.0.0.0'});
-      expect((c.ftp.host, c.ftp.port, c.ftp.user, c.ftp.tls), ('ftp.example', 2121, 'moi', false));
+      final ftp = c.files as FtpConfig;
+      expect((ftp.host, ftp.port, ftp.user, ftp.tls), ('ftp.example', 2121, 'moi', false));
       expect((c.port, c.password, c.library, c.host), (9000, 'pw', '/lib.json', '0.0.0.0'));
       expect(c.public, isTrue);
       expect(WebConfig.load(file.path).public, isFalse, reason: 'local par défaut');
+    });
+
+    test('WebDAV choisi dans les réglages', () {
+      final c = WebConfig.load(write({
+        'ftpHost': 'ftp.example', 'filesProtocol': 'webdav',
+        'webdavUrl': 'https://dav.example/', 'webdavUser': 'moi', 'webdavPassword': 's',
+      }).path);
+      final dav = c.files as WebDavConfig;
+      expect((dav.url, dav.user, dav.password), ('https://dav.example/', 'moi', 's'));
+      expect(() => WebConfig.load(write({'filesProtocol': 'webdav'}).path),
+          throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('webdavUrl'))));
     });
 
     test('sans hôte FTP : erreur claire', () {
@@ -193,7 +206,7 @@ void main() {
       dir = Directory.systemTemp.createTempSync('c411web');
       final lib = File('${dir.path}/prefs.json')..writeAsStringSync(_prefs(_library));
       final config = WebConfig(
-        ftp: FtpConfig(host: '127.0.0.1', port: ftp.port, user: 'moi', password: 'secret', tls: false),
+        files: FtpConfig(host: '127.0.0.1', port: ftp.port, user: 'moi', password: 'secret', tls: false),
         library: lib.path,
         port: 0,
         password: password,
@@ -201,7 +214,7 @@ void main() {
       server = WebPlayerServer(
         config,
         catalog: CatalogSource(lib.path),
-        relay: MediaRelay(config.ftp),
+        relay: MediaRelay(config.files),
         publicDir: 'public',
         canTranscode: transcode,
         probe: probe,

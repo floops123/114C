@@ -17,7 +17,7 @@ import 'package:c411_core/ftp.dart';
 /// ```
 class WebConfig {
   WebConfig({
-    required this.ftp,
+    required this.files,
     required this.library,
     this.tmdbKey = '',
     this.host = '127.0.0.1',
@@ -25,7 +25,7 @@ class WebConfig {
     this.password = '',
   });
 
-  final FtpConfig ftp;
+  final FilesConfig files;
 
   /// Fichier de la vidéothèque : les préférences de l'application (clé
   /// `mediaLibrary`), ou un export de la base seule.
@@ -51,18 +51,8 @@ class WebConfig {
     final web = (json['web'] as Map?)?.cast<String, dynamic>() ?? const {};
     String text(Map<String, dynamic> m, String k) => (m[k] as String?)?.trim() ?? '';
 
-    final host = text(json, 'ftpHost');
-    if (host.isEmpty) {
-      throw const FormatException('ftpHost manquant dans le fichier de réglages');
-    }
     return WebConfig(
-      ftp: FtpConfig(
-        host: host,
-        port: (json['ftpPort'] as num?)?.toInt() ?? 21,
-        user: text(json, 'ftpUser'),
-        password: (json['ftpPassword'] as String?) ?? '',
-        tls: json['ftpTls'] as bool? ?? true,
-      ),
+      files: filesConfigFromJson(json),
       tmdbKey: text(json, 'tmdbKey'),
       library: overrides['library'] ??
           (text(web, 'library').isEmpty ? defaultLibrary : text(web, 'library')),

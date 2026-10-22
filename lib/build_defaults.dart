@@ -31,6 +31,10 @@ class BuildDefaults {
       _has(_ftpUser) ||
       _has(_ftpPassword) ||
       _has(_ftpTls) ||
+      _has(_filesProtocol) ||
+      _has(_webdavUrl) ||
+      _has(_webdavUser) ||
+      _has(_webdavPassword) ||
       _has(_mediaFolders) ||
       _has(_c411Key) ||
       _has(_tr4kerKey) ||
@@ -62,6 +66,10 @@ class BuildDefaults {
       ftpUser: _str(_ftpUser) ?? '',
       ftpPassword: _str(_ftpPassword) ?? '',
       ftpTls: _bool(_ftpTls) ?? true,
+      filesProtocol: _str(_filesProtocol) ?? 'ftp',
+      webdavUrl: _str(_webdavUrl) ?? '',
+      webdavUser: _str(_webdavUser) ?? '',
+      webdavPassword: _str(_webdavPassword) ?? '',
       mediaFolders: folders,
     );
   }
@@ -80,6 +88,10 @@ class BuildDefaults {
     'C411_FTP_USER',
     'C411_FTP_PASSWORD',
     'C411_FTP_TLS',
+    'C411_FILES_PROTOCOL',
+    'C411_WEBDAV_URL',
+    'C411_WEBDAV_USER',
+    'C411_WEBDAV_PASSWORD',
     'C411_MEDIA_FOLDERS',
     'C411_C411_KEY',
     'C411_TR4KER_KEY',
@@ -104,6 +116,10 @@ const String _ftpPort = String.fromEnvironment('C411_FTP_PORT');
 const String _ftpUser = String.fromEnvironment('C411_FTP_USER');
 const String _ftpPassword = String.fromEnvironment('C411_FTP_PASSWORD');
 const String _ftpTls = String.fromEnvironment('C411_FTP_TLS');
+const String _filesProtocol = String.fromEnvironment('C411_FILES_PROTOCOL');
+const String _webdavUrl = String.fromEnvironment('C411_WEBDAV_URL');
+const String _webdavUser = String.fromEnvironment('C411_WEBDAV_USER');
+const String _webdavPassword = String.fromEnvironment('C411_WEBDAV_PASSWORD');
 const String _mediaFolders = String.fromEnvironment('C411_MEDIA_FOLDERS');
 const String _c411Key = String.fromEnvironment('C411_C411_KEY');
 const String _tr4kerKey = String.fromEnvironment('C411_TR4KER_KEY');
