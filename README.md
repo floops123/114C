@@ -6,8 +6,8 @@
 C411 Remote est un client **Flutter** multiplateforme (Linux, Android…) qui
 parle directement à ton serveur **Transmission**, aux trackers **C411**,
 **tr4ker**, **Nostradamus**, **Draupnirr** et **AstraTorrent**, à **TMDB**
-et au **FTP** de ta seedbox. Aucun serveur intermédiaire : tout se passe
-entre l'application et tes services.
+et aux fichiers de ta seedbox (**FTP**, **WebDAV** ou dossier local). Aucun
+serveur intermédiaire : tout se passe entre l'application et tes services.
 
 <p align="center">
   <img src="docs/images/fiche-titre.png" alt="Fiche d'un film : déjà sur le disque, sorties en France, disponibilité sur les trackers" width="860">
@@ -19,12 +19,13 @@ entre l'application et tes services.
 |---|---|
 | 🎬 **Films & séries** | Les tops TMDB (rangées *Découvrir* tournées vers la France) et ta liste de souhaits ; sur chaque affiche, ▶ si tu l'as déjà, ⬇ s'il est sur un tracker. |
 | 🌐 **Trackers** | Les sorties de tous les trackers, regroupées par film ou série et illustrées par TMDB ; choisis ta version, ou lis-la si elle est sur le disque. |
-| 💾 **Ta vidéothèque** | Ta propre base de films et séries, construite à partir des fichiers de ta seedbox (FTP), reconnue par TMDB, saisons et épisodes compris ; filtre *Sur le disque* dans les deux vues. |
+| 💾 **Ta vidéothèque** | Ta propre base de films et séries, construite à partir des fichiers de ta seedbox (FTP, WebDAV ou dossier local), reconnue par TMDB, saisons et épisodes compris ; filtre *Sur le disque* dans les deux vues. |
 | ▶️ **Lecteur intégré** | Lecture directe du fichier d'origine, sans transcodage (mpv) : pistes audio, sous-titres, reprise là où tu t'étais arrêté. |
 | ⬇️ **Transferts** | Tout Transmission : suivi en direct, tris, filtres, actions groupées, détail complet, statistiques, configuration du serveur. |
 | 🆕 **Nouveautés** | Relève les trackers de ton choix toutes les *x* minutes, garde la liste des dernières sorties et te notifie de leur arrivée. |
 | 🔁 **Cross-seed** | Repère tes torrents terminés présents sur d'autres trackers et les partage sans rien retélécharger. Relance aussi les sorties **sans seeder** et la liste palliative de C411. |
 | 💰 **Rendement Zen** | Ce que rapporte chaque torrent partagé en Zen, et les sorties qu'il serait rentable d'ajouter, dans tes limites de disque et de ratio. |
+| 🛡️ **Draupnirr** | Ton compte Draupnirr : upload, crédits, tampon, seedtime, missions en cours et badges. |
 | 🔔 **C411 et Salon** | L'onglet C411 : les notifications du site en direct et ton compte (ratio, crédit) ; le salon de discussion du site. |
 
 ## Démarrage rapide
@@ -37,6 +38,11 @@ sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev \
 flutter pub get
 flutter run -d linux
 ```
+
+Sans rien installer, la CI GitHub publie aussi un fichier unique à lancer :
+une **AppImage** et un **AppBundle** ([pelf](https://github.com/xplshn/pelf))
+pour Linux, et un APK pour Android. Pour les produire soi-même :
+[Installation](docs/guide/installation.md).
 
 Au premier lancement, l'application ouvre les **Réglages** : renseigne au
 minimum l'adresse de Transmission et une clé de tracker. Tout le reste est
@@ -120,9 +126,10 @@ La documentation complète est dans [`docs/`](docs/README.md).
 
 | Plateforme | État |
 |---|---|
-| Linux | utilisée au quotidien |
+| Linux | utilisée au quotidien ; AppImage et AppBundle en un seul fichier |
 | Android | APK compilé (API 24 → 36), mise en page téléphone vérifiée |
-| iOS, Windows, macOS | projet généré, non testé |
+| Windows | installateur (Inno Setup) prêt, compilation CI désactivée pour le moment |
+| iOS, macOS | projet généré, non testé |
 | Web | non prise en charge (ni Transmission ni les trackers n'autorisent les requêtes d'un navigateur, CORS) |
 
 ## Vie privée
