@@ -92,8 +92,9 @@ jobs:
       - run: flutter build linux --release
       - name: Archive
         run: tar -czf c411_remote-linux-x64.tar.gz -C build/linux/x64/release bundle
-      # Un seul fichier exécutable, libmpv comprise (voir le script).
-      - name: AppImage
+      # Un seul fichier exécutable, libmpv comprise (voir le script) :
+      # AppImage et AppBundle (pelf).
+      - name: AppImage et AppBundle
         run: tool/build_appimage.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -101,6 +102,7 @@ jobs:
           path: |
             c411_remote-linux-x64.tar.gz
             build/appimage/C411_Remote-x86_64.AppImage
+            build/appimage/C411_Remote-x86_64.dwfs.AppBundle
           retention-days: 14
 
   windows:

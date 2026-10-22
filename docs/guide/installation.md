@@ -38,12 +38,19 @@ flutter build linux         # version optimisée : build/linux/x64/release/bundl
 Le dossier `bundle/` est autonome : copie-le où tu veux et lance
 `bundle/c411_remote`.
 
-### Un seul fichier : AppImage
+### Un seul fichier : AppImage ou AppBundle
 
 ```sh
 flutter build linux --release
-tool/build_appimage.sh      # → build/appimage/C411_Remote-x86_64.AppImage
+tool/build_appimage.sh
+# → build/appimage/C411_Remote-x86_64.AppImage
+# → build/appimage/C411_Remote-x86_64.dwfs.AppBundle
 ```
+
+Deux formes, même contenu : l'**AppImage** classique, et l'**AppBundle**
+de [pelf](https://github.com/xplshn/pelf) (système de fichiers DwarFS, un peu
+plus petit : ~90 Mo au lieu de ~100). Sans FUSE, l'AppBundle s'extrait et se
+lance quand même.
 
 Le fichier se lance directement (`chmod +x` puis double-clic), sans rien
 installer : libmpv et ffmpeg sont embarqués (d'où ~100 Mo). GTK 3, le
@@ -51,8 +58,8 @@ trousseau (libsecret) et OpenGL restent ceux du système, présents sur tout
 bureau Linux. Il faut une distribution au moins aussi récente que celle de la
 compilation (glibc) : Ubuntu 24.04, Debian 13, Fedora 40 ou plus récent pour
 l'AppImage de la CI GitHub, publiée avec chaque compilation à côté de
-l'archive. Les outils (linuxdeploy, appimagetool) sont téléchargés par le
-script au premier passage.
+l'archive. Les outils (linuxdeploy, appimagetool, pelf) sont téléchargés
+par le script au premier passage.
 
 > **Lecture fluide sous Linux.** Le projet embarque une copie corrigée du
 > module vidéo (`third_party/media_kit_video`) : sans elle, avec le moteur de

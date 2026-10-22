@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Empaquette la version Linux (déjà compilée par `flutter build linux
-# --release`) en un seul fichier AppImage : C411_Remote-x86_64.AppImage.
+# --release`) en un seul fichier exécutable, sous deux formes :
+#   C411_Remote-x86_64.AppImage        (appimagetool, SquashFS)
+#   C411_Remote-x86_64.dwfs.AppBundle  (pelf, DwarFS : plus petit)
+# Même contenu (AppDir) dans les deux.
 #
 # Embarque libmpv (lecteur) et ses dépendances (ffmpeg…), absents de
 # beaucoup de systèmes ; GTK, glibc, OpenGL et le trousseau restent ceux du
-# système. linuxdeploy et appimagetool sont téléchargés dans
-# build/appimage/tools s'ils ne sont pas fournis (LINUXDEPLOY, APPIMAGETOOL).
+# système. linuxdeploy, appimagetool et pelf sont téléchargés dans
+# build/appimage/tools s'ils ne sont pas fournis (LINUXDEPLOY, APPIMAGETOOL,
+# PELF).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -23,8 +27,10 @@ fetch() { # fetch <fichier> <url>
 }
 LINUXDEPLOY=${LINUXDEPLOY:-$TOOLS/linuxdeploy}
 APPIMAGETOOL=${APPIMAGETOOL:-$TOOLS/appimagetool}
+PELF=${PELF:-$TOOLS/pelf}
 fetch linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
 fetch appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+fetch pelf https://github.com/xplshn/pelf/releases/download/196/pelf_x86_64
 
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/lib" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
@@ -65,4 +71,12 @@ RUN
 chmod +x "$APPDIR/AppRun"
 
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" --no-appstream "$APPDIR" "$OUT/C411_Remote-x86_64.AppImage"
+
+# AppBundle : même AppDir. Identifiant : application, date d'empaquetage.
+rm -f "$OUT/C411_Remote-x86_64.dwfs.AppBundle"
+"$PELF" --add-appdir "$APPDIR" \
+  --appbundle-id "fr.c411remote.c411_remote-$(date +%Y%m%d)" \
+  --output-to "$OUT/C411_Remote-x86_64.dwfs.AppBundle"
+
 echo "→ $OUT/C411_Remote-x86_64.AppImage"
+echo "→ $OUT/C411_Remote-x86_64.dwfs.AppBundle"
