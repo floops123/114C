@@ -137,11 +137,33 @@ jobs:
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
       - run: flutter build windows --release
+      # Runtime Visual C++ à côté de l'exécutable (déploiement local
+      # autorisé par Microsoft) : rien à installer en plus sur un Windows
+      # neuf.
+      - name: Runtime Visual C++
+        shell: pwsh
+        run: |
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:SystemRoot\System32\$dll" build/windows/x64/runner/Release/
+          }
       - name: Archive
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath c411_remote-windows-x64.zip
+      # Un seul fichier : l'installateur (Inno Setup), version de pubspec.yaml.
+      - name: Installateur
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          & $iscc "/DAppVersion=$version" windows\packaging\c411_remote.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: c411_remote-windows-${{ github.sha }}
-          path: c411_remote-windows-x64.zip
+          path: |
+            c411_remote-windows-x64.zip
+            build/installer/C411_Remote-Setup-x64.exe
           retention-days: 14

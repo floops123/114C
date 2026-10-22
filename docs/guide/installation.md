@@ -97,11 +97,37 @@ Ce qui est réglé dans `android/app/src/main/AndroidManifest.xml` :
 L'APK est signé avec la clé de débogage : parfait pour un usage personnel, une
 clé dédiée serait nécessaire pour le Play Store.
 
+## Windows
+
+La CI GitHub compile la version Windows et publie, à chaque compilation :
+
+- **`C411_Remote-Setup-x64.exe`** : l'installateur, un seul fichier. Il
+  installe l'application pour ton compte, sans droits d'administrateur
+  (« pour tous les utilisateurs » reste possible), ajoute un raccourci au
+  menu Démarrer (et au bureau si tu le coches), et se désinstalle depuis les
+  Paramètres de Windows. Une nouvelle version s'installe par-dessus.
+- **`c411_remote-windows-x64.zip`** : la même chose sans installation ;
+  décompresse et lance `c411_remote.exe`.
+
+Les deux contiennent le runtime Visual C++ et le lecteur (libmpv) : rien
+d'autre à installer. L'installateur n'est pas signé : Windows SmartScreen
+peut afficher « Windows a protégé votre ordinateur » → *Informations
+complémentaires* → *Exécuter quand même*.
+
+Pour le construire soi-même (Visual Studio avec C++ et ATL,
+[Inno Setup 6](https://jrsoftware.org/isinfo.php)) :
+
+```powershell
+flutter build windows --release
+iscc /DAppVersion=1.0.0 windows\packaging\c411_remote.iss
+# → build\installer\C411_Remote-Setup-x64.exe
+```
+
 ## Autres plateformes
 
 | Plateforme | État |
 |---|---|
-| iOS, macOS, Windows | projets générés, jamais testés |
+| iOS, macOS | projets générés, jamais testés |
 | Web | non prise en charge : Transmission et les trackers refusent les requêtes venant d'un navigateur (pas d'en-têtes CORS) |
 
 ## Et ensuite ?
