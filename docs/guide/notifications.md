@@ -61,6 +61,13 @@ augmente.
 Un clic ouvre la bonne chose : le torrent dans l'application s'il est dans
 Transmission, le salon pour un lien de discussion, sinon la page du site.
 
+**Torrent supprimé du site** : quand C411 annonce qu'un torrent a été retiré
+(par son uploader ou la modération), l'application le cherche dans
+Transmission par son empreinte, le **met en pause** et lui ajoute l'étiquette
+**à supprimer** ; un bandeau le signale. Il reste à le retirer depuis
+Transferts (filtre par étiquette). Chaque notification n'est appliquée
+qu'une fois : un torrent remis en route n'est pas remis en pause.
+
 La pastille de l'onglet compte les non lues **pas encore vues dans
 l'application** ; l'état « lu » du site n'est pas modifié.
 

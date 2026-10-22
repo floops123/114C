@@ -8,8 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/c411_chat.dart';
 import '../api/c411_socket.dart';
+import '../api/transmission.dart';
 import '../core/preferences.dart';
 import '../core/settings.dart';
+import 'torrents.dart';
 
 // Événements observés sur le WebSocket de C411 :
 //   unread:update    compteurs de non-lus (messages privés, salons, demandes…)
@@ -80,6 +82,17 @@ class AppNotification {
   /// Données propres au type (`data`).
   final Object? raw;
 
+  /// Empreinte du torrent retiré du site (`torrent_deleted`), en minuscules.
+  String? get deletedHash {
+    if (type != 'torrent_deleted') return null;
+    final data = raw;
+    final hash = (data is Map ? data['infoHash'] as String? : null) ??
+        RegExp(r'/torrents/([0-9a-fA-F]{40})').firstMatch(link ?? '')?.group(1);
+    return hash != null && RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(hash)
+        ? hash.toLowerCase()
+        : null;
+  }
+
   Map<String, Object?> toJson() => {
         'id': id,
         'type': type,
@@ -96,6 +109,10 @@ class AppNotification {
 abstract class NotificationStore {
   (List<AppNotification>, int seenUpTo) load();
   void save(List<AppNotification> items, int seenUpTo);
+
+  /// Notifications de suppression déjà appliquées au client.
+  Set<int> loadHandled();
+  void saveHandled(Set<int> ids);
 }
 
 class PrefsNotificationStore implements NotificationStore {
@@ -128,6 +145,22 @@ class PrefsNotificationStore implements NotificationStore {
         'seenUpTo': seenUpTo,
         'items': [for (final n in items) n.toJson()],
       }));
+
+  static const handledKey = 'notifications.deleted';
+
+  @override
+  Set<int> loadHandled() {
+    try {
+      final raw = _prefs.getString(handledKey);
+      return {...(jsonDecode(raw ?? '[]') as List).whereType<int>()};
+    } on Object {
+      return {};
+    }
+  }
+
+  @override
+  void saveHandled(Set<int> ids) =>
+      _prefs.setString(handledKey, jsonEncode(ids.toList()));
 }
 
 class MemoryNotificationStore implements NotificationStore {
@@ -142,6 +175,47 @@ class MemoryNotificationStore implements NotificationStore {
     _items = items;
     _seenUpTo = seenUpTo;
   }
+
+  Set<int> handled = {};
+
+  @override
+  Set<int> loadHandled() => {...handled};
+
+  @override
+  void saveHandled(Set<int> ids) => handled = {...ids};
+}
+
+/// Étiquette posée sur un torrent que le site a supprimé.
+const deletedLabel = 'à supprimer';
+
+/// Met en pause et étiquette [deletedLabel] les torrents du client retirés du
+/// site (notifications `torrent_deleted`). Renvoie les noms des torrents
+/// trouvés dans le client.
+Future<List<String>> holdDeletedTorrents(
+    TransmissionClient client, Iterable<AppNotification> notes) async {
+  final byHash = <String, AppNotification>{
+    for (final n in notes) ?n.deletedHash: n,
+  };
+  if (byHash.isEmpty) return const [];
+  // Transmission accepte les empreintes comme identifiants.
+  final found = await client.torrentGet(['id', 'hashString', 'name', 'labels'],
+      ids: byHash.keys.toList());
+  final held = <String>[];
+  for (final t in found.torrents) {
+    final id = (t['id'] as num?)?.toInt();
+    final hash = (t['hashString'] as String?)?.toLowerCase();
+    if (id == null || !byHash.containsKey(hash)) continue;
+    final labels =
+        (t['labels'] as List? ?? const []).whereType<String>().toList();
+    await client.action('torrent-stop', [id]);
+    if (!labels.contains(deletedLabel)) {
+      await client.torrentSet([id], {
+        'labels': [...labels, deletedLabel],
+      });
+    }
+    held.add(t['name'] as String? ?? hash!);
+  }
+  return held;
 }
 
 final notificationStoreProvider = Provider<NotificationStore>((ref) {
@@ -319,6 +393,10 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
   /// Notifications d'id ≤ à cette valeur déjà vues dans l'application.
   int _seenUpTo = 0;
   bool _loadedOnce = false;
+
+  /// Suppressions déjà appliquées : un torrent remis en route par
+  /// l'utilisateur n'est pas remis en pause.
+  Set<int> _handled = {};
   DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
   static const maxChat = 600;
   static const historySize = 50;
@@ -341,6 +419,7 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
     // Les dernières notifications chargées restent consultables hors ligne.
     final (stored, seenUpTo) = ref.read(notificationStoreProvider).load();
     _seenUpTo = seenUpTo;
+    _handled = ref.read(notificationStoreProvider).loadHandled();
     if (cookie.isEmpty) {
       return NotificationsState(items: stored, unread: _unseen(stored));
     }
@@ -429,9 +508,37 @@ class NotificationsNotifier extends Notifier<NotificationsState> {
       }
       _loadedOnce = true;
       _persist();
+      await holdDeleted(fetched);
     } on ChatException catch (e) {
       if (ref.mounted) state = state.copyWith(notifError: () => e.message);
     }
+  }
+
+  /// Torrents supprimés du site : en pause et étiquetés dans le client, une
+  /// seule fois par notification. Sans client joignable, on réessaiera au
+  /// prochain relevé.
+  Future<void> holdDeleted(List<AppNotification> notes) async {
+    final todo = [
+      for (final n in notes)
+        if (n.deletedHash != null && n.id != null && !_handled.contains(n.id))
+          n,
+    ];
+    final client = ref.read(transmissionProvider);
+    if (todo.isEmpty || client == null) return;
+    final List<String> held;
+    try {
+      held = await holdDeletedTorrents(client, todo);
+    } on Object {
+      return;
+    }
+    if (!ref.mounted) return;
+    _handled = {..._handled, for (final n in todo) n.id!};
+    ref.read(notificationStoreProvider).saveHandled(_handled);
+    if (held.isEmpty) return;
+    _arrive(held.length == 1
+        ? 'Supprimé du site, mis en pause : ${held.first}'
+        : '${held.length} torrents supprimés du site mis en pause');
+    ref.read(torrentsProvider.notifier).refresh();
   }
 
   /// Page suivante (plus anciennes).
