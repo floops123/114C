@@ -252,6 +252,15 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
       ),
     );
 
+    final table = MediaQuery.sizeOf(context).width >= _tableWidth;
+    final search = TextField(
+      onChanged: (v) => setState(() => _query = v),
+      decoration: const InputDecoration(
+        prefixIcon: Icon(Icons.search_rounded, size: 20),
+        hintText: 'Filtrer par nom',
+      ),
+    );
+
     final header = _selected.isNotEmpty
         ? _SelectionBar(
             torrents: selection,
@@ -356,16 +365,46 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                 'Renseigne l’adresse de ton serveur Transmission\ndans les réglages.',
               ),
             )
-          else ...[
+          else if (table) ...[
+            // PC : recherche, étiquette et états sur une seule ligne.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+              child: Row(children: [
+                SizedBox(width: 300, child: search),
+                if (labels.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  _LabelMenu(
+                    labels: labels,
+                    selected: _label,
+                    onSelected: (l) => setState(() => _label = l),
+                  ),
+                ],
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _FilterChips(
+                    selected: _filter,
+                    onSelected: (f) => setState(() => _filter = f),
+                  ),
+                ),
+              ]),
+            ),
+            if (error != null)
+              ErrorBanner(error, onRetry: () => notifier.refresh(full: true)),
+            Expanded(
+              child: _TorrentList(
+                view: view,
+                selected: _selected,
+                onToggle: _toggle,
+                table: true,
+                onSort: (s) => ref.read(uiPrefsProvider.notifier).setTransferSort(
+                    s.name, s == sort ? !ascending : s.ascendingByDefault),
+                onSelectAll: (all) => all ? selectAll() : setState(_selected.clear),
+              ),
+            ),
+          ] else ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: TextField(
-                onChanged: (v) => setState(() => _query = v),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search_rounded, size: 20),
-                  hintText: 'Filtrer par nom',
-                ),
-              ),
+              child: search,
             ),
             _FilterChips(
               selected: _filter,
@@ -578,11 +617,20 @@ class _TorrentList extends ConsumerStatefulWidget {
     required this.view,
     required this.selected,
     required this.onToggle,
+    this.table = false,
+    this.onSort,
+    this.onSelectAll,
   });
 
   final _View view;
   final Set<int> selected;
   final void Function(int id) onToggle;
+
+  /// PC : tableau dense, colonnes triables ([onSort]), case « tout »
+  /// ([onSelectAll]).
+  final bool table;
+  final ValueChanged<_Sort>? onSort;
+  final ValueChanged<bool>? onSelectAll;
 
   @override
   ConsumerState<_TorrentList> createState() => _TorrentListState();
@@ -590,6 +638,30 @@ class _TorrentList extends ConsumerStatefulWidget {
 
 class _TorrentListState extends ConsumerState<_TorrentList> {
   final _rows = <int, (Torrent, bool, bool, Widget)>{};
+  final _tableRows = <int, (Torrent, bool, bool, int, Widget)>{};
+
+  Widget _tableRow(Torrent t, List<_Column> columns) {
+    final selected = widget.selected.contains(t.id);
+    final selecting = widget.selected.isNotEmpty;
+    final cached = _tableRows[t.id];
+    if (cached != null &&
+        identical(cached.$1, t) &&
+        cached.$2 == selected &&
+        cached.$3 == selecting &&
+        cached.$4 == columns.length) {
+      return cached.$5;
+    }
+    final row = _TableRow(
+      key: ValueKey(t.id),
+      torrent: t,
+      columns: columns,
+      selected: selected,
+      selecting: selecting,
+      onToggle: () => widget.onToggle(t.id),
+    );
+    _tableRows[t.id] = (t, selected, selecting, columns.length, row);
+    return row;
+  }
 
   Widget _row(Torrent t) {
     final selected = widget.selected.contains(t.id);
@@ -624,8 +696,35 @@ class _TorrentListState extends ConsumerState<_TorrentList> {
     if (_rows.length > state.byId.length + 50) {
       _rows.removeWhere((id, _) => !state.byId.containsKey(id));
     }
+    if (_tableRows.length > state.byId.length + 50) {
+      _tableRows.removeWhere((id, _) => !state.byId.containsKey(id));
+    }
     if (torrents.isEmpty) {
       return const EmptyState(Icons.inbox_outlined, 'Aucun torrent');
+    }
+    if (widget.table) {
+      return LayoutBuilder(builder: (context, box) {
+        final columns = _Column.shown(box.maxWidth);
+        final shown = torrents.where((t) => widget.selected.contains(t.id)).length;
+        return Column(children: [
+          _TableHeader(
+            columns: columns,
+            sort: widget.view.sort,
+            ascending: widget.view.ascending,
+            onSort: widget.onSort ?? (_) {},
+            allSelected: shown == torrents.length,
+            someSelected: shown > 0,
+            onSelectAll: widget.onSelectAll ?? (_) {},
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemExtent: _TableRow.extent(context),
+              itemCount: torrents.length,
+              itemBuilder: (_, i) => _tableRow(torrents[i], columns),
+            ),
+          ),
+        ]);
+      });
     }
     return ListView.builder(
       itemExtent: _TorrentRow.extent(context),
@@ -966,6 +1065,332 @@ class _TorrentRow extends ConsumerWidget {
             ]),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PC : un tableau dense, colonnes triables, boutons d'action sur chaque ligne.
+
+/// Largeur d'écran à partir de laquelle la liste devient un tableau.
+const _tableWidth = 1000.0;
+
+/// Colonnes du tableau (le nom prend le reste). [minWidth] : largeur de
+/// liste en dessous de laquelle la colonne disparaît.
+enum _Column {
+  status('État', 120, _Sort.status),
+  progress('Progression', 150, _Sort.progress),
+  size('Taille', 86, _Sort.size, numeric: true),
+  down('Réception', 84, _Sort.download, numeric: true),
+  up('Envoi', 84, _Sort.upload, numeric: true),
+  eta('Reste', 70, _Sort.eta, numeric: true, minWidth: 1250),
+  ratio('Ratio', 58, _Sort.ratio, numeric: true),
+  uploaded('Envoyé', 84, _Sort.uploaded, numeric: true, minWidth: 1450),
+  peers('Pairs', 52, _Sort.peers, numeric: true, minWidth: 1150);
+
+  const _Column(this.label, this.width, this.sort, {this.numeric = false, this.minWidth = 0});
+  final String label;
+  final double width;
+  final _Sort sort;
+  final bool numeric;
+  final double minWidth;
+
+  static List<_Column> shown(double width) => [
+        for (final c in values)
+          if (width >= c.minWidth) c,
+      ];
+}
+
+/// Boutons d'action d'une ligne : démarrer ou arrêter, vérifier,
+/// étiquettes, supprimer, et le reste dans « ⋮ ».
+const _actionsWidth = 5 * 32.0 + 8;
+
+/// En-tête du tableau : case « tout », titres de colonnes (clic : tri).
+class _TableHeader extends StatelessWidget {
+  const _TableHeader({
+    required this.columns,
+    required this.sort,
+    required this.ascending,
+    required this.onSort,
+    required this.allSelected,
+    required this.someSelected,
+    required this.onSelectAll,
+  });
+
+  final List<_Column> columns;
+  final _Sort sort;
+  final bool ascending;
+  final ValueChanged<_Sort> onSort;
+  final bool allSelected;
+  final bool someSelected;
+  final ValueChanged<bool> onSelectAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    Widget title(String label, _Sort s, {bool numeric = false}) {
+      final on = s == sort;
+      return InkWell(
+        onTap: () => onSort(s),
+        child: Row(
+          mainAxisAlignment: numeric ? MainAxisAlignment.end : MainAxisAlignment.start,
+          children: [
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                      color: on ? c.text : c.muted)),
+            ),
+            if (on)
+              Icon(ascending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                  size: 13, color: c.text),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border(bottom: BorderSide(color: c.border)),
+      ),
+      child: Row(children: [
+        SizedBox(
+          width: 32,
+          child: Checkbox(
+            tristate: true,
+            value: allSelected ? true : (someSelected ? null : false),
+            onChanged: (_) => onSelectAll(!allSelected),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+        const SizedBox(width: 28),
+        Expanded(child: title('Nom', _Sort.name)),
+        for (final col in columns)
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: SizedBox(width: col.width, child: title(col.label, col.sort, numeric: col.numeric)),
+          ),
+        const SizedBox(width: _actionsWidth),
+      ]),
+    );
+  }
+}
+
+/// Une ligne du tableau.
+class _TableRow extends ConsumerWidget {
+  const _TableRow({
+    super.key,
+    required this.torrent,
+    required this.columns,
+    required this.selected,
+    required this.selecting,
+    required this.onToggle,
+  });
+
+  final Torrent torrent;
+  final List<_Column> columns;
+  final bool selected;
+  final bool selecting;
+  final VoidCallback onToggle;
+
+  static double extent(BuildContext context) =>
+      math.max(42, MediaQuery.textScalerOf(context).scale(13.5) * 1.3 + 22);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = torrent;
+    final c = context.colors;
+    final color = torrentColor(t, c);
+    final progress = t.isChecking
+        ? t.recheckProgress
+        : t.needsMetadata
+            ? t.metadataPercentComplete
+            : t.percentDone;
+    const mono = [FontFeature.tabularFigures()];
+    final small = TextStyle(fontSize: 12.5, color: c.muted, fontFeatures: mono);
+    final strong = small.copyWith(color: c.text, fontWeight: FontWeight.w600);
+
+    Widget cell(_Column col) {
+      final Widget child = switch (col) {
+        _Column.status => Text(
+            t.needsMetadata
+                ? 'Métadonnées'
+                : [
+                    t.statusLabel,
+                    if (t.isQueued) 'n° ${t.queuePosition + 1}',
+                    if (t.isStalled) 'bloqué',
+                  ].join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: small.copyWith(color: color, fontWeight: FontWeight.w700)),
+        _Column.progress => Row(children: [
+            Expanded(
+              child: LinearProgressIndicator(
+                  value: progress, color: color, minHeight: 5, borderRadius: BorderRadius.circular(3)),
+            ),
+            SizedBox(
+              width: 46,
+              child: Text(formatPercent(progress),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  style: small.copyWith(color: color, fontWeight: FontWeight.w700)),
+            ),
+          ]),
+        // Taille totale : la part reçue est dans la progression.
+        _Column.size => Text(formatBytes(t.sizeWhenDone), maxLines: 1, style: small),
+        _Column.down => t.rateDownload > 0
+            ? Text(formatSpeed(t.rateDownload), maxLines: 1, style: strong.copyWith(color: c.download))
+            : Text('—', style: small),
+        _Column.up => t.rateUpload > 0
+            ? Text(formatSpeed(t.rateUpload), maxLines: 1, style: strong.copyWith(color: c.upload))
+            : Text('—', style: small),
+        _Column.eta => Text(t.isDownloading && t.eta >= 0 ? formatDuration(t.eta) : '—', maxLines: 1, style: small),
+        _Column.ratio => Text(formatRatio(t.ratio), maxLines: 1, style: small),
+        _Column.uploaded => Text(formatBytes(t.uploadedEver), maxLines: 1, style: small),
+        _Column.peers => Text(t.peersConnected > 0 ? '${t.peersConnected}' : '—', maxLines: 1, style: small),
+      };
+      return Padding(
+        padding: const EdgeInsets.only(left: 12),
+        child: SizedBox(
+          width: col.width,
+          child: Align(alignment: col.numeric ? Alignment.centerRight : Alignment.centerLeft, child: child),
+        ),
+      );
+    }
+
+    Widget action(IconData icon, String tip, VoidCallback onTap, {Color? tone}) => SizedBox.square(
+          dimension: 32,
+          child: IconButton(
+            tooltip: tip,
+            padding: EdgeInsets.zero,
+            iconSize: 18,
+            color: tone ?? c.muted,
+            onPressed: onTap,
+            icon: Icon(icon),
+          ),
+        );
+
+    return Material(
+      color: selected ? c.accent.withValues(alpha: 0.10) : Colors.transparent,
+      child: InkWell(
+        onLongPress: onToggle,
+        onTap: selecting
+            ? onToggle
+            : () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => TorrentDetailPage(id: t.id, name: t.name)),
+                ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.6)))),
+          child: Row(children: [
+            SizedBox(
+              width: 32,
+              child: Checkbox(
+                value: selected,
+                onChanged: (_) => onToggle(),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            SizedBox(width: 28, child: Icon(torrentIcon(t), size: 18, color: color)),
+            Expanded(
+              child: Row(children: [
+                if (t.bandwidthPriority == TransmissionClient.priorityHigh)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(Icons.keyboard_double_arrow_up_rounded, size: 15, color: c.warning),
+                  ),
+                Flexible(
+                  child: Tooltip(
+                    message: t.hasError ? '${t.name}\n${t.errorString}' : t.name,
+                    waitDuration: const Duration(milliseconds: 600),
+                    child: Text(t.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: t.hasError ? c.danger : null)),
+                  ),
+                ),
+                for (final l in t.labels.take(2))
+                  Padding(padding: const EdgeInsets.only(left: 6), child: Tag(l, color: c.info)),
+              ]),
+            ),
+            for (final col in columns) cell(col),
+            const SizedBox(width: 8),
+            action(
+              t.isStopped ? Icons.play_arrow_rounded : Icons.pause_rounded,
+              t.isStopped ? 'Démarrer' : 'Mettre en pause',
+              () => runTorrentAction(
+                  context, ref, (c) => c.action(t.isStopped ? 'torrent-start' : 'torrent-stop', [t.id])),
+              tone: c.text,
+            ),
+            action(Icons.fact_check_outlined, 'Vérifier les données',
+                () => handleTorrentAction(context, ref, TorrentAction.verify, [t])),
+            action(Icons.label_outline_rounded, 'Étiquettes…',
+                () => handleTorrentAction(context, ref, TorrentAction.labels, [t])),
+            action(Icons.delete_outline_rounded, 'Supprimer…',
+                () => handleTorrentAction(context, ref, TorrentAction.remove, [t]),
+                tone: c.danger),
+            SizedBox.square(
+              dimension: 32,
+              child: TorrentMenu(
+                torrents: [t],
+                compact: true,
+                exclude: const {
+                  TorrentAction.start,
+                  TorrentAction.stop,
+                  TorrentAction.verify,
+                  TorrentAction.labels,
+                  TorrentAction.remove,
+                },
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Filtre d'étiquette en menu (PC), à côté de la recherche.
+class _LabelMenu extends StatelessWidget {
+  const _LabelMenu({required this.labels, required this.selected, required this.onSelected});
+  final List<String> labels;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return PopupMenuButton<String?>(
+      tooltip: 'Étiquette',
+      onSelected: onSelected,
+      itemBuilder: (_) => [
+        CheckedPopupMenuItem(value: null, checked: selected == null, child: const Text('Toutes étiquettes')),
+        for (final l in labels) CheckedPopupMenuItem(value: l, checked: selected == l, child: Text(l)),
+      ],
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: selected == null ? c.surfaceAlt : c.accent.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.label_outline_rounded, size: 18, color: selected == null ? c.muted : c.accent),
+          const SizedBox(width: 6),
+          Text(selected ?? 'Étiquettes', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Icon(Icons.arrow_drop_down_rounded, color: c.muted),
+        ]),
       ),
     );
   }

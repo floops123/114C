@@ -79,9 +79,13 @@ class TorrentMenu extends ConsumerWidget {
     this.magnetLink,
     this.onRemoved,
     this.exclude = const {},
+    this.compact = false,
   });
 
   final List<Torrent> torrents;
+
+  /// Bouton réduit, aligné sur des boutons d'icône de 32 px (tableau).
+  final bool compact;
 
   /// Disponible seulement sur l'écran de détail (champ lourd).
   final String? magnetLink;
@@ -96,7 +100,8 @@ class TorrentMenu extends ConsumerWidget {
         (a != TorrentAction.copyMagnet || magnetLink != null));
     return PopupMenuButton<TorrentAction>(
       tooltip: 'Actions',
-      icon: const Icon(Icons.more_vert_rounded),
+      icon: Icon(Icons.more_vert_rounded, size: compact ? 18 : null),
+      padding: compact ? EdgeInsets.zero : const EdgeInsets.all(8),
       onSelected: (a) => handleTorrentAction(context, ref, a, torrents,
           magnetLink: magnetLink, onRemoved: onRemoved),
       itemBuilder: (_) => [
