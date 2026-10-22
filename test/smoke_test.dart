@@ -14,6 +14,7 @@ import 'package:c411_remote/ui/theme.dart';
 import 'package:c411_remote/ui/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -104,7 +105,7 @@ class _Tr implements TrackerApi {
 }
 
 void main() {
-  for (final width in [400.0, 1400.0]) {
+  for (final width in [360.0, 400.0, 1400.0]) {
     testWidgets(
       'app complète sans erreur : onglets, info-bulles, rafraîchissements ($width px)',
       (tester) async {
@@ -142,6 +143,19 @@ void main() {
         await tester.pump();
         // Le salon est un onglet comme les autres.
         expect(find.text('Salon'), findsWidgets);
+        if (width < 720) {
+          // Sept onglets : chaque libellé tient sur une ligne.
+          final nav = find.byType(NavigationBar);
+          for (final label in ['Films', 'Trackers', 'Transferts', 'Réglages']) {
+            final text = find.descendant(of: nav, matching: find.text(label));
+            final style = tester.widget<Text>(text.first);
+            final paragraph = tester.renderObject<RenderParagraph>(
+                find.descendant(of: text.first, matching: find.byType(RichText)));
+            expect(paragraph.size.height,
+                lessThan(1.5 * paragraph.text.style!.fontSize!),
+                reason: '« $label » (${style.data}) passe à la ligne');
+          }
+        }
         final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
         await mouse.addPointer(location: Offset.zero);
         for (var round = 0; round < 3; round++) {

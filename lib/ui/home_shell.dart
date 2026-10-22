@@ -227,29 +227,80 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ]),
             );
           }
+          // Barre du bas : libellés courts quand ils débordent.
+          final labels = [
+            for (final d in destinations)
+              switch (d.$3) {
+                'Films & séries' => 'Films',
+                _ => d.$3,
+              },
+          ];
           return Scaffold(
             body: SafeArea(bottom: false, child: body),
             bottomNavigationBar: DecoratedBox(
               decoration: BoxDecoration(
                   border: Border(top: BorderSide(color: c.border))),
-              child: NavigationBar(
-                selectedIndex: _index,
-                onDestinationSelected: select,
-                destinations: [
-                  for (var i = 0; i < destinations.length; i++)
-                    NavigationDestination(
-                      icon: _icon(destinations[i].$1, i, unread),
-                      selectedIcon: _icon(destinations[i].$2, i, unread),
-                      // Barre du bas : libellés courts quand ils débordent.
-                      label: switch (destinations[i].$3) {
-                        'Films & séries' => 'Films',
-                        _ => destinations[i].$3,
-                      },
-                    ),
-                ],
+              child: _FittedLabels(
+                labels: labels,
+                width: constraints.maxWidth,
+                child: NavigationBar(
+                  selectedIndex: _index,
+                  onDestinationSelected: select,
+                  destinations: [
+                    for (var i = 0; i < destinations.length; i++)
+                      NavigationDestination(
+                        icon: _icon(destinations[i].$1, i, unread),
+                        selectedIcon: _icon(destinations[i].$2, i, unread),
+                        label: labels[i],
+                      ),
+                  ],
+                ),
               ),
             ),
           );
         });
+  }
+}
+
+/// Réduit la taille des libellés de la barre du bas pour que le plus long
+/// tienne sur une ligne : sept onglets sur un téléphone de 360 à 400 px
+/// coupaient « Transferts » en deux.
+class _FittedLabels extends StatelessWidget {
+  const _FittedLabels({required this.labels, required this.width, required this.child});
+  final List<String> labels;
+  final double width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = NavigationBarTheme.of(context);
+    final style = theme.labelTextStyle;
+    if (style == null || labels.isEmpty) return child;
+    final selected = style.resolve({WidgetState.selected}) ?? const TextStyle();
+    final scaler = MediaQuery.textScalerOf(context);
+    var widest = 0.0;
+    for (final l in labels) {
+      final painter = TextPainter(
+        text: TextSpan(text: l, style: DefaultTextStyle.of(context).style.merge(selected)),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      if (painter.width > widest) widest = painter.width;
+      painter.dispose();
+    }
+    // Marge de 4 px de part et d'autre du libellé.
+    final room = width / labels.length - 8;
+    if (widest <= room) return child;
+    final factor = room / widest;
+    return NavigationBarTheme(
+      data: theme.copyWith(
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final s = style.resolve(states) ?? const TextStyle();
+          return s.copyWith(fontSize: (s.fontSize ?? 12) * factor);
+        }),
+      ),
+      child: child,
+    );
   }
 }
