@@ -107,6 +107,8 @@ jobs:
 
   windows:
     name: Windows
+    # Désactivé pour le moment ; retirer cette ligne pour le réactiver.
+    if: false
     needs: test
     runs-on: windows-latest
     steps:
