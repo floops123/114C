@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/c411.dart';
+import '../api/content_kind.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/bencode.dart';
@@ -302,9 +303,14 @@ class ReseedNotifier extends Notifier<ReseedState> {
     final parent = transmissionPath(root.parent.path, folder: folder, transmissionFolder: transmissionFolder);
     final name = root.uri.pathSegments.where((p) => p.isNotEmpty).last;
     _set(item.key, (i) => i.copyWith(status: ReseedStatus.verifying, detail: () => parent));
+    // Le .torrent vient de [ReseedItem.release] ; à défaut, le nom local.
+    final kind = switch (item.release) {
+      final release? => ContentKind.of(release),
+      null => ContentKind.ofName(item.name),
+    };
     final result = await client.addTorrentWithHash(
       metainfo: item.metainfo,
-      options: AddOptions(downloadDir: parent, paused: true, labels: const ['reseed']),
+      options: AddOptions(downloadDir: parent, paused: true, labels: ['reseed', ...kind.labels]),
     );
     final ids = (await client.torrentGet(['id'], ids: [?result.hash])).torrents
         .map((t) => (t['id'] as num).toInt())

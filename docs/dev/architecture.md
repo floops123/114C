@@ -55,6 +55,7 @@ lib/
 │   └── zen.dart               règles Zen (Swarm Keeper) : note, poids, bonus, budget
 ├── api/
 │   ├── tracker.dart           enum Tracker, modèle Release, interface TrackerApi
+│   ├── content_kind.dart      type de contenu commun aux trackers (filtres, étiquette Transmission)
 │   ├── quota.dart             quota de requêtes par minute de chaque tracker, 429
 │   ├── c411.dart              API JSON de C411
 │   ├── torznab.dart           Torznab générique (tr4ker, Nostradamus, Draupnirr)
@@ -218,6 +219,11 @@ environ à chaque saut dans la vidéo.
 Les Réglages, la vue Trackers, la disponibilité des titres, la recherche
 des souhaits et le cross-seed
 s'adaptent tout seuls.
+
+3. Vérifier que ses catégories tombent dans le bon `ContentKind`
+   (`api/content_kind.dart`) : c'est elles qui donnent l'étiquette posée
+   dans Transmission et les filtres de la vue Trackers. Ajouter ses noms
+   réels (son `caps` pour Torznab) à `test/category_labels_test.dart`.
 
 ## Dépendance corrigée
 

@@ -349,6 +349,15 @@ class AddOptions {
   final List<String> labels;
   final int? bandwidthPriority;
 
+  /// Mêmes options, avec [more] ajoutées aux étiquettes (sans doublon) :
+  /// la catégorie s'ajoute à celles choisies à la main ou à `cross-seed`.
+  AddOptions withLabels(Iterable<String> more) => AddOptions(
+        downloadDir: downloadDir,
+        paused: paused,
+        labels: {...labels, ...more}.toList(),
+        bandwidthPriority: bandwidthPriority,
+      );
+
   Map<String, dynamic> toArgs() => {
         if (downloadDir != null && downloadDir!.isNotEmpty)
           'download-dir': downloadDir,

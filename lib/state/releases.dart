@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/c411.dart';
+import '../api/content_kind.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import 'torrents.dart';
@@ -31,10 +32,11 @@ Future<void> sendToTransmission(
   }
   try {
     final link = release.downloadUrl;
+    final withKind = options.withLabels(ContentKind.of(release).labels);
     final added = link != null && link.startsWith('magnet:')
-        ? await transmission.addTorrent(filename: link, options: options)
+        ? await transmission.addTorrent(filename: link, options: withKind)
         : await transmission.addTorrent(
-            metainfo: await api.downloadTorrent(release), options: options);
+            metainfo: await api.downloadTorrent(release), options: withKind);
     say(added
         ? 'Ajouté à Transmission : ${release.name}'
         : 'Déjà présent dans Transmission');

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/content_kind.dart';
 import '../api/transmission.dart';
 import '../core/bencode.dart';
 import '../core/format.dart';
@@ -506,14 +507,17 @@ Future<FileAddReport> addTorrentFiles(
 ) async {
   final report = FileAddReport();
   for (final (name, bytes) in files) {
+    final TorrentContent content;
     try {
-      TorrentContent.parse(bytes);
+      content = TorrentContent.parse(bytes);
     } on FormatException {
       report.invalid.add(name);
       continue;
     }
     try {
-      final added = await client.addTorrent(metainfo: bytes, options: options);
+      // Sans tracker, la catégorie est devinée d'après le nom du torrent.
+      final added = await client.addTorrent(
+          metainfo: bytes, options: options.withLabels(ContentKind.ofName(content.name).labels));
       added ? report.added++ : report.duplicates++;
     } on TransmissionException catch (e) {
       report.failed.add('$name : ${e.message}');

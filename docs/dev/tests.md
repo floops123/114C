@@ -28,6 +28,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 | `c411_account_test.dart` | blocs de la page C411 : réanimations (bilan, alerte si plus dans Transmission), classement |
 | `release_quality_test.dart` | langues résumées comme sur C411 (listes réelles de l'API, tables exactes du site), descriptions techniques, équipe, BONUS ; profils (libellés du site, champ `quality` prioritaire), DTS:X sans perte |
 | `content_art_test.dart` | type de contenu d'une sortie, pictos des catégories |
+| `category_labels_test.dart` | étiquette de catégorie posée dans Transmission : même étiquette pour une même catégorie sur C411, Nostradamus (son `caps` réel), AstraTorrent et Torznab standard ; ajout à la main (nom seul) ; `AddOptions.withLabels` |
 | `row_layout_test.dart` | lignes sans débordement (390 / 1 705 px, police × 1 et × 1,3) |
 | `mouse_scroll_test.dart`, `smooth_wheel_test.dart` | glisser à la souris, molette adoucie |
 
@@ -35,7 +36,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 
 | Fichier | Contenu |
 |---|---|
-| `add_files_test.dart` | envoi de `.torrent` : ajoutés, doublons, invalides, refusés |
+| `add_files_test.dart` | envoi de `.torrent` : ajoutés, doublons, invalides, refusés ; catégorie devinée du nom, ajoutée aux étiquettes choisies |
 | `server_settings_test.dart`, `torrent_detail_test.dart` | écrans sur des réponses réelles d'un daemon 4.0.5 |
 | `charts_test.dart` | graphiques (survol, info-bulle sans débordement) |
 | `reorder_test.dart` | liste réordonnée à chaque rafraîchissement sans erreur |

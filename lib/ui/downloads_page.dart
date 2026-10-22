@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/content_kind.dart';
 import '../api/transmission.dart';
 import '../core/preferences.dart';
 import '../core/format.dart';
@@ -199,6 +200,10 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
       if (chosen == null || !mounted) return;
       options = chosen;
     }
+    // Sans tracker, la catégorie est devinée d'après le nom (`dn` d'un
+    // lien magnet ; rien pour une simple URL de .torrent).
+    final name = Uri.tryParse(link.trim())?.queryParameters['dn'] ?? '';
+    options = options.withLabels(ContentKind.ofName(name).labels);
     var added = false;
     final ok = await runTorrentAction(context, ref, (c) async {
       added = await c.addTorrent(filename: link.trim(), options: options);

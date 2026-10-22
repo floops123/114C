@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/content_kind.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/zen.dart';
@@ -387,7 +388,9 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
       state = state.copyWith(sent: n);
       String? failure;
       try {
-        await transmission.addTorrent(metainfo: await fetchTorrentFile(api, site, item.release));
+        await transmission.addTorrent(
+            metainfo: await fetchTorrentFile(api, site, item.release),
+            options: AddOptions(labels: ContentKind.of(item.release).labels));
         added++;
       } on TrackerException catch (e) {
         failure = e.message;

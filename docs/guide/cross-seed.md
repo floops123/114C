@@ -41,7 +41,8 @@ tracker ajouté plus tard est inclus d'office.
 ### Ajouter
 
 **Ajouter** (une correspondance) ou **Tout ajouter** : le torrent est ajouté
-dans le dossier des données existantes, avec l'étiquette `cross-seed`.
+dans le dossier des données existantes, avec l'étiquette `cross-seed` et
+celle de sa [catégorie](transferts.md#étiquette-de-catégorie).
 
 ### Courtoisie envers les trackers
 

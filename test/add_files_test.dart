@@ -46,4 +46,19 @@ void main() {
     expect(client.received, hasLength(3));
     expect(client.received.every((r) => r.$2.downloadDir == '/data/films'), isTrue);
   });
+
+  test('envoi de fichiers .torrent : catégorie devinée du nom, en plus des étiquettes choisies',
+      () async {
+    final client = _Client();
+    await addTorrentFiles(client, [
+      ('a.torrent', _torrent('Serie.S01E01.1080p.WEB-GRP.mkv', 100)),
+      ('b.torrent', _torrent('Auteur.Roman.FRENCH.EPUB-GRP.epub', 100)),
+      ('c.torrent', _torrent('archive.bin', 100)),
+    ], const AddOptions(labels: ['pc']));
+    expect([for (final (_, o) in client.received) o.labels], [
+      ['pc', 'Séries'],
+      ['pc', 'Livres'],
+      ['pc'],
+    ]);
+  });
 }

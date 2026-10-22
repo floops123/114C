@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/c411.dart';
+import '../api/content_kind.dart';
 import '../api/ftp.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
@@ -392,7 +393,9 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
         }
         return 'Fichiers différents entre C411 et ${best.tracker.label}';
       }
-      final added = await client.addTorrentWithHash(metainfo: remote);
+      final added = await client.addTorrentWithHash(
+          metainfo: remote,
+          options: AddOptions(labels: ContentKind.of(item.release).labels));
       final hash = added.hash ?? best.infoHash;
       if (hash == null) return 'Transmission n’a pas renvoyé l’infohash';
       if (!ref.mounted) return null;
@@ -516,7 +519,9 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
         if (match == null) return null;
         await client.addTorrent(
           metainfo: metainfo,
-          options: AddOptions(downloadDir: match['downloadDir'] as String?, labels: const [CrossSeedNotifier.label]),
+          options: AddOptions(
+              downloadDir: match['downloadDir'] as String?,
+              labels: [CrossSeedNotifier.label, ...ContentKind.of(item.release).labels]),
         );
         return 'Cross-seed sur « ${match['name']} »';
       },
@@ -547,7 +552,7 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
         final match = await matchLocal(content, index);
         if (match == null) return null;
         return local
-            ? _addInPlace(client, content, metainfo, match)
+            ? _addInPlace(client, content, metainfo, match, ContentKind.of(item.release).labels)
             : _upload(item, client, content, metainfo, match);
       },
     );
@@ -555,12 +560,13 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
 
   /// Transmission local : ajouté en pause dans le dossier parent, renommé si
   /// le fichier ou le dossier n'a pas le nom du torrent, vérifié, relancé.
-  Future<String> _addInPlace(
-      TransmissionClient client, TorrentContent content, Uint8List metainfo, LocalMatch match) async {
+  Future<String> _addInPlace(TransmissionClient client, TorrentContent content,
+      Uint8List metainfo, LocalMatch match, List<String> labels) async {
     final root = File(match.root);
     final name = root.uri.pathSegments.where((p) => p.isNotEmpty).last;
     final added = await client.addTorrentWithHash(
-        metainfo: metainfo, options: AddOptions(downloadDir: root.parent.path, paused: true));
+        metainfo: metainfo,
+        options: AddOptions(downloadDir: root.parent.path, paused: true, labels: labels));
     final ids = (await client.torrentGet(['id'], ids: [?added.hash])).torrents
         .map((t) => (t['id'] as num).toInt())
         .toList();
@@ -612,7 +618,9 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
     } finally {
       await ftp.close();
     }
-    await client.addTorrent(metainfo: metainfo, options: AddOptions(downloadDir: downloadDir));
+    await client.addTorrent(
+        metainfo: metainfo,
+        options: AddOptions(downloadDir: downloadDir, labels: ContentKind.of(item.release).labels));
     return 'Envoyé depuis ${match.root}';
   }
 
@@ -641,9 +649,10 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
       try {
         await client.addTorrent(
           metainfo: p.metainfo,
+          // Étiquettes de la copie, dont sa catégorie, en plus de cross-seed.
           options: AddOptions(
               downloadDir: t.downloadDir,
-              labels: const [CrossSeedNotifier.label]),
+              labels: {CrossSeedNotifier.label, ...t.labels}.toList()),
         );
         if (!ref.mounted) return;
         _forget(hash);

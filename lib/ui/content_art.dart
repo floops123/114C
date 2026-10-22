@@ -1,101 +1,38 @@
 import 'package:flutter/material.dart';
 
-import '../api/tracker.dart';
-import '../core/release_name.dart';
+import '../api/content_kind.dart';
 import 'theme.dart';
 
-/// Type de contenu d'une sortie, pour l'image affichée à défaut d'affiche.
-enum ContentKind {
-  movie('Film', Icons.movie_rounded),
-  series('Série', Icons.live_tv_rounded),
-  documentary('Documentaire', Icons.public_rounded),
-  animation('Animation', Icons.animation_rounded),
-  music('Musique', Icons.album_rounded),
-  book('Livre', Icons.menu_book_rounded),
-  game('Jeu vidéo', Icons.sports_esports_rounded),
-  software('Logiciel', Icons.terminal_rounded),
-  adult('Adulte', Icons.no_adult_content_rounded),
-  other('Contenu', Icons.folder_zip_rounded);
+export '../api/content_kind.dart';
 
-  const ContentKind(this.label, this.icon);
-  final String label;
-  final IconData icon;
-
-  static bool _any(String s, List<String> words) => words.any(s.contains);
-
-  /// D'après la fiche du tracker (C411), la sous-catégorie, puis le nom.
-  static ContentKind of(Release r) {
-    // Sous-catégorie et catégories du tracker (pour Torznab, celles du
-    // `caps` : « Movies/HD », « TV/HD », « Books/EBook »…).
-    final sub = [r.subcategory, ...r.categories].join(' ').toLowerCase();
-    final name = r.name.toLowerCase();
-    bool word(String pattern) => RegExp('\\b($pattern)\\b').hasMatch(sub);
-    if (_any(sub, ['xxx', 'adulte', 'hentai', 'porn'])) return adult;
-    if (sub.contains('documentaire') || RegExp(r'[.\s]doc[.\s]').hasMatch(name)) {
-      return documentary;
-    }
-    switch (r.mediaKind) {
-      case 'music':
-        return music;
-      case 'game':
-        return game;
-      case 'tv':
-        return _any(sub, ['anim']) ? animation : series;
-      case 'movie':
-        return _any(sub, ['anim']) ? animation : movie;
-    }
-    if (_any(sub, ['anim'])) return animation;
-    if (_any(sub, ['série', 'serie', 'saison', 'épisode', 'episode', 'émission']) ||
-        word('tv')) {
-      return series;
-    }
-    if (_any(sub, ['livre', 'ebook', 'bd', 'manga', 'comic', 'presse', 'roman']) ||
-        word('books?|magazines?')) {
-      return book;
-    }
-    // Après les livres : « Ebook › Audio » est un livre audio.
-    if (_any(sub, ['musique', 'album', 'flac', 'mp3', 'audio', 'karaok', 'podcast']) ||
-        word('music')) {
-      return music;
-    }
-    if (_any(sub, ['jeu', 'jv', 'nintendo', 'playstation', 'xbox', 'switch', 'sony']) ||
-        word('games?|console')) {
-      return game;
-    }
-    if (_any(sub, ['logiciel', 'application', 'apps', 'macos', 'linux', 'windows']) ||
-        word('pc|mobile|software')) {
-      return software;
-    }
-    if (_any(sub, ['film', 'métrage', 'metrage', 'spectacle', 'concert']) ||
-        word('movies?')) {
-      return movie;
-    }
-    // Rien dans la catégorie : indices dans le nom.
-    if (ReleaseName.parse(r.name).kind == 'Série') return series;
-    if (RegExp(r'\b(epub|pdf|cbz|cbr|mobi|azw3)\b').hasMatch(name)) return book;
-    if (RegExp(r'\b(flac|mp3|aac|alac)\b').hasMatch(name) &&
-        !RegExp(r'\b(1080p|2160p|720p)\b').hasMatch(name)) {
-      return music;
-    }
-    if (RegExp(r'elamigos|fitgirl|\bgog\b|codex|skidrow').hasMatch(name)) return game;
-    if (r.resolution != null || ReleaseName.parse(r.name).resolution != null) {
-      return movie;
-    }
-    return other;
-  }
+/// Picto et couleurs d'un type de contenu, pour l'image affichée à défaut
+/// d'affiche.
+extension ContentKindStyle on ContentKind {
+  IconData get icon => switch (this) {
+        ContentKind.movie => Icons.movie_rounded,
+        ContentKind.series => Icons.live_tv_rounded,
+        ContentKind.documentary => Icons.public_rounded,
+        ContentKind.animation => Icons.animation_rounded,
+        ContentKind.music => Icons.album_rounded,
+        ContentKind.book => Icons.menu_book_rounded,
+        ContentKind.game => Icons.sports_esports_rounded,
+        ContentKind.software => Icons.terminal_rounded,
+        ContentKind.adult => Icons.no_adult_content_rounded,
+        ContentKind.other => Icons.folder_zip_rounded,
+      };
 
   /// Dégradé, dans les couleurs de la palette.
   List<Color> colors(AppColors c) => switch (this) {
-        movie => [c.accent, c.download],
-        series => [c.download, c.info],
-        documentary => [c.success, c.download],
-        animation => [c.warning, c.accent],
-        music => [c.upload, c.warning],
-        book => [c.toneBronze, c.warning],
-        game => [c.info, c.accent],
-        software => [c.muted, c.download],
-        adult => [c.danger, c.upload],
-        other => [c.muted, c.border],
+        ContentKind.movie => [c.accent, c.download],
+        ContentKind.series => [c.download, c.info],
+        ContentKind.documentary => [c.success, c.download],
+        ContentKind.animation => [c.warning, c.accent],
+        ContentKind.music => [c.upload, c.warning],
+        ContentKind.book => [c.toneBronze, c.warning],
+        ContentKind.game => [c.info, c.accent],
+        ContentKind.software => [c.muted, c.download],
+        ContentKind.adult => [c.danger, c.upload],
+        ContentKind.other => [c.muted, c.border],
       };
 }
 

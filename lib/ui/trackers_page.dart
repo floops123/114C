@@ -265,19 +265,9 @@ class _TrackersPageState extends ConsumerState<TrackersPage> {
 ContentKind groupKind(ReleaseGroup g) => ContentKind.of(
     g.releases.firstWhere((r) => r.mediaKind != null, orElse: () => g.releases.first));
 
-/// Nom d'une catégorie dans les filtres.
-String categoryLabel(ContentKind k) => switch (k) {
-      ContentKind.movie => 'Films',
-      ContentKind.series => 'Séries',
-      ContentKind.documentary => 'Documentaires',
-      ContentKind.animation => 'Animation',
-      ContentKind.music => 'Musique',
-      ContentKind.book => 'Livres',
-      ContentKind.game => 'Jeux vidéo',
-      ContentKind.software => 'Logiciels',
-      ContentKind.adult => 'Adulte',
-      ContentKind.other => 'Autres',
-    };
+/// Nom d'une catégorie dans les filtres (le même que l'étiquette posée dans
+/// Transmission).
+String categoryLabel(ContentKind k) => k.plural;
 
 /// Étiquette de catégorie sur une affiche ou une carte.
 Widget categoryTag(AppColors c, ContentKind k, {bool solid = false}) => Tag(k.label,

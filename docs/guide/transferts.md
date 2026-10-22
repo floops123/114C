@@ -52,6 +52,25 @@ Bouton **+** :
 Depuis un tracker, c'est le bouton ⬇ d'une version dans la vue
 [Trackers](trackers.md#télécharger).
 
+### Étiquette de catégorie
+
+Tout torrent ajouté par l'application reçoit **l'étiquette de sa
+catégorie** : *Films*, *Séries*, *Documentaires*, *Animation*, *Musique*,
+*Livres*, *Jeux vidéo*, *Logiciels* ou *Adulte* — les mêmes noms que les
+filtres de la vue Trackers, **quel que soit le tracker** (« Films & Vidéos ›
+Film » sur C411, « Films/Film » sur Nostradamus, « Movies/HD » en Torznab
+et « Films » sur AstraTorrent donnent tous *Films*). Le filtre par
+étiquette des Transferts trie donc tout par catégorie.
+
+- Depuis un tracker (⬇, import en masse, opportunités Zen, cross-seed,
+  revive, palliatifs, reseed) : la catégorie de la sortie.
+- Fichier `.torrent` ou lien magnet ajouté à la main : la catégorie est
+  devinée d'après le nom (épisode, livre, album…) ; rien si elle ne se
+  devine pas, ou pour une simple URL de `.torrent`.
+- Elle s'ajoute aux autres étiquettes (`cross-seed`, `reseed`, celles
+  choisies dans les options), sans les remplacer. Une mise à jour de
+  torrent garde les étiquettes de l'ancien.
+
 ## Le détail d'un torrent
 
 Cinq onglets :

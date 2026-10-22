@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../api/content_kind.dart';
 import '../api/tracker.dart';
 import '../core/zen.dart';
 import '../api/transmission.dart';
@@ -715,10 +716,12 @@ class BulkImportNotifier extends Notifier<BulkState> {
           continue;
         }
         final link = item.release.downloadUrl;
+        final options = AddOptions(labels: ContentKind.of(item.release).labels);
         final ok = link != null && link.startsWith('magnet:')
-            ? await transmission.addTorrent(filename: link)
+            ? await transmission.addTorrent(filename: link, options: options)
             : await transmission.addTorrent(
                 metainfo: await fetchTorrentFile(api, site, item.release),
+                options: options,
               );
         if (ok) added++;
         _patch(item.key, (i) => i.copyWith(done: true, failed: false, detail: null));

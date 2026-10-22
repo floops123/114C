@@ -256,10 +256,11 @@ void main() {
     expect(tr4ker.downloads, 2, reason: 'seul le candidat de même taille est téléchargé');
     expect(s.running, isFalse);
 
-    // Ajout : dans le dossier existant, avec l'étiquette cross-seed.
+    // Ajout : dans le dossier existant, avec l'étiquette cross-seed et la
+    // catégorie de la sortie.
     expect(await first.read(crossSeedProvider.notifier).addAll(), 1);
     expect(transmission.added.single.downloadDir, '/data/films');
-    expect(transmission.added.single.labels, ['cross-seed']);
+    expect(transmission.added.single.labels, ['cross-seed', 'Films']);
     expect(first.read(crossSeedProvider).count(CrossSeedStatus.added), 1);
 
     // Nouvelle analyse : introuvables / différents / déjà partagés mémorisés.

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/astra.dart';
+import '../api/content_kind.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/bencode.dart';
@@ -490,9 +491,13 @@ class CrossSeedNotifier extends Notifier<CrossSeedState> {
     final client = ref.read(transmissionProvider);
     if (client == null || item.metainfo == null) return 'Rien à ajouter';
     try {
+      final kind = switch (item.candidate) {
+        final candidate? => ContentKind.of(candidate),
+        null => ContentKind.ofName(item.name),
+      };
       final added = await client.addTorrent(
         metainfo: item.metainfo,
-        options: AddOptions(downloadDir: item.downloadDir, labels: const [label]),
+        options: AddOptions(downloadDir: item.downloadDir, labels: [label, ...kind.labels]),
       );
       _set(
           item.key,

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../api/content_kind.dart';
 import '../api/tracker.dart';
 import '../api/transmission.dart';
 import '../core/bencode.dart';
@@ -386,7 +387,9 @@ class ReviveNotifier extends Notifier<ReviveState> {
         return 'Fichiers différents entre ${item.release.tracker.label} et '
             '${candidate.tracker.label}';
       }
-      final added = await client.addTorrentWithHash(metainfo: remote);
+      final added = await client.addTorrentWithHash(
+          metainfo: remote,
+          options: AddOptions(labels: ContentKind.of(item.release).labels));
       final hash = added.hash ?? candidate.infoHash;
       if (hash == null) return 'Transmission n’a pas renvoyé l’infohash';
       if (!ref.mounted) return null;
@@ -435,9 +438,10 @@ class ReviveNotifier extends Notifier<ReviveState> {
       try {
         await client.addTorrent(
           metainfo: p.metainfo,
+          // Étiquettes de la copie, dont sa catégorie, en plus de cross-seed.
           options: AddOptions(
               downloadDir: t.downloadDir,
-              labels: const [CrossSeedNotifier.label]),
+              labels: {CrossSeedNotifier.label, ...t.labels}.toList()),
         );
         if (!ref.mounted) return;
         _forget(hash);
