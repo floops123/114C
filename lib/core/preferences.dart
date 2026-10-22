@@ -20,6 +20,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         UiPrefsNotifier._transferAscKey,
         'tracker', // SelectedTrackerNotifier
         'notifications', // PrefsNotificationStore
+        'notifications.deleted', // PrefsNotificationStore.handledKey
         'crossSeed', // PrefsCrossSeedCache
         'crossSeedDirections', // CrossSeedDirectionsNotifier
         'wishlist', // PrefsWishlistStore

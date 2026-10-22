@@ -4,6 +4,7 @@ import 'package:c411_remote/api/c411.dart';
 import 'package:c411_remote/api/c411_chat.dart';
 import 'package:c411_remote/api/tracker.dart';
 import 'package:c411_remote/api/transmission.dart';
+import 'package:c411_remote/core/preferences.dart';
 import 'package:c411_remote/core/settings.dart';
 import 'package:c411_remote/state/notifications.dart';
 import 'package:c411_remote/state/palliative.dart';
@@ -11,6 +12,8 @@ import 'package:c411_remote/state/torrent_updates.dart';
 import 'package:c411_remote/state/torrents.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 import 'palliative_test.dart' show FakeTorrents;
 
@@ -88,6 +91,7 @@ class _NoSettings extends SettingsNotifier {
 
 void main() {
   updates();
+  prefs();
 
   test('empreinte d’une notification de suppression', () {
     expect(AppNotification.fromSite(_deleted).deletedHash, _hash);
@@ -239,5 +243,17 @@ void updates() {
     final n = client.calls.length;
     await notifier.refreshNotifications();
     expect(client.calls, hasLength(n));
+  });
+}
+
+void prefs() {
+  test('notifications appliquées : enregistrées dans les préférences autorisées', () async {
+    SharedPreferencesAsyncPlatform.instance = InMemorySharedPreferencesAsync.empty();
+    final store = PrefsNotificationStore(await loadSharedPrefs());
+    store.saveHandled({1, 2});
+    await Future<void>.delayed(Duration.zero);
+    expect(store.loadHandled(), {1, 2});
+    expect(PrefsNotificationStore(await loadSharedPrefs()).loadHandled(), {1, 2},
+        reason: 'relu après redémarrage');
   });
 }

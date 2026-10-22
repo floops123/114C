@@ -161,8 +161,10 @@ class PrefsNotificationStore implements NotificationStore {
   }
 
   @override
-  void saveHandled(Set<int> ids) =>
-      _prefs.setString(handledKey, jsonEncode(ids.toList()));
+  void saveHandled(Set<int> ids) => unawaited(_prefs
+      .setString(handledKey, jsonEncode(ids.toList()))
+      // Non enregistré : retenu en mémoire jusqu'au redémarrage.
+      .then((_) {}, onError: (Object _) {}));
 }
 
 class MemoryNotificationStore implements NotificationStore {
