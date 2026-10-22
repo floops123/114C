@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../core/format.dart';
 import 'theme.dart';
@@ -756,3 +757,89 @@ InlineSpan ratingSpan(BuildContext context, double rating, TextStyle style) =>
       text: '★ ${formatRating(rating)}',
       style: style.copyWith(color: context.colors.warning, fontWeight: FontWeight.w700),
     );
+
+/// Une ligne d'éléments, de gauche à droite, centrés verticalement : ceux qui
+/// ne tiennent pas entiers sont masqués, plutôt que coupés au milieu (une
+/// icône sans sa valeur).
+class OneLineRow extends MultiChildRenderObjectWidget {
+  const OneLineRow({super.key, required super.children});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderOneLineRow();
+}
+
+class _OneLineParentData extends ContainerBoxParentData<RenderBox> {
+  bool visible = true;
+}
+
+class _RenderOneLineRow extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _OneLineParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _OneLineParentData> {
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _OneLineParentData) child.parentData = _OneLineParentData();
+  }
+
+  @override
+  void performLayout() {
+    final maxWidth = constraints.maxWidth;
+    var x = 0.0;
+    var height = 0.0;
+    var full = false;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      child.layout(BoxConstraints(maxHeight: constraints.maxHeight), parentUsesSize: true);
+      final data = child.parentData! as _OneLineParentData;
+      // Dès qu'un élément déborde, les suivants sont masqués aussi : l'ordre
+      // des informations est gardé.
+      data.visible = !full && x + child.size.width <= maxWidth;
+      full = !data.visible;
+      if (data.visible) {
+        data.offset = Offset(x, 0);
+        x += child.size.width;
+        if (child.size.height > height) height = child.size.height;
+      }
+    }
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      final data = child.parentData! as _OneLineParentData;
+      if (data.visible) data.offset = Offset(data.offset.dx, (height - child.size.height) / 2);
+    }
+    size = constraints.constrain(Size(x, height));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      final data = child.parentData! as _OneLineParentData;
+      if (data.visible) context.paintChild(child, data.offset + offset);
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    for (var child = lastChild; child != null; child = childBefore(child)) {
+      final data = child.parentData! as _OneLineParentData;
+      if (!data.visible) continue;
+      final hit = result.addWithPaintOffset(
+        offset: data.offset,
+        position: position,
+        hitTest: (result, transformed) => child!.hitTest(result, position: transformed),
+      );
+      if (hit) return true;
+    }
+    return false;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) => computeMaxIntrinsicHeight(width);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    var h = 0.0;
+    for (var child = firstChild; child != null; child = childAfter(child)) {
+      final c = child.getMaxIntrinsicHeight(double.infinity);
+      if (c > h) h = c;
+    }
+    return h;
+  }
+}

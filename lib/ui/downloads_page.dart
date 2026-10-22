@@ -977,15 +977,15 @@ class _TorrentRow extends ConsumerWidget {
             if (t.isQueued) 'n° ${t.queuePosition + 1}',
             if (t.isStalled) 'bloqué',
           ].join(' · ');
-    // Écran étroit : les vitesses en tête de la ligne d'infos (coupée à
-    // droite si besoin) plutôt qu'à part, où elles ne tiendraient pas.
+    // Écran étroit : les vitesses en tête de la ligne d'infos (les derniers
+    // éléments masqués si besoin) plutôt qu'à part, où elles ne tiendraient pas.
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final speeds = [
       if (t.rateDownload > 0)
         speed(Icons.south_rounded, c.download, t.rateDownload),
       if (t.rateUpload > 0) speed(Icons.north_rounded, c.upload, t.rateUpload),
     ];
-    final details = Row(children: [
+    final details = OneLineRow(children: [
       Padding(
         padding: const EdgeInsets.only(right: 12),
         child: Text(status,
@@ -1127,12 +1127,8 @@ class _TorrentRow extends ConsumerWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: small.copyWith(color: c.danger))
-                            // Une ligne, coupée à droite si besoin.
-                            : SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                physics: const NeverScrollableScrollPhysics(),
-                                child: details,
-                              ),
+                            // Une ligne : ce qui ne tient pas est masqué.
+                            : details,
                       ),
                       if (!narrow) ...speeds,
                     ]),
