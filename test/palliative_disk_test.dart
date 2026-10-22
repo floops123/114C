@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,71 +11,13 @@ import 'package:c411_remote/state/media_library.dart';
 import 'package:c411_remote/state/palliative.dart';
 import 'package:c411_remote/state/palliative_match.dart';
 import 'package:c411_remote/state/torrents.dart';
-import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_ftp.dart';
 import 'palliative_test.dart' show FakeTorrents, FakeTracker;
+import 'torrent_fixture.dart';
 
-/// Bencode, avec les octets bruts (empreintes des morceaux).
-Uint8List _benc(Object v) {
-  final out = BytesBuilder();
-  void w(Object v) {
-    switch (v) {
-      case int n:
-        out.add(ascii.encode('i${n}e'));
-      case Uint8List b:
-        out
-          ..add(ascii.encode('${b.length}:'))
-          ..add(b);
-      case String s:
-        w(Uint8List.fromList(utf8.encode(s)));
-      case List l:
-        out.addByte(0x6c);
-        for (final e in l) {
-          w(e as Object);
-        }
-        out.addByte(0x65);
-      case Map m:
-        out.addByte(0x64);
-        for (final k in (m.keys.cast<String>().toList()..sort())) {
-          w(k);
-          w(m[k] as Object);
-        }
-        out.addByte(0x65);
-    }
-  }
-
-  w(v);
-  return out.takeBytes();
-}
-
-/// Un vrai .torrent : morceaux de [pieceLength] octets et leurs SHA-1.
-Uint8List _torrent(String name, List<(List<String>, List<int>)> files, {int pieceLength = 16}) {
-  final all = [for (final f in files) ...f.$2];
-  final pieces = BytesBuilder();
-  for (var i = 0; i < all.length; i += pieceLength) {
-    pieces.add(sha1.convert(all.sublist(i, (i + pieceLength).clamp(0, all.length))).bytes);
-  }
-  final single = files.length == 1 && files.first.$1.isEmpty;
-  return _benc({
-    'announce': 'https://c411.org/announce/x',
-    'info': {
-      'name': name,
-      'piece length': pieceLength,
-      'pieces': pieces.takeBytes(),
-      if (single)
-        'length': files.first.$2.length
-      else
-        'files': [
-          for (final (path, data) in files) {'path': path, 'length': data.length},
-        ],
-    },
-  });
-}
-
-List<int> _bytes(int n, int seed) => List.generate(n, (i) => (i * 7 + seed) % 251);
 
 Release _rel(String id, String name, int size) => Release(
     tracker: Tracker.c411, id: id, name: name, size: size, seeders: 0, infoHash: 'h$id', createdAt: DateTime(2026));
@@ -138,10 +79,10 @@ class _Settings extends SettingsNotifier {
 
 void main() {
   late Directory dir;
-  final movie = _bytes(100, 1); // Film à un fichier, 7 morceaux.
-  final a = _bytes(40, 2), b = _bytes(25, 3); // Pack à deux fichiers.
-  final movieTorrent = _torrent('Film.A-GRP.mkv', [(const [], movie)]);
-  final packTorrent = _torrent('Pack-GRP', [(['a.txt'], a), (['sous', 'b.txt'], b)]);
+  final movie = testBytes(100, 1); // Film à un fichier, 7 morceaux.
+  final a = testBytes(40, 2), b = testBytes(25, 3); // Pack à deux fichiers.
+  final movieTorrent = realTorrent('Film.A-GRP.mkv', [(const [], movie)]);
+  final packTorrent = realTorrent('Pack-GRP', [(['a.txt'], a), (['sous', 'b.txt'], b)]);
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('palliatif');
@@ -150,7 +91,7 @@ void main() {
     File('${dir.path}/Mon film.mkv').writeAsBytesSync(movie);
     File('${dir.path}/Autre/meme taille.mkv')
       ..createSync(recursive: true)
-      ..writeAsBytesSync(_bytes(100, 9));
+      ..writeAsBytesSync(testBytes(100, 9));
     File('${dir.path}/Mon pack/a.txt')
       ..createSync(recursive: true)
       ..writeAsBytesSync(a);
@@ -179,7 +120,7 @@ void main() {
       ]);
 
       // Même taille, autres données : refusé par les empreintes.
-      File('${dir.path}/Mon film.mkv').writeAsBytesSync(_bytes(100, 5));
+      File('${dir.path}/Mon film.mkv').writeAsBytesSync(testBytes(100, 5));
       expect(await matchLocal(TorrentContent.parse(movieTorrent), await LocalIndex.scan(dir.path)), isNull);
     });
 

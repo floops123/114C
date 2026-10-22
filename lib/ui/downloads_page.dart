@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import '../core/preferences.dart';
 import '../core/format.dart';
 import '../state/torrents.dart';
 import 'cross_seed_page.dart';
+import 'reseed_page.dart';
 import 'revive_page.dart';
 import 'stats_page.dart';
 import 'theme.dart';
@@ -317,6 +319,9 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                   'revive' => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const RevivePage()),
                   ),
+                  'reseed' => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ReseedPage()),
+                  ),
                   'start' => _all(
                     'torrent-start',
                     'Tous les torrents démarrés',
@@ -324,14 +329,17 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                   'stop' => _all('torrent-stop', 'Tous les torrents arrêtés'),
                   _ => selectAll(),
                 },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'select', child: Text('Sélectionner')),
-                  PopupMenuItem(value: 'cross', child: Text('Cross-seed…')),
-                  PopupMenuItem(
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'select', child: Text('Sélectionner')),
+                  const PopupMenuItem(value: 'cross', child: Text('Cross-seed…')),
+                  const PopupMenuItem(
                       value: 'revive', child: Text('Sans seeder…')),
-                  PopupMenuDivider(),
-                  PopupMenuItem(value: 'start', child: Text('Tout démarrer')),
-                  PopupMenuItem(value: 'stop', child: Text('Tout arrêter')),
+                  // Un dossier de l'appareil : version de bureau.
+                  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+                    const PopupMenuItem(value: 'reseed', child: Text('Reseed…')),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(value: 'start', child: Text('Tout démarrer')),
+                  const PopupMenuItem(value: 'stop', child: Text('Tout arrêter')),
                 ],
               ),
             ],

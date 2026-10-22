@@ -122,3 +122,31 @@ déjà là. Les autres passent en *Aucune correspondance* sans requête.
 L'envoi par FTP demande l'accès FTP dans les Réglages et la correspondance
 des chemins Transmission → FTP. Celle-ci est établie par un premier parcours
 de la vidéothèque (*Films & séries › Sur le disque › Actualiser*).
+
+## Reseed (version de bureau)
+
+Des fichiers déjà sur ton appareil (un ancien disque, une sauvegarde, un
+partage réseau) peuvent repartir en partage sans rien retélécharger. Menu ⋮
+de **Transferts › Reseed…**.
+
+1. **Choisis un dossier.** Chaque fichier et chaque dossier qu'il contient
+   est cherché ; coche *Aussi le contenu des sous-dossiers* pour un dossier
+   qui regroupe des sorties (« Films », « Séries »).
+2. **Choisis le tracker** où chercher.
+3. **Indique ce dossier vu par Transmission** :
+   - Transmission sur cet appareil : le même chemin, rempli tout seul ;
+   - Transmission ailleurs : son chemin à lui, par exemple le dossier d'un
+     NAS ou d'un partage monté des deux côtés. Il doit voir ces fichiers.
+4. **Rechercher.** Une sortie correspond si elle a le même nom (sans
+   extension), la même taille, les mêmes fichiers (chemins et tailles), et
+   les mêmes empreintes pour le premier et le dernier morceau. Si un
+   fichier a la même taille mais d'autres données, la ligne affiche
+   *Fichiers différents*.
+5. **Ajouter à Transmission** les correspondances cochées. Chaque torrent :
+   - est ajouté **en pause** dans le dossier qui contient le fichier ou le
+     dossier (étiquette « reseed »), et renommé si ton fichier porte un
+     autre nom que dans le torrent ;
+   - est **vérifié** par Transmission, avec la progression affichée ;
+   - **repart en partage seulement si les données sont complètes à 100 %**.
+     Sinon, il reste en pause avec le pourcentage trouvé, souvent signe
+     d'un mauvais chemin : rien n'est retéléchargé.
