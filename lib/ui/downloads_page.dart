@@ -241,14 +241,15 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
     final ascending = prefs.transferSort == null
         ? false
         : prefs.transferAscending;
-    final view = _View(_filter, _label, _query.toLowerCase(), sort, ascending);
+    final view = _View(_filter, _label, _query.toLowerCase(), sort, ascending,
+        prefs.transferLimit);
 
     final byId = ref.read(torrentsProvider).byId;
     _selected.removeWhere((id) => !byId.containsKey(id));
     final selection = [for (final id in _selected) ?byId[id]];
     void selectAll() => setState(
       () => _selected.addAll(
-        view.apply(ref.read(torrentsProvider)).map((t) => t.id),
+        view.shown(view.apply(ref.read(torrentsProvider))).map((t) => t.id),
       ),
     );
 
@@ -386,6 +387,7 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                     onSelected: (f) => setState(() => _filter = f),
                   ),
                 ),
+                const _ListOptions(),
               ]),
             ),
             if (error != null)
@@ -420,7 +422,10 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                 onSelected: (l) => setState(() => _label = l),
               ),
             ],
-            const SizedBox(height: 10),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 2, 8, 0),
+              child: Align(alignment: Alignment.centerLeft, child: _ListOptions()),
+            ),
             if (error != null)
               ErrorBanner(error, onRetry: () => notifier.refresh(full: true)),
             Divider(height: 1, color: c.border),
@@ -440,12 +445,20 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
 
 /// Filtres, recherche et tri appliqués à la liste.
 class _View {
-  const _View(this.filter, this.label, this.query, this.sort, this.ascending);
+  const _View(this.filter, this.label, this.query, this.sort, this.ascending,
+      this.limit);
   final _Filter filter;
   final String? label;
   final String query;
   final _Sort sort;
   final bool ascending;
+
+  /// Torrents affichés au plus ; 0 : tous.
+  final int limit;
+
+  /// Les premiers de [all] (déjà filtrés et triés), dans la limite.
+  List<Torrent> shown(List<Torrent> all) =>
+      limit > 0 && all.length > limit ? all.sublist(0, limit) : all;
 
   List<Torrent> apply(TorrentsState state) {
     int compare(Torrent a, Torrent b) {
@@ -692,7 +705,9 @@ class _TorrentListState extends ConsumerState<_TorrentList> {
           ? const Center(child: CircularProgressIndicator())
           : const SizedBox();
     }
-    final torrents = widget.view.apply(state);
+    final all = widget.view.apply(state);
+    final torrents = widget.view.shown(all);
+    final hidden = all.length - torrents.length;
     if (_rows.length > state.byId.length + 50) {
       _rows.removeWhere((id, _) => !state.byId.containsKey(id));
     }
@@ -723,13 +738,105 @@ class _TorrentListState extends ConsumerState<_TorrentList> {
               itemBuilder: (_, i) => _tableRow(torrents[i], columns),
             ),
           ),
+          if (hidden > 0) _HiddenNotice(shown: torrents.length, total: all.length),
         ]);
       });
     }
-    return ListView.builder(
-      itemExtent: _TorrentRow.extent(context),
-      itemCount: torrents.length,
-      itemBuilder: (_, i) => _row(torrents[i]),
+    return Column(children: [
+      Expanded(
+        child: ListView.builder(
+          itemExtent: _TorrentRow.extent(context),
+          itemCount: torrents.length,
+          itemBuilder: (_, i) => _row(torrents[i]),
+        ),
+      ),
+      if (hidden > 0) _HiddenNotice(shown: torrents.length, total: all.length),
+    ]);
+  }
+}
+
+/// Actualisation automatique et nombre de torrents affichés.
+class _ListOptions extends ConsumerWidget {
+  const _ListOptions();
+
+  static const limits = [50, 100, 200, 500, 1000, 0];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(uiPrefsProvider);
+    final notifier = ref.read(uiPrefsProvider.notifier);
+    final c = context.colors;
+    final small = TextStyle(fontSize: 12.5, color: c.muted);
+    // Wrap : sur téléphone, la limite passe à la ligne si besoin.
+    return Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+      Tooltip(
+        message: 'Relire Transmission toutes les 2 secondes',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => notifier.setAutoRefresh(!prefs.autoRefresh),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Checkbox(
+              value: prefs.autoRefresh,
+              visualDensity: VisualDensity.compact,
+              onChanged: (v) => notifier.setAutoRefresh(v ?? true),
+            ),
+            Text('Actualisation auto', style: small),
+            const SizedBox(width: 4),
+          ]),
+        ),
+      ),
+      if (!prefs.autoRefresh)
+        IconButton(
+          tooltip: 'Actualiser',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+          onPressed: () => ref.read(torrentsProvider.notifier).refresh(full: true),
+        ),
+      const SizedBox(width: 12),
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Text('Afficher', style: small),
+        const SizedBox(width: 6),
+        DropdownButton<int>(
+          value: limits.contains(prefs.transferLimit) ? prefs.transferLimit : 0,
+          isDense: true,
+          underline: const SizedBox(),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontSize: 12.5, color: c.text, fontWeight: FontWeight.w600),
+          items: [
+            for (final n in limits)
+              DropdownMenuItem(value: n, child: Text(n == 0 ? 'Tout' : '$n')),
+          ],
+          onChanged: (n) => notifier.setTransferLimit(n ?? 0),
+        ),
+      ]),
+    ]);
+  }
+}
+
+/// Pied de liste quand la limite masque des torrents.
+class _HiddenNotice extends ConsumerWidget {
+  const _HiddenNotice({required this.shown, required this.total});
+  final int shown;
+  final int total;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    return DecoratedBox(
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: c.border))),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+        child: Row(children: [
+          Expanded(
+            child: Text('$shown affichés sur $total',
+                style: TextStyle(fontSize: 12.5, color: c.muted)),
+          ),
+          TextButton(
+            onPressed: () => ref.read(uiPrefsProvider.notifier).setTransferLimit(0),
+            child: const Text('Tout afficher'),
+          ),
+        ]),
+      ),
     );
   }
 }

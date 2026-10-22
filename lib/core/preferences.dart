@@ -18,6 +18,8 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         UiPrefsNotifier._releaseAscKey,
         UiPrefsNotifier._transferSortKey,
         UiPrefsNotifier._transferAscKey,
+        UiPrefsNotifier._autoRefreshKey,
+        UiPrefsNotifier._transferLimitKey,
         'tracker', // SelectedTrackerNotifier
         'notifications', // PrefsNotificationStore
         'notifications.deleted', // PrefsNotificationStore.handledKey
@@ -44,6 +46,8 @@ class UiPrefs {
     this.releaseAscending = false,
     this.transferSort,
     this.transferAscending = false,
+    this.autoRefresh = true,
+    this.transferLimit = 200,
   });
 
   final ThemeMode themeMode;
@@ -58,6 +62,12 @@ class UiPrefs {
   final String? transferSort;
   final bool transferAscending;
 
+  /// Transmission relu toutes les 2 s ; sinon, seulement à la demande.
+  final bool autoRefresh;
+
+  /// Torrents affichés au plus dans Transferts ; 0 : tous.
+  final int transferLimit;
+
   UiPrefs copyWith({
     ThemeMode? themeMode,
     String? font,
@@ -66,6 +76,8 @@ class UiPrefs {
     bool? releaseAscending,
     String? transferSort,
     bool? transferAscending,
+    bool? autoRefresh,
+    int? transferLimit,
   }) =>
       UiPrefs(
         themeMode: themeMode ?? this.themeMode,
@@ -75,6 +87,8 @@ class UiPrefs {
         releaseAscending: releaseAscending ?? this.releaseAscending,
         transferSort: transferSort ?? this.transferSort,
         transferAscending: transferAscending ?? this.transferAscending,
+        autoRefresh: autoRefresh ?? this.autoRefresh,
+        transferLimit: transferLimit ?? this.transferLimit,
       );
 }
 
@@ -86,6 +100,8 @@ class UiPrefsNotifier extends Notifier<UiPrefs> {
   static const _releaseAscKey = 'releaseAscending';
   static const _transferSortKey = 'transferSort';
   static const _transferAscKey = 'transferAscending';
+  static const _autoRefreshKey = 'autoRefresh';
+  static const _transferLimitKey = 'transferLimit';
 
   SharedPreferencesWithCache get _prefs => ref.read(sharedPrefsProvider);
 
@@ -106,6 +122,8 @@ class UiPrefsNotifier extends Notifier<UiPrefs> {
       releaseAscending: prefs.getBool(_releaseAscKey) ?? false,
       transferSort: prefs.getString(_transferSortKey),
       transferAscending: prefs.getBool(_transferAscKey) ?? false,
+      autoRefresh: prefs.getBool(_autoRefreshKey) ?? true,
+      transferLimit: prefs.getInt(_transferLimitKey) ?? 200,
     );
   }
 
@@ -142,6 +160,24 @@ class UiPrefsNotifier extends Notifier<UiPrefs> {
     _prefs.setString(_transferSortKey, sort);
     _prefs.setBool(_transferAscKey, ascending);
     state = state.copyWith(transferSort: sort, transferAscending: ascending);
+  }
+
+  void setAutoRefresh(bool on) {
+    try {
+      _prefs.setBool(_autoRefreshKey, on);
+    } on Object {
+      // Préférences non initialisées (tests) : en mémoire seulement.
+    }
+    state = state.copyWith(autoRefresh: on);
+  }
+
+  void setTransferLimit(int limit) {
+    try {
+      _prefs.setInt(_transferLimitKey, limit);
+    } on Object {
+      // Préférences non initialisées (tests) : en mémoire seulement.
+    }
+    state = state.copyWith(transferLimit: limit);
   }
 }
 

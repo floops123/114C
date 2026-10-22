@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/transmission.dart';
+import '../core/preferences.dart';
 
 class TorrentsState {
   const TorrentsState({
@@ -22,7 +23,8 @@ class TorrentsState {
   int get uploadRate => byId.values.fold(0, (sum, t) => sum + t.rateUpload);
 }
 
-/// Interroge Transmission toutes les 2 s. Seuls les torrents actifs récemment
+/// Interroge Transmission toutes les 2 s (sauf actualisation automatique
+/// désactivée dans Transferts : seulement à la demande et après une action). Seuls les torrents actifs récemment
 /// sont redemandés (`recently-active`) ; une liste complète est rechargée
 /// régulièrement et après chaque action pour rester cohérent.
 class TorrentsNotifier extends Notifier<TorrentsState> {
@@ -38,7 +40,9 @@ class TorrentsNotifier extends Notifier<TorrentsState> {
     final client = ref.watch(transmissionProvider);
     ref.onDispose(() => _timer?.cancel());
     if (client == null) return const TorrentsState();
-    _timer = Timer.periodic(_interval, (_) => refresh());
+    _timer = Timer.periodic(_interval, (_) {
+      if (ref.read(uiPrefsProvider).autoRefresh) refresh();
+    });
     Future.microtask(() => refresh(full: true));
     return const TorrentsState();
   }

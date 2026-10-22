@@ -10,6 +10,13 @@ L'onglet **Transferts** pilote ton serveur Transmission, en direct.
   torrents actifs.
 - **Rafraîchissement toutes les 2 s** ; seuls les torrents modifiés sont
   redemandés au serveur.
+- **Actualisation auto** : décochée, Transmission n'est plus relu toutes les
+  2 s (utile avec des milliers de torrents ou une connexion lente) ; le
+  bouton ⟳ à côté relit la liste, qui se met aussi à jour après chaque
+  action.
+- **Afficher** : 50, 100, 200 (par défaut), 500, 1000 torrents ou Tout — les
+  premiers selon le tri et les filtres. Le pied de liste indique combien
+  sont masqués, avec **Tout afficher**. Les deux réglages sont mémorisés.
 - **Filtres** (avec leur nombre) : tous, actifs, en cours, en partage,
   terminés, en file, arrêtés, bloqués, en erreur — et filtre par
   **étiquette**.
