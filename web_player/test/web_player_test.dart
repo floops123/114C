@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:c411_core/ftp.dart';
+import 'package:c411_core/local_files.dart';
 import 'package:c411_core/media_relay.dart';
 import 'package:c411_core/webdav.dart';
 import 'package:c411_web_player/config.dart';
@@ -111,6 +112,13 @@ void main() {
       }).path);
       final dav = c.files as WebDavConfig;
       expect((dav.url, dav.user, dav.password), ('https://dav.example/', 'moi', 's'));
+      // Sans filesProtocol : déduit de ce qui est rempli.
+      expect(WebConfig.load(write({'webdavUrl': 'https://dav.example/'}).path).files,
+          isA<WebDavConfig>());
+      expect(WebConfig.load(write({'ftpHost': '', 'localRoot': '/mnt/x'}).path).files,
+          isA<LocalConfig>());
+      expect(WebConfig.load(write({'ftpHost': 'ftp.example', 'webdavUrl': 'https://d/'}).path).files,
+          isA<FtpConfig>(), reason: 'FTP renseigné : comme avant');
       expect(() => WebConfig.load(write({'filesProtocol': 'webdav'}).path),
           throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('webdavUrl'))));
     });

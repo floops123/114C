@@ -60,18 +60,23 @@ RemoteFiles openRemoteFiles(FilesConfig config) => switch (config) {
     };
 
 /// Accès aux fichiers depuis les réglages de l'application (JSON) :
-/// `filesProtocol` (`ftp` par défaut, `webdav` ou `local`), puis `ftpHost`,
-/// `ftpPort`, `ftpUser`, `ftpPassword`, `ftpTls`, ou `webdavUrl`,
-/// `webdavUser`, `webdavPassword`, ou `localRoot`.
+/// `filesProtocol` (`ftp`, `webdav` ou `local`), puis `ftpHost`, `ftpPort`,
+/// `ftpUser`, `ftpPassword`, `ftpTls`, ou `webdavUrl`, `webdavUser`,
+/// `webdavPassword`, ou `localRoot`. Sans `filesProtocol`, il est déduit
+/// de ce qui est rempli ([inferFilesProtocol]).
 FilesConfig filesConfigFromJson(Map<String, dynamic> json) {
   String text(String k) => (json[k] as String?)?.trim() ?? '';
-  if (text('filesProtocol') == 'local') {
+  final protocol = text('filesProtocol').isNotEmpty
+      ? text('filesProtocol').toLowerCase()
+      : inferFilesProtocol(
+          ftpHost: text('ftpHost'), webdavUrl: text('webdavUrl'), localRoot: text('localRoot'));
+  if (protocol == 'local') {
     if (text('localRoot').isEmpty) {
       throw const FormatException('localRoot manquant dans le fichier de réglages');
     }
     return LocalConfig(text('localRoot'));
   }
-  if (text('filesProtocol') == 'webdav') {
+  if (protocol == 'webdav') {
     if (text('webdavUrl').isEmpty) {
       throw const FormatException('webdavUrl manquant dans le fichier de réglages');
     }
@@ -82,7 +87,8 @@ FilesConfig filesConfigFromJson(Map<String, dynamic> json) {
     );
   }
   if (text('ftpHost').isEmpty) {
-    throw const FormatException('ftpHost manquant dans le fichier de réglages');
+    throw const FormatException('Accès aux fichiers manquant dans le fichier de '
+        'réglages : ftpHost (FTP), webdavUrl (WebDAV) ou localRoot (dossier local)');
   }
   return FtpConfig(
     host: text('ftpHost'),
@@ -92,3 +98,15 @@ FilesConfig filesConfigFromJson(Map<String, dynamic> json) {
     tls: json['ftpTls'] as bool? ?? true,
   );
 }
+
+/// Protocole quand il n'est pas précisé : le FTP s'il est renseigné (les
+/// réglages d'avant le WebDAV), sinon le WebDAV, sinon le dossier local.
+String inferFilesProtocol(
+        {required String ftpHost, required String webdavUrl, required String localRoot}) =>
+    ftpHost.trim().isNotEmpty
+        ? 'ftp'
+        : webdavUrl.trim().isNotEmpty
+            ? 'webdav'
+            : localRoot.trim().isNotEmpty
+                ? 'local'
+                : 'ftp';

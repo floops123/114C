@@ -37,6 +37,10 @@ void main() {
     expect((round.useWebDav, round.webdavUrl, round.webdavUser, round.webdavPassword),
         (true, 'https://dav.x/', 'moi', 's'));
     expect(round.hasFiles, isTrue, reason: 'WebDAV suffit, sans FTP');
+    // Sans filesProtocol (réglages écrits à la main) : déduit.
+    expect(AppSettings.fromJson({'webdavUrl': 'https://d/'}).filesProtocol, 'webdav');
+    expect(AppSettings.fromJson({'ftpHost': 'h', 'webdavUrl': 'https://d/'}).filesProtocol, 'ftp');
+    expect(AppSettings.fromJson({'localRoot': '/mnt/x'}).filesProtocol, 'local');
     // Ancienne variante compilée : AstraTorrent rangé sous son nom complet.
     expect(AppSettings.fromJson({'apiKeys': {'astratorrent': 'pk'}}).apiKeys, {'astra': 'pk'});
   });

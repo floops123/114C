@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:c411_core/remote_files.dart' show inferFilesProtocol;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -49,7 +50,11 @@ class AppSettings {
         ftpUser: json['ftpUser'] as String? ?? '',
         ftpPassword: json['ftpPassword'] as String? ?? '',
         ftpTls: json['ftpTls'] as bool? ?? true,
-        filesProtocol: json['filesProtocol'] as String? ?? 'ftp',
+        filesProtocol: json['filesProtocol'] as String? ??
+            inferFilesProtocol(
+                ftpHost: json['ftpHost'] as String? ?? '',
+                webdavUrl: json['webdavUrl'] as String? ?? '',
+                localRoot: json['localRoot'] as String? ?? ''),
         webdavUrl: json['webdavUrl'] as String? ?? '',
         webdavUser: json['webdavUser'] as String? ?? '',
         webdavPassword: json['webdavPassword'] as String? ?? '',

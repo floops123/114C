@@ -1,3 +1,5 @@
+import 'package:c411_core/remote_files.dart' show inferFilesProtocol;
+
 import 'core/settings.dart';
 
 /// Réglages injectés au build via `--dart-define`. Permettent de produire
@@ -70,7 +72,8 @@ class BuildDefaults {
       ftpUser: _str(_ftpUser) ?? '',
       ftpPassword: _str(_ftpPassword) ?? '',
       ftpTls: _bool(_ftpTls) ?? true,
-      filesProtocol: _str(_filesProtocol) ?? 'ftp',
+      filesProtocol: _str(_filesProtocol) ??
+          inferFilesProtocol(ftpHost: _ftpHost, webdavUrl: _webdavUrl, localRoot: _localRoot),
       webdavUrl: _str(_webdavUrl) ?? '',
       webdavUser: _str(_webdavUser) ?? '',
       webdavPassword: _str(_webdavPassword) ?? '',
