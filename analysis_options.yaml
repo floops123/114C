@@ -17,6 +17,11 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # Serveurs web : projets Dart à part, analysés chacun avec ses
+    # dépendances (dart analyze dans leur dossier, voir la CI).
+    - web_player/**
+    - web_music/**
+    - web_books/**
 
 linter:
   # The lint rules applied to this project can be customized in the
