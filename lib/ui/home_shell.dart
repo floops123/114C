@@ -144,6 +144,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           content: Text(text),
           action: SnackBarAction(
               label: 'Voir', onPressed: () => select(_notificationsTab)),
+          // Avec une action, le bandeau reste affiché : on peut aussi le fermer.
+          showCloseIcon: true,
         ));
     });
     final unread = ref.watch(notificationsProvider.select((s) => (
