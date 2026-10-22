@@ -360,12 +360,7 @@ class ZenSection extends StatelessWidget {
     final day = f?.today ?? latest;
     final cap = (f?.bonusCapBp ?? h?.bonusCapBp ?? 0) / 10000;
 
-    final head = _Block(
-      children: [
-        Wrap(
-          spacing: 24,
-          runSpacing: 14,
-          children: [
+    final bigs = <Widget>[
             if (b != null)
               _Big(
                 caption: const _Caption(
@@ -400,7 +395,20 @@ class ZenSection extends StatelessWidget {
                     ? null
                     : 'le ${shortDay(latest.date!)}',
               ),
-          ],
+    ];
+
+    final head = _Block(
+      children: [
+        // Côte à côte quand la place le permet (une ligne), sinon à la ligne.
+        LayoutBuilder(
+          builder: (context, box) => box.maxWidth >= bigs.length * 210
+              ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  for (final (i, b) in bigs.indexed) ...[
+                    if (i > 0) const SizedBox(width: 24),
+                    Expanded(child: b),
+                  ],
+                ])
+              : Wrap(spacing: 24, runSpacing: 14, children: bigs),
         ),
         if (day != null) ...[
           const SizedBox(height: 14),

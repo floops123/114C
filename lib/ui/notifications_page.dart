@@ -17,6 +17,10 @@ import 'widgets.dart';
 
 /// Notifications du site C411 : état de la connexion, compte en direct,
 /// compteurs, puis les notifications par jour (le salon a son onglet).
+/// Largeur à partir de laquelle la page devient un tableau de bord en deux
+/// colonnes (compte et notifications, Zen).
+const _dashboardWidth = 1100.0;
+
 class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});
 
@@ -39,6 +43,12 @@ class NotificationsPage extends ConsumerWidget {
                 : Text('Notifications et compte',
                     style: TextStyle(color: c.muted, fontSize: 12.5)),
             actions: [
+              // PC : l'état de la connexion dans l'en-tête, pas en carte.
+              if (MediaQuery.sizeOf(context).width >= _dashboardWidth && state.configured)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _ConnectionTile(status: state.status, compact: true),
+                ),
               if (state.status == SocketStatus.unauthorized ||
                   state.status == SocketStatus.disconnected)
                 IconButton(
@@ -103,26 +113,11 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
     final remaining = state.items.length - shown.length;
     final overview = ref.watch(c411OverviewProvider);
     final o = overview.value;
+    // PC : le compte et les notifications à gauche, le Zen à droite.
+    final wide = MediaQuery.sizeOf(context).width >= _dashboardWidth;
+    final hasZen = o != null && (o.balance != null || o.forecast != null || o.history != null);
 
-    final top = <Widget>[
-      if (!state.configured)
-        Text(
-          'Hors ligne : historique local. Ajoute tes cookies de session dans '
-          'les réglages pour recevoir les nouvelles.',
-          style: TextStyle(color: c.muted, fontSize: 12),
-        ),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: _ConnectionTile(status: state.status),
-      ),
-      if (o != null && (o.account != null || o.level != null))
-        C411ProfileCard(account: o.account, level: o.level),
-      if (state.account != null) _AccountCard(state.account!),
-      if (state.counters != null) _Counters(state.counters!),
-      if (o != null && (o.balance != null || o.forecast != null || o.history != null))
-        const ZenPageButton(),
-      if (o != null && (o.balance != null || o.forecast != null || o.history != null))
-        ZenSection(balance: o.balance, forecast: o.forecast, history: o.history),
+    final activity = <Widget>[
       if (o?.revivals case final revivals? when revivals.isNotEmpty)
         RevivalsCard(
           revivals: revivals,
@@ -130,9 +125,52 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
         ),
       if (o?.leaderboard case final board?)
         LeaderboardCard(board: board, me: o?.account?.username),
+    ];
+    final account = <Widget>[
+      if (!state.configured)
+        Text(
+          'Hors ligne : historique local. Ajoute tes cookies de session dans '
+          'les réglages pour recevoir les nouvelles.',
+          style: TextStyle(color: c.muted, fontSize: 12),
+        ),
+      if (!wide)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _ConnectionTile(status: state.status),
+        ),
+      if (o != null && (o.account != null || o.level != null))
+        C411ProfileCard(account: o.account, level: o.level),
+      if (state.account != null) _AccountCard(state.account!),
+      if (state.counters != null) _Counters(state.counters!),
       if (overview.hasError)
         ErrorBanner('Compte C411 : ${overview.error}'),
+      // PC : à gauche, sous le compte (la colonne Zen est déjà longue).
+      if (wide) ...activity,
     ];
+    final zen = <Widget>[
+      if (hasZen)
+        wide
+            ? Row(children: [
+                Icon(Icons.savings_rounded, size: 20, color: c.accent),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Zen', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                ),
+                const ZenPageButton(short: true),
+              ])
+            : const ZenPageButton(),
+      if (hasZen)
+        ZenSection(balance: o.balance, forecast: o.forecast, history: o.history),
+      if (!wide) ...activity,
+    ];
+    final top = [...account, ...zen];
+    final notifications = _notifications(state, shown, remaining);
+    Widget column(List<Widget> widgets) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final w in widgets) ...[w, const SizedBox(height: 12)],
+          ],
+        );
 
     return RefreshIndicator(
       onRefresh: () => Future.wait([
@@ -143,15 +181,44 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
         padding: const EdgeInsets.only(bottom: 24),
         children: [
           if (state.notifError != null) ErrorBanner(state.notifError!),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final w in top) ...[w, const SizedBox(height: 12)],
-              ],
+          if (wide)
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                flex: 5,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 0), child: column(account)),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Row(children: [
+                      Icon(Icons.notifications_rounded, size: 20, color: c.accent),
+                      const SizedBox(width: 8),
+                      const Text('Notifications', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                    ]),
+                  ),
+                  ...notifications,
+                ]),
+              ),
+              Expanded(
+                flex: 6,
+                child: Padding(padding: const EdgeInsets.fromLTRB(0, 4, 16, 0), child: column(zen)),
+              ),
+            ])
+          else ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: column(top),
             ),
-          ),
+            ...notifications,
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Les notifications groupées par jour, puis « Afficher plus ».
+  List<Widget> _notifications(NotificationsState state, List<AppNotification> shown, int remaining) {
+    final notifier = ref.read(notificationsProvider.notifier);
+    return [
           if (state.items.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 24),
@@ -199,17 +266,18 @@ class _NotificationsViewState extends ConsumerState<_NotificationsView> {
                 ),
               ),
           ],
-        ],
-      ),
-    );
+    ];
   }
 }
 
 /// État de la connexion au site en direct (toujours une icône et un
 /// libellé, pas seulement une couleur).
 class _ConnectionTile extends StatelessWidget {
-  const _ConnectionTile({required this.status});
+  const _ConnectionTile({required this.status, this.compact = false});
   final SocketStatus status;
+
+  /// Pastille d'en-tête (PC) : une ligne, sans le détail.
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +288,24 @@ class _ConnectionTile extends StatelessWidget {
       SocketStatus.disconnected => (c.warning, Icons.wifi_off_rounded, 'Nouvel essai bientôt'),
       SocketStatus.unauthorized => (c.danger, Icons.lock_outline_rounded, 'Cookie de session refusé'),
     };
+    if (compact) {
+      return Tooltip(
+        message: detail,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(status.label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: color)),
+          ]),
+        ),
+      );
+    }
     return Container(
       height: 60,
       padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
@@ -303,7 +389,7 @@ class _AccountCard extends StatelessWidget {
           ratio == null ? '—' : formatRatio(ratio)),
       if (withCredit != null)
         _Figure(Icons.workspace_premium_rounded, ratioColor(withCredit),
-            'Ratio avec crédit', formatRatio(withCredit)),
+            'Ratio (crédit)', formatRatio(withCredit)),
     ];
     return Panel(
       radius: 16,
@@ -322,7 +408,7 @@ class _AccountCard extends StatelessWidget {
           LayoutBuilder(builder: (context, constraints) {
             // Tuiles de même largeur : 2 par ligne sur téléphone, toutes sur
             // une ligne si la place le permet.
-            final perRow = constraints.maxWidth >= 900
+            final perRow = constraints.maxWidth >= tiles.length * 140
                 ? tiles.length
                 : constraints.maxWidth >= 560
                     ? 3

@@ -748,7 +748,10 @@ class _OpportunityRow extends StatelessWidget {
 
 /// Bouton d'accès, pour la page C411.
 class ZenPageButton extends StatelessWidget {
-  const ZenPageButton({super.key});
+  const ZenPageButton({super.key, this.short = false});
+
+  /// Libellé court (en-tête de colonne).
+  final bool short;
 
   @override
   Widget build(BuildContext context) => Align(
@@ -756,7 +759,7 @@ class ZenPageButton extends StatelessWidget {
         child: FilledButton.tonalIcon(
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ZenPage())),
           icon: const Icon(Icons.savings_rounded, size: 18),
-          label: const Text('Rendement Zen : mon portefeuille, les opportunités'),
+          label: Text(short ? 'Rendement Zen' : 'Rendement Zen : mon portefeuille, les opportunités'),
         ),
       );
 }
