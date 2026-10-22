@@ -226,6 +226,20 @@ void main() {
     expect(p.siteScored, 1);
   });
 
+  test('part de la journée partagée : moyenne des derniers versements', () {
+    ZenDay d(int torrents, int shareBp) =>
+        ZenDay(torrents: torrents, shareBp: shareBp, weightBp: 0, contribution: 0, bonusBp: 0, paid: 0);
+    final history = ZenHistory(days: 30, entries: [
+      d(100, 900000), // 90 %
+      d(100, 700000), // 70 %
+      d(0, 0), // jour sans torrent : ignoré
+      for (var i = 0; i < 10; i++) d(10, 10000), // 10 %, plus anciens
+    ]);
+    expect(history.shareOver(days: 2), closeTo(0.8, 1e-9));
+    expect(history.shareOver(), closeTo((0.9 + 0.7 + 5 * 0.1) / 7, 1e-9));
+    expect(const ZenHistory(days: 30).shareOver(), isNull);
+  });
+
   test('Zen des niveaux d’XP : l’échelle du site', () {
     expect(zenForLevel(1), 1);
     expect(zenForLevel(7), 2);
@@ -264,6 +278,14 @@ void main() {
         closeTo(7 * day(big, 0) + 23 * day(big, 7) + 60 * day(big, 30) + 90 * day(big, 90), 1e-9));
     expect(gain.over.keys, zenHorizons);
     expect(gain.over[30], closeTo(zenOver(list[0], 30, bonus: 0.2) + zenOver(list[1], 30, bonus: 0.2), 1e-9));
+
+    // Partagé la moitié de la journée : moitié moins par jour, et les
+    // paliers arrivent deux fois plus tard (14 jours pour 7 jours de seed).
+    final half = selectionZen([big], bonus: 0.2, share: 0.5);
+    expect(half.perDay, closeTo(day(big, 0) / 2, 1e-9));
+    expect(half.over[7], closeTo(7 * day(big, 0) / 2, 1e-9));
+    expect(half.over[30], closeTo((14 * day(big, 0) + 16 * day(big, 7)) / 2, 1e-9));
+    expect(half.perDayLater, closeTo(day(big, 90) / 2, 1e-9), reason: '6 mois : 90 jours de seed');
   });
 
   group('opportunités : recherche et ajout', () {

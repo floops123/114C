@@ -70,8 +70,9 @@ enum BulkOrder {
 const zenHorizons = [7, 30, 60, 90, 180];
 
 /// Zen cumulés par [r] pendant ses [days] premiers jours de seed, partagée
-/// toute la journée : la note monte aux paliers de durée (7, 30, 90, 180 j).
-double zenOver(Release r, int days, {double bonus = 0.25}) {
+/// [share] de la journée (1 : toute la journée) : la note monte aux paliers
+/// de durée (7, 30, 90, 180 j), comptés en jours de seed réels.
+double zenOver(Release r, int days, {double bonus = 0.25, double share = 1}) {
   final starts = [0, for (final (from, _) in seedDurationSteps) from];
   var total = 0.0;
   for (final (i, from) in starts.indexed) {
@@ -79,28 +80,47 @@ double zenOver(Release r, int days, {double bonus = 0.25}) {
     final to = i + 1 < starts.length && starts[i + 1] < days ? starts[i + 1] : days;
     total += BulkOrder.zenOf(r, bonus: bonus, seedDays: from.toDouble()) * (to - from);
   }
-  return total;
+  return total * share;
 }
 
-/// Ce que rapporterait une sélection une fois partagée : Zen par jour tout
-/// de suite et après six mois, et cumulés sur chaque horizon de
-/// [zenHorizons] ; [counted] : les sorties C411, les seules qui rapportent.
+/// Ce que rapporterait une sélection une fois partagée [share] de la
+/// journée : Zen par jour tout de suite et après six mois, et cumulés sur
+/// chaque horizon de [zenHorizons] ; [counted] : les sorties C411, les
+/// seules qui rapportent.
+///
+/// Le site paie chaque torrent au prorata du temps partagé dans la journée.
+/// Avec [share] < 1, les paliers de durée arrivent aussi plus tard (ils
+/// comptent les jours de seed réels) : 7 jours de seed demandent 7 ÷ share
+/// jours de calendrier.
 ({int counted, double perDay, double perDayLater, Map<int, double> over}) selectionZen(
     Iterable<Release> releases,
-    {double bonus = 0.25}) {
+    {double bonus = 0.25, double share = 1}) {
   var counted = 0;
   var perDay = 0.0, later = 0.0;
   final over = {for (final d in zenHorizons) d: 0.0};
   for (final r in releases) {
     if (r.tracker != Tracker.c411) continue;
     counted++;
-    perDay += BulkOrder.zenOf(r, bonus: bonus);
-    later += BulkOrder.zenOf(r, bonus: bonus, seedDays: 180);
+    perDay += BulkOrder.zenOf(r, bonus: bonus) * share;
+    // Six mois de calendrier : 180 × share jours de seed.
+    later += BulkOrder.zenOf(r, bonus: bonus, seedDays: 180 * share) * share;
     for (final d in zenHorizons) {
-      over[d] = over[d]! + zenOver(r, d, bonus: bonus);
+      over[d] = over[d]! + _overCalendar(r, d, bonus: bonus, share: share);
     }
   }
   return (counted: counted, perDay: perDay, perDayLater: later, over: over);
+}
+
+/// Zen cumulés en [days] jours de calendrier, partagés [share] de chaque
+/// journée : chaque jour rapporte au prorata, avec la note de ses jours de
+/// seed cumulés (jour × share).
+double _overCalendar(Release r, int days, {required double bonus, required double share}) {
+  if (share >= 1) return zenOver(r, days, bonus: bonus);
+  var total = 0.0;
+  for (var d = 0; d < days; d++) {
+    total += BulkOrder.zenOf(r, bonus: bonus, seedDays: d * share);
+  }
+  return total * share;
 }
 
 /// Ce qu'on cherche. Toutes les bornes sont facultatives.

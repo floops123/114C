@@ -913,7 +913,10 @@ class _Results extends ConsumerWidget {
     // Bonus du compte s'il est connu, sinon celui d'un compte actif (25 %).
     final siteBonus = ref.watch(zenBonusProvider);
     final bonus = siteBonus ?? 0.25;
-    final zen = selectionZen([for (final i in selected) i.release], bonus: bonus);
+    // Part de la journée où tes torrents sont partagés (versements récents),
+    // sinon toute la journée.
+    final share = ref.watch(zenShareProvider);
+    final zen = selectionZen([for (final i in selected) i.release], bonus: bonus, share: share ?? 1);
     final pending = state.pending;
     final all = pending.isNotEmpty && selected.length == pending.length;
 
@@ -975,7 +978,7 @@ class _Results extends ConsumerWidget {
             // En tête, les gains en Zen de la sélection : ils défilent
             // avec les résultats (peu de hauteur sur un téléphone).
             if (index < head) {
-              return _ZenGains(gain: zen, bonus: bonus, accountBonus: siteBonus != null);
+              return _ZenGains(gain: zen, bonus: bonus, accountBonus: siteBonus != null, share: share);
             }
             final i = index - head;
             if (i >= state.items.length) {
@@ -1146,13 +1149,17 @@ class _Results extends ConsumerWidget {
 /// ramené, et propose de chercher plus loin ou de tout effacer.
 /// Gains en Zen de la sélection, cumulés sur 7 jours à 6 mois de seed.
 class _ZenGains extends StatelessWidget {
-  const _ZenGains({required this.gain, required this.bonus, required this.accountBonus});
+  const _ZenGains({required this.gain, required this.bonus, required this.accountBonus, this.share});
 
   final ({int counted, double perDay, double perDayLater, Map<int, double> over}) gain;
   final double bonus;
 
   /// Le bonus est celui du compte (sinon supposé).
   final bool accountBonus;
+
+  /// Part de la journée partagée (versements récents) ; null : toute la
+  /// journée, supposée.
+  final double? share;
 
   static String _horizon(int days) => switch (days) {
         180 => '6 mois',
@@ -1204,7 +1211,7 @@ class _ZenGains extends StatelessWidget {
           ]),
           const SizedBox(height: 8),
           Text(
-            'Zen cumulés, partagés toute la journée : '
+            '${share == null ? 'Zen cumulés, en partageant toute la journée (supposé)' : 'Zen cumulés, en partageant ${frNumber(share! * 100)} % de la journée comme tes 7 derniers versements'} : '
             '${frNumber(gain.perDay, 2)} Zen/j au départ, '
             '${frNumber(gain.perDayLater, 2)} Zen/j après 6 mois (la note monte '
             'avec la durée de seed). Bonus ${frNumber(bonus * 100)} %'

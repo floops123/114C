@@ -24,5 +24,12 @@ final zenBonusProvider = Provider<double?>((ref) {
   return bp == null ? null : bp / 10000;
 });
 
+/// Part de la journée où les torrents sont partagés en moyenne (7 derniers
+/// versements) ; null : inconnue. La journée en cours, incomplète, n'y est
+/// pas.
+final zenShareProvider = Provider<double?>((ref) {
+  return ref.watch(c411OverviewProvider).value?.history?.shareOver()?.clamp(0.0, 1.0);
+});
+
 /// Le site recalcule la journée en cours régulièrement ; inutile d'insister.
 const refreshEvery = Duration(minutes: 10);

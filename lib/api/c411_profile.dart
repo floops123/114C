@@ -224,6 +224,14 @@ class ZenHistory {
 
   ZenDay? get latest => entries.firstOrNull;
 
+  /// Part moyenne de la journée où les torrents ont été partagés, sur les
+  /// [days] derniers versements ; null sans versement.
+  double? shareOver({int days = 7}) {
+    final recent = entries.where((e) => e.torrents > 0).take(days).toList();
+    if (recent.isEmpty) return null;
+    return recent.fold(0.0, (n, e) => n + e.share) / recent.length;
+  }
+
   /// Versement moyen par jour, sur les jours versés (comme le site).
   double get perDay => entries.isEmpty
       ? 0

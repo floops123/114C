@@ -30,6 +30,11 @@ une taille max (raccourcis *Toutes*, ≤ 50 Mo … ≤ 4 Go), laisse l'ordre sur
   paliers de durée (7, 30, 90 et 180 jours), et donne les Zen par jour au
   départ et après six mois. Il prend le bonus de ton compte s'il est connu
   (cookie de session), sinon 25 %, en te comptant parmi les seeders.
+  Il tient aussi compte de ta **disponibilité** : la part de la journée où
+  tes torrents ont été partagés, en moyenne sur tes 7 derniers versements.
+  Le site paie au prorata de ce temps, et les paliers de durée arrivent
+  d'autant plus tard. Sans cookie de session, il suppose un partage toute la
+  journée.
 
 ## Les filtres
 
