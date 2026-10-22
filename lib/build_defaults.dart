@@ -35,6 +35,7 @@ class BuildDefaults {
       _has(_webdavUrl) ||
       _has(_webdavUser) ||
       _has(_webdavPassword) ||
+      _has(_localRoot) ||
       _has(_mediaFolders) ||
       _has(_c411Key) ||
       _has(_tr4kerKey) ||
@@ -70,6 +71,7 @@ class BuildDefaults {
       webdavUrl: _str(_webdavUrl) ?? '',
       webdavUser: _str(_webdavUser) ?? '',
       webdavPassword: _str(_webdavPassword) ?? '',
+      localRoot: _str(_localRoot) ?? '',
       mediaFolders: folders,
     );
   }
@@ -92,6 +94,7 @@ class BuildDefaults {
     'C411_WEBDAV_URL',
     'C411_WEBDAV_USER',
     'C411_WEBDAV_PASSWORD',
+    'C411_LOCAL_ROOT',
     'C411_MEDIA_FOLDERS',
     'C411_C411_KEY',
     'C411_TR4KER_KEY',
@@ -120,6 +123,7 @@ const String _filesProtocol = String.fromEnvironment('C411_FILES_PROTOCOL');
 const String _webdavUrl = String.fromEnvironment('C411_WEBDAV_URL');
 const String _webdavUser = String.fromEnvironment('C411_WEBDAV_USER');
 const String _webdavPassword = String.fromEnvironment('C411_WEBDAV_PASSWORD');
+const String _localRoot = String.fromEnvironment('C411_LOCAL_ROOT');
 const String _mediaFolders = String.fromEnvironment('C411_MEDIA_FOLDERS');
 const String _c411Key = String.fromEnvironment('C411_C411_KEY');
 const String _tr4kerKey = String.fromEnvironment('C411_TR4KER_KEY');

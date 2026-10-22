@@ -59,5 +59,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(TextField, 'Hôte'), findsOneWidget);
     expect(find.widgetWithText(TextField, 'Adresse du partage'), findsNothing);
+
+    // Dossier de l'appareil : saisi (ou choisi), puis testé.
+    final dir = Directory.systemTemp.createTempSync('c411root');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    Directory('${dir.path}/torrents').createSync();
+    await tester.tap(find.text('Dossier local'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choisir…'), findsOneWidget);
+    final local = find.widgetWithText(TextField, 'Dossier de l’appareil');
+    await tester.enterText(local, dir.path);
+    final y = tester.getTopLeft(local).dy;
+    final localTester = find.widgetWithText(OutlinedButton, 'Tester').evaluate()
+        .map((e) => find.byWidget(e.widget))
+        .where((f) => tester.getTopLeft(f).dy > y)
+        .reduce((a, b) => tester.getTopLeft(a).dy < tester.getTopLeft(b).dy ? a : b);
+    await tester.tap(localTester);
+    for (var i = 0; i < 20 && find.textContaining('✓ Connecté').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+    }
+    expect(find.textContaining('✓ Connecté · dossiers à la racine : torrents'), findsOneWidget);
   });
 }

@@ -1,8 +1,9 @@
 import 'ftp.dart';
+import 'local_files.dart';
 import 'webdav.dart';
 
-/// Accès aux fichiers du serveur : FTP ([FtpConfig]) ou WebDAV
-/// ([WebDavConfig]).
+/// Accès aux fichiers du serveur : FTP ([FtpConfig]), WebDAV
+/// ([WebDavConfig]) ou un dossier de l'appareil ([LocalConfig]).
 abstract interface class FilesConfig {
   bool get isEmpty;
 }
@@ -51,18 +52,25 @@ abstract interface class RemoteFiles {
 }
 
 /// Client du protocole choisi (pas encore connecté).
-RemoteFiles openFiles(FilesConfig config) => switch (config) {
+RemoteFiles openRemoteFiles(FilesConfig config) => switch (config) {
       FtpConfig() => FtpClient(config),
       WebDavConfig() => WebDavClient(config),
+      LocalConfig() => LocalFiles(config),
       _ => throw ArgumentError('Protocole inconnu : $config'),
     };
 
 /// Accès aux fichiers depuis les réglages de l'application (JSON) :
-/// `filesProtocol` (`ftp` par défaut ou `webdav`), puis `ftpHost`,
-/// `ftpPort`, `ftpUser`, `ftpPassword`, `ftpTls` ou `webdavUrl`,
-/// `webdavUser`, `webdavPassword`.
+/// `filesProtocol` (`ftp` par défaut, `webdav` ou `local`), puis `ftpHost`,
+/// `ftpPort`, `ftpUser`, `ftpPassword`, `ftpTls`, ou `webdavUrl`,
+/// `webdavUser`, `webdavPassword`, ou `localRoot`.
 FilesConfig filesConfigFromJson(Map<String, dynamic> json) {
   String text(String k) => (json[k] as String?)?.trim() ?? '';
+  if (text('filesProtocol') == 'local') {
+    if (text('localRoot').isEmpty) {
+      throw const FormatException('localRoot manquant dans le fichier de réglages');
+    }
+    return LocalConfig(text('localRoot'));
+  }
   if (text('filesProtocol') == 'webdav') {
     if (text('webdavUrl').isEmpty) {
       throw const FormatException('webdavUrl manquant dans le fichier de réglages');

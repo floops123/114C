@@ -11,7 +11,7 @@ indispensables ; chaque autre section ajoute une fonction et peut rester vide.
 | Trackers | au moins un | vue Trackers, téléchargements, disponibilité des titres |
 | Cookie de session C411 | non | Notifications, Salon, Mon compte |
 | TMDB | non | vue Films & séries, fiches, affiches des Trackers et de la base |
-| Serveur de fichiers (FTP ou WebDAV) | non | ta vidéothèque, lecture directe |
+| Serveur de fichiers (FTP, WebDAV ou dossier local) | non | ta vidéothèque, lecture directe |
 | Jellyfin | non | lecture depuis Jellyfin (secours) |
 
 Les boutons **Tester** vérifient chaque service ; **Tester et enregistrer**
@@ -73,8 +73,19 @@ Crée un compte gratuit sur [themoviedb.org](https://www.themoviedb.org/), puis
 ## Serveur de fichiers (FTP)
 
 C'est ce qui alimente ta propre vidéothèque ([Sur le disque](sur-le-disque.md)),
-et permet de lire les fichiers directement. Deux protocoles au choix, en tête
-de la section : **FTP** ou **WebDAV**.
+et permet de lire les fichiers directement. Trois choix, en tête de la
+section : **FTP**, **WebDAV** ou **Dossier local**.
+
+### Dossier local
+
+Les fichiers sont déjà sur l'appareil, ou sur un disque, un NAS ou un partage
+réseau monté (`/mnt/seedbox`, `Z:\`…) : **Choisir…** ouvre le sélecteur de
+dossiers du système, ou saisis le chemin. Ce dossier tient lieu de racine :
+il doit montrer les mêmes dossiers que le serveur (par exemple `torrents/`).
+Lecture et parcours se font directement sur le disque, sans réseau.
+
+Sur Android, le sélecteur ne donne pas toujours un chemin utilisable : saisis
+alors le chemin (`/storage/emulated/0/…`).
 
 ### WebDAV (le plus rapide)
 
@@ -111,8 +122,8 @@ dossiers indiqués qui sont vides ou introuvables.
 
 Les torrents terminés de Transmission sont toujours pris en compte, même sans
 dossier indiqué : l'application retrouve seule où leurs fichiers apparaissent
-sur le FTP ou le partage WebDAV. Les dossiers à parcourir et le bouton
-**Tester** valent pour les deux protocoles.
+sur le FTP, le partage WebDAV ou le dossier local. Les dossiers à parcourir
+et le bouton **Tester** valent pour les trois.
 
 ## Jellyfin
 

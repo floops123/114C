@@ -344,7 +344,9 @@ final mediaLibraryStoreProvider = Provider<MediaLibraryStore>((ref) {
 });
 
 /// Accès aux fichiers du serveur, par le protocole choisi.
-FilesConfig filesConfigOf(AppSettings s) => s.useWebDav
+FilesConfig filesConfigOf(AppSettings s) => s.useLocal
+    ? LocalConfig(s.localRoot)
+    : s.useWebDav
     ? WebDavConfig(
         url: s.webdavUrl, user: s.webdavUser, password: s.webdavPassword)
     : FtpConfig(
@@ -357,7 +359,7 @@ FilesConfig filesConfigOf(AppSettings s) => s.useWebDav
 /// Ouvre l'accès aux fichiers du serveur (remplacé dans les tests).
 final ftpConnectProvider =
     Provider<Future<RemoteFiles> Function(FilesConfig)>((ref) => (config) async {
-          final files = openFiles(config);
+          final files = openRemoteFiles(config);
           await files.connect();
           return files;
         });
@@ -486,7 +488,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   /// Réglages qui changent le contenu de la base.
   static String _signature(AppSettings s) => [
         s.filesProtocol, s.ftpHost, s.ftpPort, s.ftpUser, s.ftpTls,
-        s.webdavUrl, s.webdavUser, ...s.mediaFolders,
+        s.webdavUrl, s.webdavUser, s.localRoot, ...s.mediaFolders,
       ].join('|');
 
   /// Torrents terminés déjà examinés pendant la session (ajoutés, ou sans

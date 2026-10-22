@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -53,6 +54,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _webdavUrl = TextEditingController();
   final _webdavUser = TextEditingController();
   final _webdavPassword = TextEditingController();
+  final _localRoot = TextEditingController();
   String? _ftpStatus;
 
   @override
@@ -60,7 +62,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     for (final c in [
       _url, _user, _password, _cookie, _tmdb, _jellyfinUrl, _jellyfinKey,
       _ftpHost, _ftpPort, _ftpUser, _ftpPassword, _mediaFolders,
-      _webdavUrl, _webdavUser, _webdavPassword,
+      _webdavUrl, _webdavUser, _webdavPassword, _localRoot,
       ..._apiKeys.values,
     ]) {
       c.dispose();
@@ -89,6 +91,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     webdavUrl: _webdavUrl.text.trim(),
     webdavUser: _webdavUser.text.trim(),
     webdavPassword: _webdavPassword.text,
+    localRoot: _localRoot.text.trim(),
     mediaFolders: [
       for (final line in _mediaFolders.text.split('\n'))
         if (line.trim().isNotEmpty)
@@ -96,17 +99,38 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     ],
   );
 
+  /// Dossier de l'appareil, par le sélecteur du système.
+  Future<void> _pickLocalRoot() async {
+    final dir = await getDirectoryPath(
+        confirmButtonText: 'Choisir',
+        initialDirectory: _localRoot.text.trim().isEmpty ? null : _localRoot.text.trim());
+    if (dir == null || !mounted) return;
+    // Android renvoie une adresse content:// que l'on ne peut pas lire comme
+    // un chemin : il faut alors saisir le chemin (/storage/…).
+    if (!dir.startsWith('/') && !RegExp(r'^[A-Za-z]:').hasMatch(dir)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Ce dossier n’a pas de chemin utilisable : saisis-le à la main.')));
+      return;
+    }
+    setState(() {
+      _localRoot.text = dir;
+      _ftpStatus = null;
+    });
+  }
+
   /// Connexion, puis liste de la racine : aide à choisir les dossiers.
   Future<void> _testFtp() async {
     final form = _form;
     if (!form.hasFiles) {
-      _setStatus(() => _ftpStatus = form.useWebDav
-          ? '✗ Adresse WebDAV manquante'
-          : '✗ Hôte ou identifiant manquant');
+      _setStatus(() => _ftpStatus = form.useLocal
+          ? '✗ Dossier manquant'
+          : form.useWebDav
+              ? '✗ Adresse WebDAV manquante'
+              : '✗ Hôte ou identifiant manquant');
       return;
     }
     _setStatus(() => _ftpStatus = 'Connexion…');
-    final ftp = openFiles(filesConfigOf(form));
+    final ftp = openRemoteFiles(filesConfigOf(form));
     try {
       await ftp.connect();
       final root = await ftp.list('/');
@@ -319,6 +343,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _webdavUrl.text = saved.webdavUrl;
       _webdavUser.text = saved.webdavUser;
       _webdavPassword.text = saved.webdavPassword;
+      _localRoot.text = saved.localRoot;
       _mediaFolders.text = saved.mediaFolders.join('\n');
     }
     final c = context.colors;
@@ -592,6 +617,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 segments: const [
                                   ButtonSegment(value: 'ftp', label: Text('FTP')),
                                   ButtonSegment(value: 'webdav', label: Text('WebDAV')),
+                                  ButtonSegment(value: 'local', label: Text('Dossier local')),
                                 ],
                                 selected: {_protocol},
                                 onSelectionChanged: (v) => setState(() {
@@ -599,7 +625,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                   _ftpStatus = null;
                                 }),
                               ),
-                              if (_protocol == 'webdav') ...[
+                              if (_protocol == 'local') ...[
+                                const SizedBox(height: 12),
+                                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _localRoot,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Dossier de l’appareil',
+                                        hintText: '/mnt/seedbox',
+                                        helperMaxLines: 3,
+                                        helperText: 'Disque, NAS ou partage réseau monté : '
+                                            'sa racine tient lieu de celle du serveur '
+                                            '(il contient par exemple torrents/).',
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: OutlinedButton.icon(
+                                      onPressed: _pickLocalRoot,
+                                      icon: const Icon(Icons.folder_open_rounded, size: 18),
+                                      label: const Text('Choisir…'),
+                                    ),
+                                  ),
+                                ]),
+                                const SizedBox(height: 12),
+                              ] else if (_protocol == 'webdav') ...[
                                 const SizedBox(height: 12),
                                 TextField(
                                   controller: _webdavUrl,

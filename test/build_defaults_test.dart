@@ -46,6 +46,6 @@ void main() {
     // À chaque nouveau champ ajouté à AppSettings, il faut aussi ajouter
     // la variable correspondante ici ET dans `BuildDefaults.toAppSettings`.
     expect(BuildDefaults.allVariables, contains('C411_WEBDAV_URL'));
-    expect(BuildDefaults.allVariables.length, 21);
+    expect(BuildDefaults.allVariables.length, 22);
   });
 }

@@ -24,6 +24,7 @@ class AppSettings {
     this.webdavUrl = '',
     this.webdavUser = '',
     this.webdavPassword = '',
+    this.localRoot = '',
     this.mediaFolders = const [],
   });
 
@@ -49,6 +50,7 @@ class AppSettings {
         webdavUrl: json['webdavUrl'] as String? ?? '',
         webdavUser: json['webdavUser'] as String? ?? '',
         webdavPassword: json['webdavPassword'] as String? ?? '',
+        localRoot: json['localRoot'] as String? ?? '',
         mediaFolders: (json['mediaFolders'] as List? ?? const []).cast<String>(),
       );
 
@@ -78,7 +80,7 @@ class AppSettings {
   final String ftpPassword;
   final bool ftpTls;
 
-  /// Protocole des fichiers du serveur : `ftp` ou `webdav`.
+  /// Accès aux fichiers : `ftp`, `webdav` ou `local` (dossier de l'appareil).
   final String filesProtocol;
 
   /// Partage WebDAV (HTTPS) : plus rapide que le FTP pour lire et parcourir.
@@ -86,14 +88,22 @@ class AppSettings {
   final String webdavUser;
   final String webdavPassword;
 
+  /// Dossier de l'appareil (disque, NAS monté) qui tient lieu de racine.
+  final String localRoot;
+
   /// Dossiers du serveur à parcourir, en plus des torrents terminés.
   final List<String> mediaFolders;
 
   bool get hasFtp => ftpHost.isNotEmpty && ftpUser.isNotEmpty;
   bool get useWebDav => filesProtocol == 'webdav';
+  bool get useLocal => filesProtocol == 'local';
 
-  /// Fichiers du serveur accessibles, par le protocole choisi.
-  bool get hasFiles => useWebDav ? webdavUrl.isNotEmpty : hasFtp;
+  /// Fichiers accessibles, par le moyen choisi.
+  bool get hasFiles => useLocal
+      ? localRoot.isNotEmpty
+      : useWebDav
+          ? webdavUrl.isNotEmpty
+          : hasFtp;
 
   bool get hasTransmission => rpcUrl.isNotEmpty;
   bool get hasTracker => apiKeys.values.any((k) => k.isNotEmpty);
@@ -116,6 +126,7 @@ class AppSettings {
         'webdavUrl': webdavUrl,
         'webdavUser': webdavUser,
         'webdavPassword': webdavPassword,
+        'localRoot': localRoot,
         'mediaFolders': mediaFolders,
       };
 }

@@ -41,6 +41,7 @@ import 'dart:io';
 ///   "webdavUrl": "https://dav.seedbox.local/",
 ///   "webdavUser": "...",
 ///   "webdavPassword": "...",
+///   "localRoot": "/mnt/seedbox",
 ///   "mediaFolders": ["/torrents/completed", "/data/media"],
 ///   "apiKeys": {
 ///     "c411": "...",
@@ -123,6 +124,7 @@ List<String> personalJsonToFlags(Map<String, dynamic> json) {
     'webdavUrl': 'C411_WEBDAV_URL',
     'webdavUser': 'C411_WEBDAV_USER',
     'webdavPassword': 'C411_WEBDAV_PASSWORD',
+    'localRoot': 'C411_LOCAL_ROOT',
   }.entries) {
     final value = json[entry.key];
     if (value == null) continue;

@@ -26,7 +26,7 @@ class MediaRelay {
 
   Future<RemoteFiles> _open() async {
     if (connect != null) return connect!();
-    final files = openFiles(config);
+    final files = openRemoteFiles(config);
     await files.connect();
     return files;
   }

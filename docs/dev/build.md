@@ -64,6 +64,7 @@ Les champs non renseignés prennent les valeurs par défaut.
   "webdavUrl": "",
   "webdavUser": "",
   "webdavPassword": "",
+  "localRoot": "",
   "mediaFolders": ["/torrents/completed", "/data/media"],
   "apiKeys": {
     "c411": "abc",
@@ -74,8 +75,8 @@ Les champs non renseignés prennent les valeurs par défaut.
 }
 ```
 
-`filesProtocol` vaut `ftp` (par défaut) ou `webdav` : dans ce cas, les
-fichiers du serveur sont lus sur le partage `webdavUrl` (voir
+`filesProtocol` vaut `ftp` (par défaut), `webdav` (fichiers lus sur le
+partage `webdavUrl`) ou `local` (dossier `localRoot` de la machine) (voir
 [Configuration](../guide/configuration.md#serveur-de-fichiers-ftp)), et les
 serveurs web (C411 TV, Musique, Livres) font de même.
 

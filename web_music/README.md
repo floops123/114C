@@ -41,7 +41,8 @@ puis ouvrir <http://127.0.0.1:8412/>.
 [compilation personnalisée](../docs/dev/build.md). Il fournit l'accès au FTP
 (`ftpHost`, `ftpPort`, `ftpUser`, `ftpPassword`, `ftpTls`), ou au partage
 WebDAV (`filesProtocol: "webdav"`, `webdavUrl`, `webdavUser`,
-`webdavPassword`). La base de
+`webdavPassword`), ou à un dossier de la machine (`filesProtocol: "local"`,
+`localRoot`). La base de
 l'application est lue dans ses préférences
 (`~/.local/share/fr.c411remote.c411_remote/shared_preferences.json` sous
 Linux), comme pour C411 TV ; ailleurs, `--library <fichier>`.
