@@ -258,9 +258,23 @@ class ChatChannel {
 
 /// Message épinglé d'un salon.
 class PinnedMessage {
-  const PinnedMessage(this.content, this.username);
+  const PinnedMessage(this.content, this.username, {this.images = const []});
+
+  /// Comme [ChatMessage.fromJson] : les images partagées sortent du texte.
+  factory PinnedMessage.fromJson(Map json) {
+    final content = cleanRichText(json['content'] as String? ?? '');
+    return PinnedMessage(
+      content.replaceAll(_imagePath, '').trim(),
+      (json['sender'] as Map?)?['username'] as String? ?? '',
+      images: [
+        for (final m in _imagePath.allMatches(content)) 'https://c411.org${m[1]}',
+      ],
+    );
+  }
+
   final String content;
   final String username;
+  final List<String> images;
 }
 
 class ChannelHistory {
@@ -350,12 +364,7 @@ class C411ChatApi {
     final pinned = (body['channel'] as Map?)?['pinnedMessage'];
     return ChannelHistory(
       messages,
-      pinned is Map
-          ? PinnedMessage(
-              cleanRichText(pinned['content'] as String? ?? ''),
-              (pinned['sender'] as Map?)?['username'] as String? ?? '',
-            )
-          : null,
+      pinned is Map ? PinnedMessage.fromJson(pinned) : null,
     );
   }
 

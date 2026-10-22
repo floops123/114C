@@ -2,6 +2,7 @@ import 'package:c411_remote/ui/smooth_wheel.dart';
 import 'package:c411_remote/ui/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 PointerScrollEvent _wheel(double dy, {Offset at = Offset.zero}) =>
@@ -84,10 +85,12 @@ void main() {
     await roll(240, tester.getCenter(find.text('L3')));
     expect(page.offset, closeTo(240, 1e-6));
 
-    // Sur la rangée horizontale : elle défile de côté, pas la page.
+    // Maj + molette sur la rangée horizontale : elle défile de côté, pas la page.
     page.jumpTo(0);
     await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await roll(150, tester.getCenter(find.text('C1')));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     expect(row.offset, closeTo(150, 1e-6));
     expect(page.offset, 0);
   });

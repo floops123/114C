@@ -158,22 +158,45 @@ class _ChatViewState extends State<_ChatView> {
                         Expanded(
                           // Même mise en forme que les messages (liens
                           // cliquables) ; hauteur ajustée au contenu.
-                          child: Text.rich(
-                            TextSpan(
-                              children: [
-                                ...chatSpans(pinned.content, colors: c),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text.rich(
                                 TextSpan(
-                                  text: '\n— ${pinned.username}',
-                                  style: TextStyle(color: c.muted),
+                                  children: [
+                                    ...chatSpans(pinned.content, colors: c),
+                                    TextSpan(
+                                      text: '\n— ${pinned.username}',
+                                      style: TextStyle(color: c.muted),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            maxLines: 4,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              height: 1.35,
-                            ),
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                              for (final url in pinned.images)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 240,
+                                        maxHeight: 120,
+                                      ),
+                                      child: _ZoomableImage(
+                                        url,
+                                        memCacheWidth: 480,
+                                        errorWidget: (_, _, _) => const SizedBox.shrink(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ],
@@ -448,9 +471,8 @@ class _ChatTile extends ConsumerWidget {
                     maxWidth: 300,
                     maxHeight: 220,
                   ),
-                  child: CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.contain,
+                  child: _ZoomableImage(
+                    url,
                     memCacheWidth: 600,
                     errorWidget: (_, _, _) => Text(
                       url,
@@ -711,4 +733,39 @@ class _ComposerState extends ConsumerState<_Composer> {
       ),
     );
   }
+}
+
+/// Image d'un message : un clic l'ouvre en grand (zoom à la molette ou au
+/// pincement), un clic à côté ou Échap la referme.
+class _ZoomableImage extends StatelessWidget {
+  const _ZoomableImage(this.url, {required this.memCacheWidth, required this.errorWidget});
+  final String url;
+  final int memCacheWidth;
+  final LoadingErrorWidgetBuilder errorWidget;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        cursor: SystemMouseCursors.zoomIn,
+        child: GestureDetector(
+          onTap: () => showDialog<void>(
+            context: context,
+            barrierColor: Colors.black87,
+            builder: (context) => GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: Center(
+                  child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+          ),
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.contain,
+            memCacheWidth: memCacheWidth,
+            errorWidget: errorWidget,
+          ),
+        ),
+      );
 }

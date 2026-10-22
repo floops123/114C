@@ -92,3 +92,5 @@ affichés.
 ## Souris (PC)
 
 Défilement à la molette adouci, et glisser à la souris pour faire défiler.
+Sur une rangée horizontale, **Maj + molette** la fait défiler de côté ; la
+molette seule fait défiler la page.

@@ -114,7 +114,7 @@ class _AccountSection extends StatelessWidget {
       if (a.uploaded != null) _Stat(Icons.north_rounded, c.upload, 'Upload', formatBytes(a.uploaded!)),
       if (a.downloaded != null) _Stat(Icons.south_rounded, c.download, 'Download', formatBytes(a.downloaded!)),
       if (a.ratio != null) _Stat(Icons.balance_rounded, ratioColor(a.ratio!), 'Ratio', a.ratio!.toStringAsFixed(2).replaceAll('.', ',')),
-      if (a.credits != null) _Stat(Icons.savings_rounded, c.accent, 'Crédits', formatBytes(a.credits!)),
+      if (a.credits != null) _Stat(Icons.savings_rounded, c.accent, 'Crédits', frInt(a.credits!)),
       if (a.buffer != null && a.buffer != a.credits)
         _Stat(Icons.shield_rounded, c.info, 'Tampon', formatBytes(a.buffer!)),
       if (a.seedtimeCumulativeHours != null)
@@ -338,7 +338,7 @@ class _MissionTile extends StatelessWidget {
         Row(children: [
           Text(
             mission.progress != null && mission.goalValue != null
-                ? '${mission.progress} / ${_formatGoal(mission.goalValue!)}'
+                ? _formatProgress(mission.progress!, mission.goalValue!)
                 : '${(fraction * 100).toStringAsFixed(0)} %',
             style: TextStyle(color: c.muted, fontSize: 11.5),
           ),
@@ -356,14 +356,20 @@ class _MissionTile extends StatelessWidget {
     );
   }
 
-  /// Formate la cible : les durées sont en secondes, on les convertit en
-  /// heures lisibles.
-  String _formatGoal(int n) {
-    if (n >= 3600 && n % 3600 == 0) {
-      final h = n ~/ 3600;
-      return '$h h';
+  /// « progression / cible ». Une cible en heures pleines est une durée en
+  /// secondes : la progression est alors convertie elle aussi (« 1 h 30 / 2 h »).
+  String _formatProgress(num progress, int goal) {
+    if (goal >= 3600 && goal % 3600 == 0) {
+      return '${_formatDuration(progress.toInt())} / ${_formatDuration(goal)}';
     }
-    return '$n';
+    return '${frInt(progress.toInt())} / ${frInt(goal)}';
+  }
+
+  String _formatDuration(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    if (h == 0) return '$m min';
+    return m == 0 ? '$h h' : '$h h ${m.toString().padLeft(2, '0')}';
   }
 }
 

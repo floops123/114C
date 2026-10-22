@@ -1,6 +1,7 @@
 import 'package:c411_remote/ui/widgets.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Page verticale contenant une rangée horizontale de 20 cartes de 100 px.
@@ -31,7 +32,7 @@ Widget _page(ScrollController page, ScrollController? Function(ScrollController)
     );
 
 void main() {
-  testWidgets('molette : la rangée défile de côté, puis la page', (tester) async {
+  testWidgets('molette : la page défile ; Maj + molette, la rangée', (tester) async {
     tester.view.physicalSize = const Size(400, 600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -42,23 +43,20 @@ void main() {
     final mouse = TestPointer(1, PointerDeviceKind.mouse);
     final over = tester.getCenter(find.text('C1'));
     await tester.sendEventToBinding(mouse.hover(over));
+    await tester.sendEventToBinding(mouse.scroll(const Offset(0, 200)));
+    await tester.pump();
+    expect(page.offset, 200, reason: 'la rangée ne retient pas la molette');
+    expect(row.offset, 0);
+
+    page.jumpTo(0);
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendEventToBinding(mouse.scroll(const Offset(0, 300)));
     await tester.pump();
     expect(row.offset, 300);
     expect(page.offset, 0, reason: 'la page ne bouge pas en même temps');
 
-    // Au bout de la rangée (2000 − 400 px), la molette fait défiler la page.
-    row.jumpTo(row.position.maxScrollExtent);
-    await tester.sendEventToBinding(mouse.scroll(const Offset(0, 200)));
-    await tester.pump();
-    expect(page.offset, 200);
-
-    // Vers le haut : la rangée revient d'abord en arrière.
-    page.jumpTo(0);
-    await tester.pump();
-    await tester.sendEventToBinding(mouse.scroll(const Offset(0, -100)));
-    await tester.pump();
-    expect(row.offset, row.position.maxScrollExtent - 100);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
   });
 
   testWidgets('souris : on fait glisser la rangée en cliquant', (tester) async {

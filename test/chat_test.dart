@@ -83,6 +83,12 @@ void main() {
         cleanRichText('Hello, **&lt;span class=&quot;underline&quot;&gt;'
             'vous trouverez surement réponse par ici :&lt;/span&gt;** https://c411.org/guide'),
         'Hello, vous trouverez surement réponse par ici : https://c411.org/guide');
+    final p = PinnedMessage.fromJson({
+      'content': 'État des uploads : /uploads/chat/2026-10/5f0d.webp',
+      'sender': {'username': 'WTF'},
+    });
+    expect((p.content, p.username), ('État des uploads :', 'WTF'));
+    expect(p.images, ['https://c411.org/uploads/chat/2026-10/5f0d.webp']);
   });
 
   test('historique fusionné avec le direct, sans doublon', () async {
