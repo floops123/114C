@@ -85,7 +85,9 @@ class Content {
   /// [future], retiré de [cache] s'il échoue (réessayé la fois suivante).
   static Future<T> _forgetOnError<T>(Map<String, Future<T>> cache, String key, Future<T> future) {
     // Écoute qui ne laisse aucune erreur sans destinataire.
-    unawaited(future.then((_) {}, onError: (Object _) => cache.remove(key)));
+    unawaited(future.then((_) {}, onError: (Object _) {
+      cache.remove(key);
+    }));
     return future;
   }
 
