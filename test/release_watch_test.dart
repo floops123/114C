@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:c411_remote/api/tracker.dart';
+import 'package:c411_remote/api/transmission.dart';
 import 'package:c411_remote/state/release_watch.dart';
+import 'package:c411_remote/state/torrents.dart';
 import 'package:c411_remote/ui/content_art.dart';
 import 'package:c411_remote/ui/release_watch_page.dart';
 import 'package:c411_remote/ui/theme.dart';
@@ -43,6 +45,27 @@ class _Fake implements TrackerApi {
 
   @override
   Future<Uint8List> downloadTorrent(Release release) async => Uint8List(0);
+}
+
+class _Torrents extends TorrentsNotifier {
+  @override
+  TorrentsState build() => const TorrentsState(loaded: true);
+}
+
+/// Transmission qui note les ajouts.
+class _Transmission extends TransmissionClient {
+  _Transmission() : super(url: 'http://x');
+  int added = 0;
+  @override
+  Future<bool> addTorrent(
+      {Uint8List? metainfo, String? filename, AddOptions options = const AddOptions()}) async {
+    added++;
+    return true;
+  }
+
+  @override
+  Future<TorrentGetResult> torrentGet(List<String> fields, {Object? ids}) async =>
+      (torrents: <Map<String, dynamic>>[], removed: <int>[]);
 }
 
 class _Notifier implements SystemNotifier {
@@ -372,5 +395,47 @@ void main() {
     await tester.tap(find.text('Tout · 3'));
     await tester.pump();
     expect(find.text('R3'), findsOneWidget);
+  });
+
+  testWidgets('Nouveautés : sélection multiple et ajout groupé', (tester) async {
+    final store = MemoryWatchStore()
+      ..data = WatchData(items: [
+        for (final id in ['1', '2', '3'])
+          WatchedRelease(release: _r(Tracker.c411, id), foundAt: DateTime(2026), isNew: false),
+      ]);
+    final transmission = _Transmission();
+    final container = ProviderContainer(overrides: [
+      trackersProvider.overrideWithValue({Tracker.c411: _Fake(Tracker.c411)}),
+      watchStoreProvider.overrideWithValue(store),
+      systemNotifierProvider.overrideWithValue(_Notifier()),
+      transmissionProvider.overrideWithValue(transmission),
+      torrentsProvider.overrideWith(_Torrents.new),
+    ]);
+    addTearDown(container.dispose);
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(theme: buildTheme(Brightness.dark), home: const ReleaseWatchPage()),
+    ));
+    await tester.pump();
+
+    await tester.longPress(find.text('Release.1.1080p'));
+    await tester.pump();
+    expect(find.text('1 sélectionnée'), findsOneWidget);
+    await tester.tap(find.text('Release.2.1080p'));
+    await tester.pump();
+    expect(find.text('2 sélectionnées'), findsOneWidget);
+    await tester.tap(find.byTooltip('Tout sélectionner'));
+    await tester.pump();
+    expect(find.text('3 sélectionnées'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Envoyer à Transmission'));
+    await tester.pumpAndSettle();
+    expect(transmission.added, 3);
+    expect(find.text('3 ajoutés à Transmission'), findsOneWidget);
+    // Sélection refermée après l'envoi.
+    expect(find.text('Nouveautés'), findsOneWidget);
   });
 }

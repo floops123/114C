@@ -48,6 +48,61 @@ Future<void> sendToTransmission(
   }
 }
 
+/// Ajoute plusieurs sorties à Transmission, une par une, puis résume le tout
+/// en un seul message. Renvoie le nombre de torrents ajoutés.
+Future<int> sendManyToTransmission(
+  BuildContext context,
+  WidgetRef ref,
+  List<Release> releases, {
+  AddOptions options = const AddOptions(),
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  void say(String text) => messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(text)));
+
+  final trackers = ref.read(trackersProvider);
+  final transmission = ref.read(transmissionProvider);
+  final torrents = ref.read(torrentsProvider.notifier);
+  if (transmission == null) {
+    say('Configure Transmission dans les réglages');
+    return 0;
+  }
+  var added = 0;
+  var present = 0;
+  final failed = <String>[];
+  for (final release in releases) {
+    final api = trackers[release.tracker];
+    if (api == null) {
+      failed.add('${release.name} : ${release.tracker.label} non configuré');
+      continue;
+    }
+    try {
+      final link = release.downloadUrl;
+      final withKind = options.withLabels(ContentKind.of(release).labels);
+      final ok = link != null && link.startsWith('magnet:')
+          ? await transmission.addTorrent(filename: link, options: withKind)
+          : await transmission.addTorrent(
+              metainfo: await api.downloadTorrent(release), options: withKind);
+      ok ? added++ : present++;
+    } on TrackerException catch (e) {
+      failed.add('${release.name} : ${e.message}');
+    } on TransmissionException catch (e) {
+      failed.add('${release.name} : ${e.message}');
+    }
+  }
+  say([
+    [
+      '$added ajouté${added > 1 ? 's' : ''} à Transmission',
+      if (present > 0) '$present déjà présent${present > 1 ? 's' : ''}',
+      if (failed.isNotEmpty) '${failed.length} en échec',
+    ].join(' · '),
+    ...failed.take(3),
+  ].join('\n'));
+  if (added > 0) await torrents.refresh(full: true);
+  return added;
+}
+
 /// Le .torrent d'une sortie. C411 : par le site avec le cookie de session
 /// s'il est renseigné (`/api/torrents/<infohash>/download`, sans attente
 /// entre deux), sinon par la clé API ; les autres trackers par leur propre

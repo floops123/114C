@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/tracker.dart';
+import '../api/transmission.dart';
 import '../core/format.dart';
 import '../state/release_watch.dart';
 import '../state/releases.dart';
+import '../state/torrents.dart';
 import 'content_art.dart';
 import 'quota_notice.dart';
 import 'release_detail_page.dart';
 import 'theme.dart';
+import 'torrent_actions.dart';
 import 'widgets.dart';
 
 /// Nouveautés : les dernières sorties repérées par la veille des trackers.
@@ -26,6 +29,41 @@ class _ReleaseWatchPageState extends ConsumerState<ReleaseWatchPage> {
 
   /// Type de contenu affiché ; null : tous.
   ContentKind? _kind;
+
+  /// Sélection multiple (clés des sorties) ; ouverte par un appui long ou
+  /// le bouton « Sélectionner », même vide.
+  final _selected = <String>{};
+  bool _selecting = false;
+  bool _sending = false;
+
+  void _toggle(String key) => setState(() {
+        _selecting = true;
+        _selected.contains(key) ? _selected.remove(key) : _selected.add(key);
+      });
+
+  void _endSelection() => setState(() {
+        _selecting = false;
+        _selected.clear();
+      });
+
+  /// Envoie la sélection à Transmission ; avec [withOptions], le dossier,
+  /// les étiquettes… sont demandés d'abord, une fois pour toutes.
+  Future<void> _sendSelection(List<WatchedRelease> items, {bool withOptions = false}) async {
+    var options = const AddOptions();
+    if (withOptions) {
+      final chosen = await askAddOptions(context, ref,
+          title: 'Télécharger ${items.length} torrent${items.length > 1 ? 's' : ''}');
+      if (chosen == null || !mounted) return;
+      options = chosen;
+    }
+    setState(() => _sending = true);
+    await sendManyToTransmission(context, ref, [for (final i in items) i.release],
+        options: options);
+    if (mounted) {
+      setState(() => _sending = false);
+      _endSelection();
+    }
+  }
 
   @override
   void initState() {
@@ -56,91 +94,153 @@ class _ReleaseWatchPageState extends ConsumerState<ReleaseWatchPage> {
       for (final i in state.items)
         if (kind == null || kinds[i.key] == kind) i,
     ];
+    final byKey = {for (final i in state.items) i.key: i};
+    _selected.removeWhere((k) => !byKey.containsKey(k));
+    final selection = [for (final k in _selected) ?byKey[k]];
+    final inClient = ref.watch(torrentsProvider.select((t) => t.hashes));
+    // Tout : les sorties affichées, sauf celles déjà dans Transmission.
+    void selectAll() => setState(() => _selected.addAll([
+          for (final i in shown)
+            if (!inClient.contains(i.release.infoHash)) i.key,
+        ]));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nouveautés'),
-        actions: [
-          state.checking
-              ? const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                )
-              : IconButton(
-                  tooltip: 'Vérifier maintenant',
-                  icon: const Icon(Icons.refresh_rounded),
-                  onPressed: notifier.check,
+    return PopScope(
+      // Retour (ou Échap) : quitte d'abord la sélection.
+      canPop: !_selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _endSelection();
+      },
+      child: Scaffold(
+        appBar: _selecting
+            ? AppBar(
+                leading: IconButton(
+                  tooltip: 'Annuler la sélection',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: _endSelection,
                 ),
-          PopupMenuButton<void>(
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                enabled: state.items.isNotEmpty,
-                onTap: notifier.clear,
-                child: const Text('Vider la liste'),
+                title: Text('${selection.length} sélectionnée${selection.length > 1 ? 's' : ''}'),
+                actions: [
+                  IconButton(
+                    tooltip: 'Tout sélectionner',
+                    icon: const Icon(Icons.select_all_rounded),
+                    onPressed: _sending ? null : selectAll,
+                  ),
+                  if (_sending)
+                    const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else ...[
+                    IconButton(
+                      tooltip: 'Envoyer à Transmission',
+                      icon: const Icon(Icons.download_rounded),
+                      onPressed: selection.isEmpty ? null : () => _sendSelection(selection),
+                    ),
+                    IconButton(
+                      tooltip: 'Envoyer avec options…',
+                      icon: const Icon(Icons.tune_rounded),
+                      onPressed: selection.isEmpty
+                          ? null
+                          : () => _sendSelection(selection, withOptions: true),
+                    ),
+                  ],
+                ],
+              )
+            : AppBar(
+                title: const Text('Nouveautés'),
+                actions: [
+                  if (state.items.isNotEmpty)
+                    IconButton(
+                      tooltip: 'Sélectionner',
+                      icon: const Icon(Icons.checklist_rounded),
+                      onPressed: () => setState(() => _selecting = true),
+                    ),
+                  state.checking
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      : IconButton(
+                          tooltip: 'Vérifier maintenant',
+                          icon: const Icon(Icons.refresh_rounded),
+                          onPressed: notifier.check,
+                        ),
+                  PopupMenuButton<void>(
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        enabled: state.items.isNotEmpty,
+                        onTap: notifier.clear,
+                        child: const Text('Vider la liste'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Panel(
-              radius: 14,
-              child: ExpansionTile(
-                shape: const Border(),
-                collapsedShape: const Border(),
-                initiallyExpanded: !config.enabled,
-                title: Text(config.enabled
-                    ? 'Veille active, toutes les ${intervalLabel(config.minutes)}'
-                    : 'Veille désactivée'),
-                subtitle: Text(_status(state), style: small),
-                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                children: const [WatchSettingsPanel()],
+        body: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Panel(
+                radius: 14,
+                child: ExpansionTile(
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  initiallyExpanded: !config.enabled,
+                  title: Text(config.enabled
+                      ? 'Veille active, toutes les ${intervalLabel(config.minutes)}'
+                      : 'Veille désactivée'),
+                  subtitle: Text(_status(state), style: small),
+                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  children: const [WatchSettingsPanel()],
+                ),
               ),
             ),
-          ),
-          QuotaNotice(
-            trackers: ref.watch(trackersProvider).keys,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          ),
-          for (final MapEntry(key: t, value: e) in state.errors.entries)
-            Padding(
+            QuotaNotice(
+              trackers: ref.watch(trackersProvider).keys,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: ErrorBanner(e.contains(t.label) ? e : '${t.label} : $e'),
             ),
-          if (state.items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 48),
-              child: EmptyState(
-                Icons.new_releases_outlined,
-                config.enabled
-                    ? 'Aucune sortie pour l’instant : la liste se remplit au '
-                        'prochain relevé.'
-                    : 'Active la veille pour suivre les nouvelles sorties '
-                        'des trackers.',
+            for (final MapEntry(key: t, value: e) in state.errors.entries)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: ErrorBanner(e.contains(t.label) ? e : '${t.label} : $e'),
               ),
-            )
-          else ...[
-            if (counts.length > 1)
-              _KindFilter(
-                counts: counts,
-                total: state.items.length,
-                selected: kind,
-                onSelected: (k) => setState(() => _kind = k),
-              ),
-            for (final item in shown)
-              _WatchRow(
-                item: item,
-                kind: kinds[item.key]!,
-                highlight: item.isNew || _highlight.contains(item.key),
-              ),
+            if (state.items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: EmptyState(
+                  Icons.new_releases_outlined,
+                  config.enabled
+                      ? 'Aucune sortie pour l’instant : la liste se remplit au '
+                          'prochain relevé.'
+                      : 'Active la veille pour suivre les nouvelles sorties '
+                          'des trackers.',
+                ),
+              )
+            else ...[
+              if (counts.length > 1)
+                _KindFilter(
+                  counts: counts,
+                  total: state.items.length,
+                  selected: kind,
+                  onSelected: (k) => setState(() => _kind = k),
+                ),
+              for (final item in shown)
+                _WatchRow(
+                  item: item,
+                  kind: kinds[item.key]!,
+                  highlight: item.isNew || _highlight.contains(item.key),
+                  selecting: _selecting,
+                  selected: _selected.contains(item.key),
+                  onToggle: () => _toggle(item.key),
+                ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -356,10 +456,20 @@ class _KindTag extends StatelessWidget {
 }
 
 class _WatchRow extends ConsumerWidget {
-  const _WatchRow({required this.item, required this.kind, required this.highlight});
+  const _WatchRow({
+    required this.item,
+    required this.kind,
+    required this.highlight,
+    required this.selecting,
+    required this.selected,
+    required this.onToggle,
+  });
   final WatchedRelease item;
   final ContentKind kind;
   final bool highlight;
+  final bool selecting;
+  final bool selected;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -370,19 +480,37 @@ class _WatchRow extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
       child: Material(
-        color: c.surface,
+        color: selected ? c.accent.withValues(alpha: 0.10) : c.surface,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
           side: BorderSide(
-              color: highlight ? c.accent.withValues(alpha: 0.6) : c.border),
+              color: selected
+                  ? c.accent
+                  : highlight
+                      ? c.accent.withValues(alpha: 0.6)
+                      : c.border),
         ),
         child: InkWell(
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ReleaseDetailPage(release: r))),
+          onLongPress: onToggle,
+          onTap: selecting
+              ? onToggle
+              : () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ReleaseDetailPage(release: r))),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
             child: Row(children: [
+              if (selecting)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 22,
+                    color: selected ? c.accent : c.muted,
+                  ),
+                ),
               _KindTile(kind),
               const SizedBox(width: 12),
               Expanded(
@@ -413,11 +541,14 @@ class _WatchRow extends ConsumerWidget {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Envoyer à Transmission',
-                icon: const Icon(Icons.download_rounded),
-                onPressed: () => sendToTransmission(context, ref, r),
-              ),
+              if (!selecting)
+                IconButton(
+                  tooltip: 'Envoyer à Transmission',
+                  icon: const Icon(Icons.download_rounded),
+                  onPressed: () => sendToTransmission(context, ref, r),
+                )
+              else
+                const SizedBox(width: 8),
             ]),
           ),
         ),
