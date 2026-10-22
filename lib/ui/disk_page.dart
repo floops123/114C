@@ -118,7 +118,9 @@ class LibraryStatus extends ConsumerWidget {
     final series = library.titles.length - films;
     final text = state.scanning
         ? state.status ?? 'Parcours du serveur…'
-        : [
+        : state.stale
+            ? 'Accès aux fichiers modifié : Actualiser pour reparcourir'
+            : [
             '$films film${films > 1 ? 's' : ''}',
             '$series série${series > 1 ? 's' : ''}',
             if (library.scannedAt != null) 'à jour ${formatAgo(library.scannedAt!)}',
@@ -136,7 +138,8 @@ class LibraryStatus extends ConsumerWidget {
           else
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Icon(Icons.dns_rounded, size: 18, color: c.success),
+              child: Icon(state.stale ? Icons.sync_problem_rounded : Icons.dns_rounded,
+                  size: 18, color: state.stale ? c.warning : c.success),
             ),
           Expanded(
             child: Text(text,

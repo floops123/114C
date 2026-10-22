@@ -119,6 +119,7 @@ class MediaLibrary {
     this.scannedAt,
     this.pathFrom,
     this.pathTo,
+    this.checked = const {},
   });
 
   factory MediaLibrary.fromJson(Map<String, dynamic> json) => MediaLibrary(
@@ -144,9 +145,15 @@ class MediaLibrary {
         scannedAt: DateTime.tryParse(json['scannedAt'] as String? ?? ''),
         pathFrom: json['pathFrom'] as String?,
         pathTo: json['pathTo'] as String?,
+        checked: {...(json['checked'] as List? ?? const []).whereType<String>()},
       );
 
   final List<MediaFile> files;
+
+  /// Infohash (minuscules) des torrents terminés déjà examinés, qu'ils aient
+  /// apporté des fichiers ou non (jeux, logiciels…) : ils ne sont pas relus
+  /// à chaque lancement.
+  final Set<String> checked;
 
   /// Fichiers audio (musique des torrents terminés et des dossiers), pour
   /// C411 Music ; l'application ne les montre pas.
@@ -266,6 +273,7 @@ class MediaLibrary {
     DateTime? scannedAt,
     String? pathFrom,
     String? pathTo,
+    Set<String>? checked,
   }) =>
       MediaLibrary(
         files: files ?? this.files,
@@ -275,6 +283,7 @@ class MediaLibrary {
         scannedAt: scannedAt ?? this.scannedAt,
         pathFrom: pathFrom ?? this.pathFrom,
         pathTo: pathTo ?? this.pathTo,
+        checked: checked ?? this.checked,
       );
 
   Map<String, dynamic> toJson() => {
@@ -287,6 +296,7 @@ class MediaLibrary {
         'scannedAt': ?scannedAt?.toIso8601String(),
         'pathFrom': ?pathFrom,
         'pathTo': ?pathTo,
+        'checked': checked.toList(),
       };
 }
 
@@ -458,9 +468,14 @@ Future<(String, String)?> detectPathMap(
 }
 
 class MediaLibraryState {
-  const MediaLibraryState(this.library, {this.scanning = false, this.status, this.error});
+  const MediaLibraryState(this.library,
+      {this.scanning = false, this.status, this.error, this.stale = false});
   final MediaLibrary library;
   final bool scanning;
+
+  /// Accès aux fichiers ou dossiers modifiés depuis le dernier parcours :
+  /// à relancer à la main (« Actualiser »).
+  final bool stale;
 
   /// Étape en cours (« Dossier /torrents/… », « Fiches TMDB 3/12 »).
   final String? status;
@@ -482,20 +497,22 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   /// rafraîchissement de Transmission au lieu d'être perdus.
   bool _appending = false;
 
+  /// Réglages des fichiers changés depuis le dernier parcours.
+  bool _stale = false;
+
   @override
   MediaLibraryState build() {
     final library = ref.watch(mediaLibraryStoreProvider).load();
-    // Le parcours du FTP est manuel : il ne démarre pas automatiquement quand
-    // le provider est lu (sinon, ouvrir la page « Sur le disque » de Films &
-    // séries déclenche un scan que l'utilisateur n'a pas demandé). L'utilisateur
-    // lance le parcours depuis le bouton « Actualiser » de `LibraryStatus`.
-    // Le listener ci-dessous re-scane automatiquement quand l'accès FTP ou
-    // les dossiers changent — l'utilisateur s'attend à ce que la base
-    // reflète ses réglages, mais à rien d'autre.
+    // Le parcours du serveur est toujours manuel (bouton « Actualiser » de
+    // `LibraryStatus`) : ni à la lecture du provider, ni quand l'accès aux
+    // fichiers ou les dossiers changent — on le signale seulement.
     ref.listen(settingsProvider, (previous, next) {
       final before = previous?.value, now = next.value;
       if (now == null || !now.hasFiles || before == null) return;
-      if (_signature(before) != _signature(now)) Future(scan);
+      if (_signature(before) != _signature(now)) {
+        _stale = true;
+        _set(state);
+      }
     });
     // Torrents terminés : leurs fichiers rejoignent la base sans repasser par
     // le FTP. Réconciliation plutôt que détection du passage à 100 % : un
@@ -525,6 +542,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       for (final t in torrents.byId.values)
         if (t.isComplete &&
             !known.contains(t.hash.toLowerCase()) &&
+            !library.checked.contains(t.hash.toLowerCase()) &&
             !_checked.contains(t.hash.toLowerCase()))
           (id: t.id, hash: t.hash.toLowerCase()),
     ];
@@ -587,7 +605,10 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
       ]);
       final audio = fresh(musicOfTorrents(result.torrents));
       final ebooks = fresh(booksOfTorrents(result.torrents));
+      // Retenus d'un lancement à l'autre.
+      library = library.copyWith(checked: {...library.checked, ...hashes});
       if (videos.isEmpty && audio.isEmpty && ebooks.isEmpty) {
+        ref.read(mediaLibraryStoreProvider).save(library);
         _set(MediaLibraryState(library));
         return 0;
       }
@@ -623,7 +644,11 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
   }
 
   void _set(MediaLibraryState s) {
-    if (ref.mounted) state = s;
+    if (!ref.mounted) return;
+    state = s.stale == _stale
+        ? s
+        : MediaLibraryState(s.library,
+            scanning: s.scanning, status: s.status, error: s.error, stale: _stale);
   }
 
   void _save(MediaLibrary library) {
@@ -708,6 +733,7 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
 
   Future<void> scan() async {
     if (!ref.mounted || state.scanning) return;
+    _stale = false;
     final settings = ref.read(settingsProvider).value;
     if (settings == null || !settings.hasFiles) {
       _set(MediaLibraryState(state.library,
@@ -814,6 +840,11 @@ class MediaLibraryNotifier extends Notifier<MediaLibraryState> {
         scannedAt: now,
         pathFrom: pathFrom,
         pathTo: pathTo,
+        // Tout ce qui est terminé vient d'être vu par le parcours.
+        checked: {
+          for (final t in ref.read(torrentsProvider).byId.values)
+            if (t.isComplete) t.hash.toLowerCase(),
+        },
       );
       _save(library);
 

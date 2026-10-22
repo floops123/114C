@@ -350,7 +350,57 @@ void main() {
       expect(transmission.calls, 1);
       expect(paths(c), ['/torrents/Dune.2024.1080p.mkv']);
     });
+
+    test('torrent sans vidéo : pas réexaminé au lancement suivant', () async {
+      final store = known();
+      final first = _Many();
+      final c = container(first, _Steps([_state({9: 1.0})]), store);
+      await c.read(settingsProvider.future);
+      c.read(mediaLibraryProvider);
+      await settle();
+      expect(first.calls, 1);
+      c.dispose();
+
+      // Relance de l'application : même base enregistrée.
+      final again = _Many();
+      final c2 = container(again, _Steps([_state({9: 1.0})]), store);
+      await c2.read(settingsProvider.future);
+      c2.read(mediaLibraryProvider);
+      await settle();
+      expect(again.calls, 0, reason: 'déjà examiné, retenu dans la base');
+      expect(c2.read(mediaLibraryProvider).scanning, isFalse);
+    });
   });
+
+  test('accès aux fichiers modifié : pas de parcours automatique, signalé', () async {
+    var connects = 0;
+    final container = ProviderContainer(overrides: [
+      settingsProvider.overrideWith(_Changing.new),
+      transmissionProvider.overrideWithValue(_ScanTransmission()),
+      mediaLibraryStoreProvider.overrideWithValue(MemoryMediaLibraryStore()),
+      ftpConnectProvider.overrideWithValue((_) async {
+        connects++;
+        throw StateError('pas de parcours automatique');
+      }),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(settingsProvider.future);
+    container.read(mediaLibraryProvider);
+
+    (container.read(settingsProvider.notifier) as _Changing).change(const AppSettings(
+        filesProtocol: 'webdav', webdavUrl: 'https://dav.example/'));
+    for (var i = 0; i < 5; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    final state = container.read(mediaLibraryProvider);
+    expect(connects, 0);
+    expect((state.scanning, state.stale), (false, true));
+  });
+}
+
+/// Réglages modifiables pendant le test.
+class _Changing extends _Settings {
+  void change(AppSettings s) => state = AsyncData(s);
 }
 
 /// Épisodes 3 et 4 d'une série, et un livre (torrent 9), selon les ids

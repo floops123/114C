@@ -72,14 +72,16 @@ résumé, titres des épisodes). Deux noms différents pour la même fiche
   terminé absent de la base est ajouté au rafraîchissement suivant de
   Transmission : y compris s'il s'est terminé application fermée, ou en
   même temps qu'un autre (les ajouts se font l'un après l'autre) ;
-- **dès que tu changes les réglages FTP ou les dossiers** : un parcours
-  complet est lancé, la base doit refléter les nouveaux dossiers ;
-- **avec le bouton Actualiser** de la vue, quand tu veux reparcourir le
-  serveur (fichiers ajoutés à la main, torrents seedés par une autre
-  application, etc.).
+- **avec le bouton Actualiser** de la vue, et seulement lui, pour
+  reparcourir le serveur (fichiers ajoutés à la main, torrents seedés par
+  une autre application, etc.).
 
-Aucun parcours automatique au lancement : ouvrir la vue *Sur le disque*
-ne déclenche rien, c'est le bouton qui décide.
+Aucun parcours automatique : ni au lancement, ni en ouvrant la vue *Sur le
+disque*, ni quand tu changes l'accès aux fichiers (FTP, WebDAV) ou les
+dossiers — la vue l'indique alors (« Accès aux fichiers modifié : Actualiser
+pour reparcourir »). Les torrents terminés déjà examinés (y compris ceux sans
+vidéo : jeux, logiciels…) sont retenus d'un lancement à l'autre et ne sont
+pas relus.
 
 Le parcours passe d'abord par **Transmission**, qui connaît déjà tous les
 torrents terminés et le chemin de leurs fichiers : une requête suffit dans le
