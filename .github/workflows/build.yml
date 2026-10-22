@@ -1,0 +1,139 @@
+# Compilation de C411 Remote : tests, puis APK Android, Linux et Windows.
+# Les binaires sont attachés à chaque exécution (onglet Actions › Artifacts).
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# Une seule exécution par branche : une nouvelle poussée annule la précédente.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Version figée, celle utilisée en local. Le projet requiert Dart ^3.13.5
+  # (Flutter >= 3.47.0).
+  FLUTTER_VERSION: '3.47.7'
+
+jobs:
+  test:
+    name: Analyse et tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      # Serveurs web (Dart pur) : C411 TV, C411 Music, C411 Books. Le test de
+      # bout en bout de C411 TV avec ffmpeg est ignoré si ffmpeg est absent.
+      - name: Serveurs web
+        run: |
+          for project in web_player web_music web_books; do
+            echo "::group::$project"
+            (cd "$project" && dart pub get && dart analyze && dart test)
+            echo "::endgroup::"
+          done
+
+  android:
+    name: APK Android
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Signé avec la clé de débogage (android/app/build.gradle.kts).
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c411_remote-android-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
+
+  linux:
+    name: Linux
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # GTK pour Flutter, libmpv pour le lecteur (media_kit), libsecret pour
+      # le trousseau (flutter_secure_storage), jsoncpp pour ce dernier.
+      - name: Dépendances
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config libgtk-3-dev \
+            libmpv-dev mpv libsecret-1-dev libjsoncpp-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter config --enable-linux-desktop
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - name: Archive
+        run: tar -czf c411_remote-linux-x64.tar.gz -C build/linux/x64/release bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c411_remote-linux-${{ github.sha }}
+          path: c411_remote-linux-x64.tar.gz
+          retention-days: 14
+
+  windows:
+    name: Windows
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - run: git config --system core.longpaths true
+      - uses: actions/checkout@v4
+      # flutter_secure_storage_windows a besoin d'ATL (atlstr.h) : ajouté à
+      # Visual Studio s'il manque.
+      - name: Composant ATL de Visual Studio
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $install = & $vswhere -products * -latest -property installationPath
+          $atl = & $vswhere -products * -latest -requires Microsoft.VisualStudio.Component.VC.ATL -property installationPath
+          if ($atl) {
+            Write-Host "ATL déjà présent : $atl"
+          } else {
+            Write-Host "ATL absent : installation…"
+            $setup = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+            $p = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList `
+              "modify --installPath `"$install`" --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart --nocache"
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit 1 }
+          }
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Archive
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath c411_remote-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c411_remote-windows-${{ github.sha }}
+          path: c411_remote-windows-x64.zip
+          retention-days: 14

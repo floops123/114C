@@ -140,3 +140,28 @@ Quand un nouveau champ est ajouté à `AppSettings` :
 Sans l'étape 1, le champ reste vide sur la variante compilée.
 Sans l'étape 4, le JSON peut contenir le champ mais il ne sera pas
 transmis à `flutter build`.
+## Compilation automatique (GitHub Actions)
+
+Le fichier `.github/workflows/build.yml` compile l'application à chaque
+poussée sur `master`, à chaque tag `v…`, à chaque pull request, ou à la
+demande (*Actions › Build › Run workflow*). Ses tâches :
+
+1. **Analyse et tests** : `flutter analyze`, `flutter test`, puis les tests
+   des serveurs web (`web_player`, `web_music`, `web_books`).
+2. Ensuite, en parallèle :
+   - **APK Android** : `flutter build apk --release`, signé avec la clé de
+     débogage comme en local ;
+   - **Linux** : `flutter build linux`, avec GTK, libmpv, libsecret et
+     jsoncpp installés ;
+   - **Windows** : `flutter build windows`, en ajoutant le composant ATL de
+     Visual Studio s'il manque (exigé par `flutter_secure_storage`).
+
+Les binaires sont attachés à l'exécution pendant 14 jours (*Artifacts*) :
+- l'APK ;
+- `c411_remote-linux-x64.tar.gz`, le dossier `bundle` à décompresser ;
+- `c411_remote-windows-x64.zip`, le dossier `Release`.
+
+Flutter est figé à la version utilisée en local (`FLUTTER_VERSION`, en tête
+du fichier). Ces binaires ne contiennent aucun réglage préenregistré : la
+variante personnelle (`tool/build_personal.dart`) se compile en local, pour
+ne pas mettre d'identifiants dans les secrets du dépôt.
