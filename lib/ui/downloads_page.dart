@@ -10,6 +10,7 @@ import '../core/preferences.dart';
 import '../core/format.dart';
 import '../state/torrents.dart';
 import 'cross_seed_page.dart';
+import 'organize_page.dart';
 import 'reseed_page.dart';
 import 'revive_page.dart';
 import 'stats_page.dart';
@@ -203,10 +204,11 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
     // Sans tracker, la catégorie est devinée d'après le nom (`dn` d'un
     // lien magnet ; rien pour une simple URL de .torrent).
     final name = Uri.tryParse(link.trim())?.queryParameters['dn'] ?? '';
-    options = options.withLabels(ContentKind.ofName(name).labels);
+    final kind = ContentKind.ofName(name);
     var added = false;
     final ok = await runTorrentAction(context, ref, (c) async {
-      added = await c.addTorrent(filename: link.trim(), options: options);
+      added = await c.addTorrent(
+          filename: link.trim(), options: await c.categorized(options, kind));
     });
     if (ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -337,6 +339,9 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                   'reseed' => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const ReseedPage()),
                   ),
+                  'organize' => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const OrganizePage()),
+                  ),
                   'start' => _all(
                     'torrent-start',
                     'Tous les torrents démarrés',
@@ -352,6 +357,8 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                   // Un dossier de l'appareil : version de bureau.
                   if (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
                     const PopupMenuItem(value: 'reseed', child: Text('Reseed…')),
+                  const PopupMenuItem(
+                      value: 'organize', child: Text('Ranger par catégorie…')),
                   const PopupMenuDivider(),
                   const PopupMenuItem(value: 'start', child: Text('Tout démarrer')),
                   const PopupMenuItem(value: 'stop', child: Text('Tout arrêter')),

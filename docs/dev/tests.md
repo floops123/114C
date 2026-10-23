@@ -45,6 +45,7 @@ local. Ils tournent hors ligne en une trentaine de secondes.
 
 | Fichier | Contenu |
 |---|---|
+| `organize_test.dart` | dossier de catégorie, nouvel ajout dans ce dossier ; rangement : catégorie du tracker (et sa mémoire), groupe de cross-seed déplacé d'un bloc, hors du dossier non coché, choix à la main ; page sans débordement |
 | `cross_seed_test.dart` | bencode, tracker d'origine, analyse dans les deux sens, mémoire, ajout |
 | `revive_test.dart` | sorties mortes retrouvées, téléchargées, puis ajoutées depuis le tracker d'origine |
 | `palliative_test.dart` | liste palliative C411, recherche multi-tracker, téléchargement puis cross-seed |

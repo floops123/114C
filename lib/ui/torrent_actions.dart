@@ -517,7 +517,8 @@ Future<FileAddReport> addTorrentFiles(
     try {
       // Sans tracker, la catégorie est devinée d'après le nom du torrent.
       final added = await client.addTorrent(
-          metainfo: bytes, options: options.withLabels(ContentKind.ofName(content.name).labels));
+          metainfo: bytes,
+          options: await client.categorized(options, ContentKind.ofName(content.name)));
       added ? report.added++ : report.duplicates++;
     } on TransmissionException catch (e) {
       report.failed.add('$name : ${e.message}');

@@ -395,7 +395,7 @@ class PalliativeNotifier extends Notifier<PalliativeState> {
       }
       final added = await client.addTorrentWithHash(
           metainfo: remote,
-          options: AddOptions(labels: ContentKind.of(item.release).labels));
+          options: await client.categorized(const AddOptions(), ContentKind.of(item.release)));
       final hash = added.hash ?? best.infoHash;
       if (hash == null) return 'Transmission n’a pas renvoyé l’infohash';
       if (!ref.mounted) return null;

@@ -71,6 +71,40 @@ et « Films » sur AstraTorrent donnent tous *Films*). Le filtre par
   choisies dans les options), sans les remplacer. Une mise à jour de
   torrent garde les étiquettes de l'ancien.
 
+### Dossier de catégorie
+
+Un nouveau téléchargement va directement dans le **dossier de sa
+catégorie**, sous le dossier de téléchargement de Transmission (réglages du
+serveur) : `…/Films`, `…/Séries`, `…/Jeux vidéo`… Transmission crée le
+dossier au besoin. Un dossier choisi dans « avec options… » l'emporte ; un
+contenu non reconnu reste à la racine. Le cross-seed, le reseed et les
+réinjections gardent le dossier des données existantes.
+
+### Ranger par catégorie
+
+**⋮ › Ranger par catégorie…** rattrape les torrents déjà présents :
+
+1. **Relevé** : la catégorie de chaque torrent vient d'une étiquette de
+   catégorie déjà posée, sinon de son **tracker d'origine** (recherche par
+   nom, puis la même empreinte ; AstraTorrent par son scanner), à défaut du
+   nom — signalée en orange, à vérifier. Le résultat des trackers est
+   mémorisé (**Réinterroger les trackers** dans le menu pour recommencer).
+   Touche la catégorie d'une ligne pour la changer.
+2. **Étiqueter** : pose l'étiquette de la catégorie (et retire une autre
+   étiquette de catégorie), sans toucher aux fichiers.
+3. **Étiqueter et déplacer** : Transmission déplace en plus les fichiers
+   dans le dossier de la catégorie, un élément à la fois. C'est le même
+   torrent : le seed reprend à l'arrivée. Sur le même disque c'est
+   immédiat ; vers un autre disque, copie puis effacement (plus long, place
+   libre nécessaire).
+
+Les torrents qui partagent leurs fichiers (cross-seed, reseed : même
+dossier, même nom) sont rangés **ensemble**. Ne sont cochés d'office que
+ceux qui se trouvent sous le dossier de téléchargement : un dossier à part
+(une médiathèque partagée en reseed, par exemple) reste au choix, dans le
+filtre **Hors du dossier**. Un torrent en cours de vérification est
+étiqueté mais pas déplacé.
+
 ## Le détail d'un torrent
 
 Cinq onglets :

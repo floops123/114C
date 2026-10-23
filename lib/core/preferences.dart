@@ -25,6 +25,7 @@ Future<SharedPreferencesWithCache> loadSharedPrefs() =>
         'notifications.deleted', // PrefsNotificationStore.handledKey
         'crossSeed', // PrefsCrossSeedCache
         'crossSeedDirections', // CrossSeedDirectionsNotifier
+        'organize', // PrefsOrganizeCache
         'wishlist', // PrefsWishlistStore
         'playback', // PrefsPlaybackStore
         'mediaLibrary', // PrefsMediaLibraryStore

@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/settings.dart';
+import 'content_kind.dart';
 
 class TransmissionException implements Exception {
   const TransmissionException(this.message);
@@ -296,6 +297,36 @@ class TransmissionClient {
 
   Future<Map<String, dynamic>> sessionGet() => call('session-get');
 
+  String? _root;
+  DateTime? _rootAt;
+
+  /// Dossier de téléchargement du serveur (`download-dir`), racine des
+  /// dossiers de catégorie. Relu au plus une fois par minute ; null s'il est
+  /// injoignable.
+  Future<String?> downloadRoot() async {
+    final at = _rootAt;
+    if (at != null && DateTime.now().difference(at) < const Duration(minutes: 1)) {
+      return _root;
+    }
+    try {
+      _root = (await sessionGet())['download-dir'] as String?;
+      _rootAt = DateTime.now();
+    } on Object {
+      return _root;
+    }
+    return _root;
+  }
+
+  /// Options d'un nouveau téléchargement de [kind] : son étiquette, et son
+  /// dossier de catégorie sous [downloadRoot] si aucun dossier n'est imposé.
+  Future<AddOptions> categorized(AddOptions options, ContentKind kind) async {
+    final withLabel = options.withLabels(kind.labels);
+    if (options.downloadDir?.isNotEmpty ?? false) return withLabel;
+    final root = await downloadRoot();
+    if (root == null || root.isEmpty) return withLabel;
+    return withLabel.withDownloadDir(categoryFolder(root, kind));
+  }
+
   Future<void> sessionSet(Map<String, dynamic> args) =>
       call('session-set', args);
 
@@ -358,6 +389,13 @@ class AddOptions {
         bandwidthPriority: bandwidthPriority,
       );
 
+  AddOptions withDownloadDir(String dir) => AddOptions(
+        downloadDir: dir,
+        paused: paused,
+        labels: labels,
+        bandwidthPriority: bandwidthPriority,
+      );
+
   Map<String, dynamic> toArgs() => {
         if (downloadDir != null && downloadDir!.isNotEmpty)
           'download-dir': downloadDir,
@@ -375,3 +413,14 @@ final transmissionProvider = Provider<TransmissionClient?>((ref) {
   ref.onDispose(client.close);
   return client;
 });
+
+/// Dossier d'une catégorie sous [root] (le dossier de téléchargement du
+/// serveur) : « `racine/Films` », « `racine/Séries` »… La racine même pour
+/// un contenu non reconnu.
+String categoryFolder(String root, ContentKind kind) {
+  final sep = root.contains('/') || !root.contains(r'\') ? '/' : r'\';
+  final base = root.length > 1 && (root.endsWith('/') || root.endsWith(r'\'))
+      ? root.substring(0, root.length - 1)
+      : root;
+  return kind == ContentKind.other ? base : '$base$sep${kind.plural}';
+}

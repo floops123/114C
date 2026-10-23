@@ -32,7 +32,7 @@ Future<void> sendToTransmission(
   }
   try {
     final link = release.downloadUrl;
-    final withKind = options.withLabels(ContentKind.of(release).labels);
+    final withKind = await transmission.categorized(options, ContentKind.of(release));
     final added = link != null && link.startsWith('magnet:')
         ? await transmission.addTorrent(filename: link, options: withKind)
         : await transmission.addTorrent(
@@ -79,7 +79,7 @@ Future<int> sendManyToTransmission(
     }
     try {
       final link = release.downloadUrl;
-      final withKind = options.withLabels(ContentKind.of(release).labels);
+      final withKind = await transmission.categorized(options, ContentKind.of(release));
       final ok = link != null && link.startsWith('magnet:')
           ? await transmission.addTorrent(filename: link, options: withKind)
           : await transmission.addTorrent(

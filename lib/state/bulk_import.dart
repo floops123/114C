@@ -716,7 +716,8 @@ class BulkImportNotifier extends Notifier<BulkState> {
           continue;
         }
         final link = item.release.downloadUrl;
-        final options = AddOptions(labels: ContentKind.of(item.release).labels);
+        final options =
+            await transmission.categorized(const AddOptions(), ContentKind.of(item.release));
         final ok = link != null && link.startsWith('magnet:')
             ? await transmission.addTorrent(filename: link, options: options)
             : await transmission.addTorrent(

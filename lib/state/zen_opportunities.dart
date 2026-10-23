@@ -390,7 +390,8 @@ class ZenOpportunitiesNotifier extends Notifier<ZenOpportunitiesState> {
       try {
         await transmission.addTorrent(
             metainfo: await fetchTorrentFile(api, site, item.release),
-            options: AddOptions(labels: ContentKind.of(item.release).labels));
+            options: await transmission.categorized(
+                const AddOptions(), ContentKind.of(item.release)));
         added++;
       } on TrackerException catch (e) {
         failure = e.message;

@@ -74,6 +74,7 @@ lib/
 │   ├── torrents.dart          interrogation de Transmission, détail, statistiques
 │   ├── speed_history.dart     historique des vitesses
 │   ├── cross_seed.dart        analyse et ajout des cross-seeds, sens choisis
+│   ├── organize.dart          rangement par catégorie : étiquette, dossier, déplacement
 │   ├── revive.dart            relance des sorties sans seeder
 │   ├── palliative.dart        liste palliative C411, copie sur les autres trackers
 │   ├── wishlist.dart          souhaits, recherche et tri sur les trackers
@@ -98,6 +99,7 @@ lib/
     ├── player_page.dart       lecteur, choix de version
     ├── on_disk.dart           « déjà chez toi » pour une sortie (base, Jellyfin)
     ├── downloads_page.dart    Transferts
+    ├── organize_page.dart     Ranger par catégorie (menu des Transferts)
     ├── torrent_detail_page.dart, torrent_actions.dart, stats_page.dart
     ├── cross_seed_page.dart, revive_page.dart
     ├── notifications_page.dart, chat_page.dart, rich_text.dart
