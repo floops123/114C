@@ -69,6 +69,7 @@ async function load() {
   for (const s of data.series) for (const id of s.books) state.seriesOf.set(id, s);
   const recent = data.books.filter(isRecent);
   state.badges = recent.length <= Math.max(10, data.books.length * 0.2);
+  await Promise.all([loadVotes(), loadFavorites()]);
   showStatus(state.status);
 }
 
@@ -117,7 +118,7 @@ function cover(b, { badge = '', count = 0 } = {}) {
 
 function bookCard(b) {
   const badge = state.badges && isRecent(b) ? 'NOUVEAU' : '';
-  return `<a class="card" href="#b=${b.id}" title="${esc(b.title)}">${cover(b, { badge })}
+  return `<a class="card" href="#b=${b.id}" title="${esc(b.title)}">${cover(b, { badge })}${voteBadge(b.id)}
     <div class="card-title">${esc(b.kind === 'book' || !b.series ? b.title : (b.kind === 'magazine' ? b.series : `${b.series} ${volumeText(b.volume)}`))}</div>
     <div class="card-sub">${esc(subtitle(b))}</div></a>`;
 }
@@ -161,6 +162,106 @@ function row(title, items, render, link) {
 }
 
 // ---------------------------------------------------------------------------
+// Votes des membres : j'aime / je n'aime pas, anonymes (api/votes, voir
+// c411_core/votes.dart). Le membre est celui de la connexion vache.cloud,
+// transmis par le proxy ; sans connexion, on voit les totaux sans voter.
+
+const thumbs = {
+  up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12Zm20-11a2 2 0 0 0-2-2h-6.3l.95-4.57.03-.32a1.5 1.5 0 0 0-.44-1.06L13.17 1 6.59 7.59A1.98 1.98 0 0 0 6 9v10a2 2 0 0 0 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2Z"/></svg>',
+  down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 3h-4v12h4V3ZM2 14a2 2 0 0 0 2 2h6.3l-.95 4.57-.03.32c0 .41.17.79.44 1.06L10.83 23l6.58-6.59c.37-.36.59-.86.59-1.41V5a2 2 0 0 0-2-2H7c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2Z"/></svg>',
+};
+const votes = { user: false, items: new Map() };
+
+async function loadVotes() {
+  try {
+    const res = await fetch('api/votes');
+    if (!res.ok) return;
+    const data = await res.json();
+    votes.user = Boolean(data.user);
+    votes.items = new Map(Object.entries(data.items || {}));
+  } catch { /* serveur sans votes : rien à afficher */ }
+}
+
+/** [pour, contre, mon vote] ; score = pour − contre. */
+const tallyOf = (id) => votes.items.get(id) || [0, 0, 0];
+const scoreOf = (id) => { const [up, down] = tallyOf(id); return up - down; };
+/** Tri « préférés des membres » : score, puis nombre de « j'aime ». */
+const byVotes = (a, b) => scoreOf(b) - scoreOf(a) || tallyOf(b)[0] - tallyOf(a)[0];
+/** Éléments au score positif, du mieux voté au moins bien. */
+const liked = (items, idOf = (x) => x.id) => items.filter((x) => scoreOf(idOf(x)) > 0)
+  .sort((a, b) => byVotes(idOf(a), idOf(b)));
+
+/** Boutons j'aime / je n'aime pas ; recliquer retire son vote. */
+function voteBar(id) {
+  const [up, down, mine] = tallyOf(id);
+  const off = votes.user ? '' : ' disabled';
+  const hint = votes.user ? '' : ' — connecte-toi par vache.cloud pour voter';
+  const button = (value, label, count) => `<button class="vote-btn${value < 0 ? ' down' : ''}${mine === value ? ' on' : ''}" data-vote="${value}"
+    aria-pressed="${mine === value}" title="${label}${mine === value ? ' (cliquer pour retirer)' : ''}${hint}"${off}>${value > 0 ? thumbs.up : thumbs.down}<span>${count}</span></button>`;
+  return `<div class="votes" data-votes="${esc(id)}">${button(1, 'J’aime', up)}${button(-1, 'Je n’aime pas', down)}<span class="votes-note">votes anonymes · 👍 ajoute à tes favoris</span></div>`;
+}
+
+/** Pastille du score sur une vignette (vide sans vote). */
+function voteBadge(id) {
+  const [up, down] = tallyOf(id);
+  const s = up - down;
+  const inner = up || down ? `${s < 0 ? thumbs.down : thumbs.up}${s > 0 ? '+' : ''}${s}` : '';
+  return `<span class="vote-badge${s < 0 ? ' neg' : ''}${inner ? '' : ' empty'}" data-badge="${esc(id)}" title="${up} j’aime · ${down} je n’aime pas">${inner}</span>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const button = e.target.closest('[data-vote]');
+  if (!button) return;
+  // Avant les autres clics : le bouton peut être dans une carte ou un lien.
+  e.preventDefault();
+  e.stopPropagation();
+  const id = button.closest('[data-votes]').dataset.votes;
+  const wanted = Number(button.dataset.vote);
+  const value = tallyOf(id)[2] === wanted ? 0 : wanted;
+  try {
+    const res = await fetch(`api/vote/${encodeURIComponent(id)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    votes.items.set(id, await res.json());
+    // Aimer, c'est mettre dans ses favoris (en tête) ; sinon, il en sort.
+    favorites.ids = [...(value === 1 ? [id] : []), ...favorites.ids.filter((x) => x !== id)];
+  } catch (err) {
+    (typeof toast === 'function' ? toast : alert)(`Vote impossible : ${err.message}`);
+    return;
+  }
+  for (const el of document.querySelectorAll(`[data-votes="${CSS.escape(id)}"]`)) el.outerHTML = voteBar(id);
+  for (const el of document.querySelectorAll(`[data-badge="${CSS.escape(id)}"]`)) el.outerHTML = voteBadge(id);
+  if (typeof onFavoritesChange === 'function') onFavoritesChange();
+}, { capture: true });
+
+/** Score d'une entrée de liste : le livre, ou la somme des tomes d'une série. */
+const entryScore = (e) => (e.book ? scoreOf(e.book.id) : e.series.books.reduce((n, id) => n + scoreOf(id), 0));
+
+// ---------------------------------------------------------------------------
+// Favoris : ce que le membre a aimé (👍), du plus récent au plus ancien.
+// Gardés sur le serveur (api/favorites), donc les mêmes sur tous ses
+// appareils ; sans connexion vache.cloud, pas de favoris (lien masqué).
+
+const favorites = { user: false, ids: [] };
+
+async function loadFavorites() {
+  try {
+    const res = await fetch('api/favorites');
+    if (!res.ok) return;
+    const data = await res.json();
+    favorites.user = Boolean(data.user);
+    favorites.ids = data.items || [];
+  } catch { /* serveur sans favoris */ }
+  for (const el of document.querySelectorAll('[data-favorites-only]')) el.hidden = !favorites.user;
+}
+
+/** Favori ajouté ou retiré : la page « Favoris » suit. */
+function onFavoritesChange() {
+  if (decodeURIComponent(location.hash) === '#favoris') renderFavorites();
+}
+
+// ---------------------------------------------------------------------------
 // Vues
 
 const content = $('#content');
@@ -188,7 +289,9 @@ function renderHome() {
   };
   content.innerHTML = bookHero(featured, reading[0] ? 'Reprendre la lecture' : 'À la une', { home: true }) +
     row('Continuer la lecture', reading.slice(0, 20), bookCard) +
+    row('Mes favoris', favorites.ids.map((id) => state.byId.get(id)).filter(Boolean).slice(0, 24), bookCard, '#favoris') +
     row('Ajoutés récemment', byAdded.slice(0, 24), bookCard) +
+    row('Préférés des membres', liked(state.books).slice(0, 24), bookCard) +
     ['book', 'comic', 'manga', 'magazine'].map(kindRow).join('');
 }
 
@@ -225,6 +328,7 @@ const sorts = {
   title: ['Titre', (a, b) => fold(a.title).localeCompare(fold(b.title), 'fr', { numeric: true })],
   author: ['Auteur', (a, b) => fold(a.author).localeCompare(fold(b.author)) || fold(a.title).localeCompare(fold(b.title))],
   year: ['Parution', (a, b) => (b.date || String(b.year || '')).localeCompare(a.date || String(a.year || ''))],
+  votes: ['Préférés des membres', (a, b) => entryScore(b) - entryScore(a)],
 };
 
 function renderKind(kind) {
@@ -238,6 +342,15 @@ function renderKind(kind) {
     <div class="grid">${entries.map(entryCard).join('')}</div>`;
   if (!entries.length) statusLine.textContent = `Aucun élément dans « ${kinds[kind].label} ».`;
   $('#sort').addEventListener('change', (e) => { state.sort = e.target.value; store.set('sort', state.sort); renderKind(kind); });
+}
+
+function renderFavorites() {
+  setNav('favoris');
+  const list = favorites.ids.map((id) => state.byId.get(id)).filter(Boolean);
+  statusLine.textContent = list.length ? '' : 'Aucun favori pour l’instant : ce que tu aimes (👍 sur la fiche d’un livre) arrive ici. '
+    + 'Les favoris te suivent sur tous tes appareils.';
+  content.innerHTML = `<div class="page-head"><h1>Mes favoris</h1><span class="count">${list.length}</span></div>
+    <div class="grid">${list.map(bookCard).join('')}</div>`;
 }
 
 function renderSeries(id) {
@@ -265,8 +378,10 @@ function renderBook(id) {
     const others = s.books.filter((x) => x !== b.id).map((x) => state.byId.get(x)).filter(Boolean);
     more = row(`${s.kind === 'magazine' ? 'Autres numéros' : 'Dans la même série'} : ${s.name}`, s.kind === 'magazine' ? others.reverse() : others, bookCard, `#s=${s.id}`);
   }
-  const link = b.link ? `Fiche <a href="${esc(b.link)}" target="_blank" rel="noopener">${b.source === 'google' ? 'Google Books' : 'Open Library'}</a>. ` : '';
-  content.innerHTML = bookHero(b, kinds[b.kind].one) + more +
+  const sourceName = { google: 'Google Books', hardcover: 'Hardcover', bnf: 'BnF',
+    wikidata: /wikipedia\.org/.test(b.link || '') ? 'Wikipédia' : 'Wikidata' }[b.source] || 'Open Library';
+  const link = b.link ? `Fiche <a href="${esc(b.link)}" target="_blank" rel="noopener">${sourceName}</a>. ` : '';
+  content.innerHTML = bookHero(b, kinds[b.kind].one).replace('<div class="facts">', `${voteBar(b.id)}<div class="facts">`) + more +
     `<p class="facts" style="padding: 0 var(--gutter)">${link}${b.kind === 'book' ? '<button class="link-btn" data-identify="' + b.id + '">Chercher à nouveau en ligne</button>' : ''}</p>`;
 }
 
@@ -301,6 +416,7 @@ function route() {
   if (query && !hash) return renderSearch(query);
   if (params.has('b')) renderBook(params.get('b'));
   else if (params.has('s')) renderSeries(params.get('s'));
+  else if (hash === 'favoris') renderFavorites();
   else if (kinds[hash]) renderKind(hash);
   else renderHome();
   window.scrollTo({ top: 0 });
@@ -545,7 +661,7 @@ async function epubReader(b) {
   const book = window.ePub(`media/${b.id}`, { openAs: 'epub' });
   const rendition = book.renderTo(host, { width: '100%', height: '100%', flow: 'paginated', spread: 'auto', allowScriptedContent: false });
   const themes = {
-    dark: { body: { background: '#050b0e !important', color: '#e3ece9 !important' }, a: { color: '#00d492 !important' } },
+    dark: { body: { background: '#050b0e !important', color: '#e3ece9 !important' }, a: { color: '#f06595 !important' } },
     sepia: { body: { background: '#f3e9d6 !important', color: '#3a2f22 !important' } },
     light: { body: { background: '#f7f5f0 !important', color: '#1b1b1b !important' } },
   };
@@ -633,7 +749,8 @@ document.addEventListener('keydown', (e) => {
 
 function statusText(s) {
   return [
-    s.step || `${s.books ?? 0} livres, dont ${s.online ?? 0} avec une fiche ${s.google ? 'Google Books ou Open Library' : 'Open Library'}.`,
+    s.step || `${s.books ?? 0} livres, dont ${s.online ?? 0} avec une fiche ${[s.google && 'Google Books', s.hardcover && 'Hardcover', 'Open Library', 'BnF', 'Wikidata'].filter(Boolean).join(', ')}.`,
+    s.hardcover ? `Hardcover : ${s.hardcoverUsed ?? 0} requêtes sur ${s.hardcoverBudget ?? 4500} aujourd’hui${s.hardcoverProblem ? ` — ${s.hardcoverProblem}` : ''}.` : '',
     s.scannedAt ? `Dernier parcours de l’application : ${new Date(s.scannedAt).toLocaleString('fr-FR')}.` : 'Pas encore de parcours dans l’application.',
     s.error || '',
   ].filter(Boolean).join('\n');

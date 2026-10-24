@@ -167,6 +167,270 @@ void main() {
       expect(b?.subjects, ['Fiction'], reason: 'pas les sujets à rallonge');
       expect(agents.every((a) => a == 'C411Books/1.0 ( moi )'), isTrue);
     });
+
+    test('Hardcover : titre français parmi les titres alternatifs, ISBN, auteur', () {
+      Map<String, dynamic> doc(String slug, String title, List<String> authors,
+              {List<String> alt = const [], List<String> isbns = const []}) =>
+          {'slug': slug, 'title': title, 'author_names': authors, 'alternative_titles': alt, 'isbns': isbns};
+      final (best, title) = OnlineBooks.pickHardcover([
+        doc('autre', 'Les Misérables', ['Claude Schönberg']),
+        doc('les-miserables', 'Les Miserables', ['Victor Hugo'], alt: ['Les Misérables', 'Los miserables']),
+      ], q)!;
+      expect((best['slug'], title), ('les-miserables', 'Les Misérables'));
+      expect(OnlineBooks.pickHardcover([doc('x', 'Notre-Dame de Paris', ['Victor Hugo'])], q), isNull);
+      const byIsbn = (title: 'Titre approximatif', author: null, isbn: '9782070409228', year: null);
+      expect(OnlineBooks.pickHardcover([doc('isbn', 'Les Misérables', ['Victor Hugo'], isbns: ['9782070409228'])], byIsbn)?.$1['slug'], 'isbn');
+    });
+
+    // Réponse SRU de la BnF (Dublin Core), au format réel : un disque et un
+    // recueil à écarter, puis le livre.
+    String bnfXml(List<String> records) => '<?xml version="1.0" encoding="UTF-8"?>'
+        '<srw:searchRetrieveResponse xmlns:srw="http://www.loc.gov/zing/srw/"><srw:numberOfRecords>${records.length}</srw:numberOfRecords><srw:records>'
+        '${records.map((r) => '<srw:record><srw:recordData><oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/">$r</oai_dc:dc></srw:recordData></srw:record>').join()}'
+        '</srw:records></srw:searchRetrieveResponse>';
+    final disque = '<dc:identifier>http://catalogue.bnf.fr/ark:/12148/cb1</dc:identifier><dc:title>L\'ETRANGER / Albert CAMUS</dc:title>'
+        '<dc:date>1961</dc:date><dc:type>enregistrement sonore</dc:type>';
+    final recueil = '<dc:identifier>http://catalogue.bnf.fr/ark:/12148/cb2</dc:identifier><dc:title>Morceaux choisis. Tome 1 / H. P. Lovecraft</dc:title>'
+        '<dc:creator>Lovecraft, Howard Phillips (1890-1937). Auteur du texte</dc:creator><dc:date>2014</dc:date><dc:type>texte imprimé</dc:type>';
+    final livre = '<dc:identifier>http://catalogue.bnf.fr/ark:/12148/cb47595018f</dc:identifier>'
+        '<dc:title>Récits : nouvelles / H. P. Lovecraft ; introduction par Laurent Folliot</dc:title>'
+        '<dc:creator>Lovecraft, Howard Phillips (1890-1937). Auteur du texte</dc:creator>'
+        '<dc:contributor>Folliot, Laurent (1979-....). Préfacier</dc:contributor>'
+        '<dc:publisher>Gallimard (Paris)</dc:publisher><dc:date>2024</dc:date>'
+        '<dc:identifier>ISBN 9782072994722</dc:identifier><dc:type>texte imprimé</dc:type><dc:type>text</dc:type>';
+
+    test('BnF : notices nettoyées, textes seulement, ISBN, recueil écarté', () {
+      final records = OnlineBooks.parseBnf(bnfXml([disque, recueil, livre]));
+      expect(records, hasLength(2), reason: 'pas le disque');
+      final b = records.last.book;
+      expect((b.title, b.year, b.publisher, b.url),
+          ('Récits', 2024, 'Gallimard', 'https://catalogue.bnf.fr/ark:/12148/cb47595018f'));
+      expect(b.authors, ['Howard Phillips Lovecraft'], reason: 'pas le préfacier');
+      expect(records.last.isbns, {'9782072994722'});
+      const recits = (title: 'Récits', author: 'Lovecraft', isbn: null, year: null);
+      expect(OnlineBooks.pickBnf(records, recits)?.id, endsWith('cb47595018f'));
+      const nouvelle = (title: 'Air froid', author: 'Lovecraft', isbn: null, year: null);
+      expect(OnlineBooks.pickBnf(records, nouvelle), isNull, reason: 'pas le recueil qui la contient');
+      const parIsbn = (title: 'peu importe', author: null, isbn: '9782072994722', year: null);
+      expect(OnlineBooks.pickBnf(records, parIsbn)?.title, 'Récits');
+      expect(OnlineBooks.parseBnf('pas du XML'), isEmpty);
+    });
+
+    test('ISBN-10 d’un ISBN-13 (anciens livres indexés ainsi à la BnF)', () {
+      expect(OnlineBooks.isbn10Of('9782070360024'), '2070360024');
+      expect(OnlineBooks.isbn10Of('9780306406157'), '0306406152');
+      expect(OnlineBooks.isbn10Of('9791032305690'), isNull, reason: 'les 979 n’ont pas d’ISBN-10');
+    });
+
+    // Réponse SPARQL : une ligne par combinaison auteur × genre.
+    String sparql(List<Map<String, String>> rows) => jsonEncode({
+          'results': {
+            'bindings': [for (final r in rows) {for (final e in r.entries) e.key: {'value': e.value}}],
+          },
+        });
+    final etrangers = sparql([
+      {'item': 'http://www.wikidata.org/entity/Q108000110', 'titre': 'L’Étranger', 'auteur': 'Charles Baudelaire', 'date': '1869-01-01T00:00:00Z'},
+      {'item': 'http://www.wikidata.org/entity/Q102045783', 'titre': "L'Étranger", 'auteur': 'Albert Camus', 'date': '1942-01-01T00:00:00Z'},
+      {'item': 'http://www.wikidata.org/entity/Q163297', 'titre': "L'Étranger", 'auteur': 'Albert Camus', 'date': '1942-01-01T00:00:00Z',
+        'genre': 'roman philosophique', 'article': 'https://fr.wikipedia.org/wiki/L%27%C3%89tranger'},
+      {'item': 'http://www.wikidata.org/entity/Q163297', 'titre': "L'Étranger", 'auteur': 'Albert Camus', 'date': '1942-01-01T00:00:00Z',
+        'genre': "littérature de l'absurde", 'article': 'https://fr.wikipedia.org/wiki/L%27%C3%89tranger'},
+    ]);
+
+    test('Wikidata : bon auteur, l’œuvre (avec article) plutôt qu’une édition', () {
+      const camus = (title: "L'Étranger", author: 'Albert Camus', isbn: null, year: null);
+      final w = OnlineBooks.pickWikidata(etrangers, camus)!;
+      expect((w.item, w.year, w.article), ('http://www.wikidata.org/entity/Q163297', 1942, 'https://fr.wikipedia.org/wiki/L%27%C3%89tranger'));
+      expect(w.genres, ['roman philosophique', "littérature de l'absurde"]);
+      const baudelaire = (title: "L'Étranger", author: 'Baudelaire', isbn: null, year: null);
+      expect(OnlineBooks.pickWikidata(etrangers, baudelaire)?.year, 1869);
+      const autre = (title: "L'Étranger", author: 'Sartre', isbn: null, year: null);
+      expect(OnlineBooks.pickWikidata(etrangers, autre), isNull);
+      expect(OnlineBooks.pickWikidata('<html>erreur</html>', camus), isNull);
+    });
+
+    group('BnF, Wikidata et Wikipédia (faux serveurs)', () {
+      late HttpServer server;
+      late List<String> calls;
+      late Map<String, Object> answers;
+
+      setUp(() async {
+        calls = [];
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((r) async {
+          final key = r.uri.path == '/sru'
+              ? 'sru ${r.uri.queryParameters['query']}'
+              : Uri.decodeFull(r.uri.path);
+          calls.add(key);
+          final body = answers[key];
+          r.response.statusCode = body == null ? 404 : 200;
+          r.response.write(body is String ? body : jsonEncode(body ?? {'docs': []}));
+          await r.response.close();
+        });
+      });
+      tearDown(() => server.close(force: true));
+
+      OnlineBooks online() {
+        final base = 'http://127.0.0.1:${server.port}';
+        final o = OnlineBooks(contact: 'moi', openLibrary: base, bnf: '$base/sru', wikidata: '$base/sparql',
+            wikipedia: base, interval: Duration.zero);
+        addTearDown(o.close);
+        return o;
+      }
+
+      test('ISBN : la BnF exacte passe avant toute recherche floue par titre', () async {
+        answers = {
+          'sru bib.isbn all "9782072994722"': bnfXml([livre]),
+          // Recherche floue d'Open Library : un autre livre au titre voisin.
+          '/search.json': {'docs': [{'key': '/works/OLperec', 'title': "Récits d'Ellis Island", 'author_name': ['Georges Perec']}]},
+        };
+        final b = await online().find((title: 'Récits', author: null, isbn: '9782072994722', year: null));
+        expect((b?.source, b?.title, b?.publisher), ('bnf', 'Récits', 'Gallimard'));
+        expect(calls.where((c) => c == '/search.json'), isEmpty, reason: 'pas de recherche floue');
+      });
+
+      test('fiche sans résumé ni couverture : complétée par Wikidata et Wikipédia', () async {
+        answers = {
+          '/search.json': {'docs': []},
+          'sru bib.title all "L\'Étranger" and bib.author all "Albert Camus"': bnfXml([
+            '<dc:identifier>http://catalogue.bnf.fr/ark:/12148/cb3</dc:identifier><dc:title>L\'étranger : roman / Albert Camus</dc:title>'
+                '<dc:creator>Camus, Albert (1913-1960). Auteur du texte</dc:creator><dc:publisher>Gallimard (Paris)</dc:publisher>'
+                '<dc:date>1957</dc:date><dc:type>texte imprimé</dc:type>',
+          ]),
+          '/sparql': etrangers,
+          "/api/rest_v1/page/summary/L'Étranger": {
+            'type': 'standard',
+            'extract': "L'Étranger est le premier roman publié d'Albert Camus, paru en 1942.",
+            'originalimage': {'source': 'https://upload.wikimedia.org/x/L_Etranger.jpg'},
+          },
+        };
+        final b = await online().find((title: "L'Étranger", author: 'Albert Camus', isbn: null, year: null));
+        expect((b?.source, b?.title, b?.publisher, b?.year), ('bnf', "L'étranger", 'Gallimard', 1957),
+            reason: 'la fiche reste celle de la BnF');
+        expect(b?.description, startsWith("L'Étranger est le premier roman"));
+        expect(b?.coverUrl, 'https://upload.wikimedia.org/x/L_Etranger.jpg');
+        expect(b?.subjects, ['roman philosophique', "littérature de l'absurde"]);
+      });
+
+      test('rien ailleurs : la fiche Wikidata seule ; Wikidata en panne : pas d’erreur', () async {
+        answers = {'/search.json': {'docs': []}, '/sparql': etrangers};
+        final b = await online().find((title: "L'Étranger", author: 'Baudelaire', isbn: null, year: null));
+        expect((b?.source, b?.year, b?.url), ('wikidata', 1869, 'https://www.wikidata.org/wiki/Q108000110'));
+        answers = {'/search.json': {'docs': []}};
+        expect(await online().find((title: "L'Étranger", author: 'Baudelaire', isbn: null, year: null)), isNull);
+      });
+    });
+
+    group('Hardcover (GraphQL)', () {
+      late HttpServer server;
+      late Directory dir;
+      late List<String> calls;
+      late int hardcoverStatus;
+
+      setUp(() async {
+        dir = Directory.systemTemp.createTempSync('c411hc');
+        calls = [];
+        hardcoverStatus = 200;
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((r) async {
+          calls.add('${r.method} ${r.uri.path}');
+          Object? body;
+          if (r.uri.path == '/graphql') {
+            final sent = jsonDecode(await utf8.decoder.bind(r).join()) as Map;
+            calls.add('auth=${r.headers.value(HttpHeaders.authorizationHeader)} q=${(sent['variables'] as Map)['q']}');
+            r.response.statusCode = hardcoverStatus;
+            body = hardcoverStatus != 200 ? {'error': 'x'} : {
+              'data': {
+                'search': {
+                  'results': {
+                    'found': 1,
+                    'hits': [
+                      {
+                        'document': {
+                          'id': 7, 'slug': 'les-miserables', 'title': 'Les Miserables',
+                          'alternative_titles': ['Les Misérables'], 'author_names': ['Victor Hugo'],
+                          'release_year': 1862, 'description': '<p>Jean Valjean…</p>',
+                          'genres': ['Classics', 'Fiction'], 'image': {'url': 'https://assets.hardcover.app/x.jpg'},
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            };
+          } else {
+            r.response.statusCode = r.uri.path == '/search.json' ? 200 : 404;
+            body = r.uri.path == '/search.json'
+                ? {'docs': [{'key': '/works/OL1W', 'title': 'Les Misérables', 'author_name': ['Victor Hugo']}]}
+                : null;
+          }
+          r.response.write(jsonEncode(body));
+          await r.response.close();
+        });
+      });
+      tearDown(() async {
+        await server.close(force: true);
+        dir.deleteSync(recursive: true);
+      });
+
+      OnlineBooks online({String key = 'Bearer jeton-secret'}) {
+        final o = OnlineBooks(
+          contact: 'moi',
+          hardcoverKey: key,
+          hardcoverQuotaFile: '${dir.path}/quota.json',
+          openLibrary: 'http://127.0.0.1:${server.port}',
+          hardcover: 'http://127.0.0.1:${server.port}/graphql',
+          interval: Duration.zero,
+        );
+        addTearDown(o.close);
+        return o;
+      }
+
+      test('fiche Hardcover avant Open Library, jeton, compteur gardé sur disque', () async {
+        final o = online();
+        final b = await o.find(q);
+        expect((b?.source, b?.title, b?.year, b?.description, b?.coverUrl, b?.url), (
+          'hardcover', 'Les Misérables', 1862, 'Jean Valjean…', 'https://assets.hardcover.app/x.jpg',
+          'https://hardcover.app/books/les-miserables',
+        ));
+        expect(b?.subjects, ['Classics', 'Fiction']);
+        expect(calls, ['POST /graphql', 'auth=Bearer jeton-secret q=Les Misérables Victor Hugo'],
+            reason: '« Bearer » pas doublé ; Open Library pas interrogé');
+        expect(o.hardcoverUsed, 1);
+        expect(online().hardcoverUsed, 1, reason: 'relu au démarrage');
+      });
+
+      test('quota atteint (429) : Open Library, puis Hardcover laissé en paix', () async {
+        hardcoverStatus = 429;
+        final o = online();
+        expect((await o.find(q))?.source, 'openlibrary');
+        calls.clear();
+        expect((await o.find(q))?.source, 'openlibrary');
+        expect(calls.where((c) => c.contains('graphql')), isEmpty);
+      });
+
+      test('jeton refusé (401) : signalé, Open Library', () async {
+        hardcoverStatus = 401;
+        final o = online();
+        expect((await o.find(q))?.source, 'openlibrary');
+        expect(o.hardcoverProblem, contains('refusée'));
+      });
+
+      test('budget du jour épuisé : Hardcover pas interrogé', () async {
+        final today = DateTime.now().toIso8601String().substring(0, 10);
+        File('${dir.path}/quota.json').writeAsStringSync(jsonEncode({'day': today, 'used': OnlineBooks.hardcoverDailyBudget}));
+        expect((await online().find(q))?.source, 'openlibrary');
+        expect(calls.where((c) => c.contains('graphql')), isEmpty);
+        // Le lendemain, le compteur repart de zéro.
+        File('${dir.path}/quota.json').writeAsStringSync(jsonEncode({'day': '2000-01-01', 'used': 9999}));
+        expect(online().hardcoverUsed, 0);
+      });
+
+      test('sans jeton : jamais interrogé', () async {
+        expect((await online(key: '').find(q))?.source, 'openlibrary');
+        expect(calls.where((c) => c.contains('graphql')), isEmpty);
+      });
+    });
   });
 
   group('bibliothèque', () {

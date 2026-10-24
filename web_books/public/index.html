@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#07141a">
+  <meta name="theme-color" content="#eaf4ff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14181f" media="(prefers-color-scheme: dark)">
   <title>C411 Books</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2300d492'/%3E%3Cpath d='M6 5.5h5a2 2 0 0 1 2 2V19a1.6 1.6 0 0 0-1.6-1.6H6Zm12 0h-3a2 2 0 0 0-2 2V19a1.6 1.6 0 0 1 1.6-1.6H18Z' fill='%2304100c'/%3E%3C/svg%3E">
+  <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,6 +18,7 @@
       <a href="#comic" data-view="comic">BD</a>
       <a href="#manga" data-view="manga">Mangas</a>
       <a href="#magazine" data-view="magazine">Magazines</a>
+      <a href="#favoris" data-view="favoris" data-favorites-only hidden>Favoris</a>
     </nav>
     <label class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a6 6 0 1 0 3.9 10.6l4.7 4.7 1.4-1.4-4.7-4.7A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/></svg>
@@ -31,6 +33,7 @@
   <main id="main">
     <div id="content"></div>
     <p class="status" id="status">Chargement de la bibliothèque…</p>
+    <footer class="made">made with <span class="coeur" aria-label="amour">♥</span></footer>
   </main>
 
   <div class="reader" id="reader" hidden>

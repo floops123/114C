@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:c411_core/votes.dart';
+
 import 'config.dart';
 import 'content.dart';
 import 'service.dart';
@@ -17,13 +19,17 @@ import 'service.dart';
 /// - `GET /api/pages/<livre>` : nombre de pages d'une BD ;
 /// - `GET /page/<livre>/<n>` : la page n (de 0) ;
 /// - `GET /media/<livre>` : le fichier tel quel, avec `Range` (liseuses
-///   EPUB et PDF) ; `?download=1` pour l'enregistrer.
+///   EPUB et PDF) ; `?download=1` pour l'enregistrer ;
+/// - `GET /api/votes`, `POST /api/vote/<livre>` : votes « j'aime / je n'aime
+///   pas » anonymes des membres ; `GET /api/favorites` :
+///   ce que le membre a aimé (`c411_core/votes.dart`).
 class BooksServer {
   BooksServer(
     this.config, {
     required this.service,
     required this.publicDir,
     this.fontsDir,
+    this.votes,
   });
 
   final BooksConfig config;
@@ -32,6 +38,10 @@ class BooksServer {
 
   /// Polices de l'application (`assets/fonts`), servies sous `/fonts/`.
   final String? fontsDir;
+
+  /// Votes des membres (absent : pas de votes).
+  final Votes? votes;
+
   HttpServer? _server;
 
   Content get _content => service.content;
@@ -80,6 +90,8 @@ class BooksServer {
         await response.close();
         return;
       }
+      final votes = this.votes;
+      if (votes != null && await votes.serve(request, exists: (id) => service.catalog.book(id) != null)) return;
       final segments = request.uri.pathSegments;
       final post = request.method == 'POST';
       switch ((segments.firstOrNull ?? '', segments.length, post)) {

@@ -41,11 +41,40 @@ les sources sont combinées, de la plus sûre à la moins sûre.
      française** quand il y en a une ;
    - par l'ISBN s'il est connu, sinon par le titre et l'auteur, puis par une
      recherche libre (titre et auteur inversés, nom « de scène »).
-3. **[Google Books](https://developers.google.com/books)**, si tu fournis une
+3. **[Hardcover](https://hardcover.app/)**, si tu fournis un jeton d'API
+   (hardcover.app → Réglages → Hardcover API ; un jeton en lecture seule
+   suffit). Interrogé **avant** Open Library : une seule requête par livre
+   (GraphQL `search`), qui donne titre (le titre français parmi les titres
+   alternatifs s'il y en a un), auteurs, année, résumé, genres et couverture ;
+   par l'ISBN s'il est connu. Compte gratuit : 5 000 requêtes par jour et
+   60 par minute. Le serveur s'arrête à **4 500 par jour**, compteur gardé
+   dans `hardcover-quota.json` à côté de l'état (il survit aux redémarrages),
+   et à une par seconde. Quota atteint (429) : Hardcover est laissé une heure
+   de côté ; jeton refusé : écarté jusqu'au redémarrage (l'état le signale).
+   Dans tous les cas la recherche continue sur Open Library.
+4. **[Le catalogue de la BnF](https://catalogue.bnf.fr/api/)** (SRU, sans
+   clé), après Open Library : la référence pour les **éditions françaises**
+   (dépôt légal). Titre (sans sous-titre), auteurs, éditeur, année ; ni
+   couverture ni résumé. Seulement les textes imprimés (pas les disques), et
+   un recueil qui contient la nouvelle cherchée ne passe pas. Le catalogue
+   n'indexe souvent que l'**ISBN-10** des livres anciens : les deux formes
+   sont essayées.
+   **ISBN connu** : les recherches exactes (Open Library puis BnF) passent
+   avant toute recherche par titre, qui pourrait prendre un livre au titre
+   voisin.
+5. **[Wikidata](https://www.wikidata.org/) et
+   [Wikipédia](https://fr.wikipedia.org/)** (sans clé), pour **compléter** :
+   une fiche sans résumé ou sans couverture (ou aucune fiche) reçoit le résumé
+   et l'image de l'article Wikipédia en français de l'œuvre, son année de
+   première parution et ses genres. L'œuvre est choisie par titre **et
+   auteur** (plusieurs « L'Étranger » existent), de préférence celle qui a un
+   article. Une requête SPARQL, puis une pour le résumé.
+   Ces sources ne bloquent jamais : en panne, la recherche continue.
+6. **[Google Books](https://developers.google.com/books)**, si tu fournis une
    clé (gratuite) : souvent de meilleurs résumés en français. Sans clé,
    Google Books partage un quota mondial vite épuisé, donc il n'est pas
    utilisé.
-4. **Le nom du fichier**, en dernier recours. Formats reconnus :
+7. **Le nom du fichier**, en dernier recours. Formats reconnus :
    - livres : `Auteur - Titre (année)`, `Nom, Prénom - Titre`, ou le nom de
      scène `Auteur.Titre.2012.FRENCH.EPUB` ;
    - BD : `Série - T01 - Titre`, `Série T03`, `Série 012`, `Série #7` ;
@@ -100,6 +129,7 @@ puis ouvrir <http://127.0.0.1:8413/>.
   "library": "/chemin/vers/shared_preferences.json",
   "state": "/chemin/vers/books.json",
   "googleBooksKey": "",
+  "hardcoverKey": "",
   "cacheGb": 2,
   "contact": "https://exemple.org/moi"
 }
@@ -110,10 +140,11 @@ puis ouvrir <http://127.0.0.1:8413/>.
 | `library` | la base de l'application (ses préférences) ; `~/.local/share/fr.c411remote.c411_remote/shared_preferences.json` par défaut |
 | `state` | ce que le serveur sait des livres ; `~/.local/share/c411_books/books.json` par défaut, couvertures (`covers/`) et copies locales (`files/`) à côté |
 | `googleBooksKey` | clé Google Books, facultative |
+| `hardcoverKey` | jeton d'API Hardcover, facultatif (avec ou sans « Bearer ») |
 | `cacheGb` | place des copies locales (PDF et CBR lus en entier), 2 Go par défaut ; les moins récemment lues partent |
 | `contact` | envoyé à Open Library dans le User-Agent ; l'adresse du dépôt par défaut |
 
-Les options `--library`, `--state`, `--google-books-key`, `--cache-gb`,
+Les options `--library`, `--state`, `--google-books-key`, `--hardcover-key`, `--cache-gb`,
 `--host`, `--port` et `--password` passent avant.
 
 ## Lecture
@@ -146,6 +177,38 @@ Raccourcis de la liseuse :
 
 On peut aussi cliquer sur le tiers gauche ou droit de la page.
 
+## Votes des membres
+
+Chaque membre peut dire « j’aime » ou « je n’aime pas » sur les livres
+(boutons 👍 / 👎 sur la fiche du livre) ; recliquer sur son vote le retire, cliquer
+sur l’autre le change. Les vignettes montrent le score (pour − contre), et
+on s’en sert pour la rangée « Préférés des membres » sur l’accueil, tri du même nom dans chaque genre (une série compte la somme de ses tomes).
+
+- **Anonymes** : le serveur ne garde pas le nom, seulement une empreinte
+  HMAC-SHA256 avec une clé propre au serveur (`votes.json.key`, créée au
+  premier lancement, lisible du seul propriétaire). On sait qu’un membre a
+  déjà voté, sans pouvoir dire qui ; seuls les totaux sont affichés.
+- **Qui vote** : le membre annoncé par le proxy dans `Remote-User` (Caddy,
+  après la connexion Authelia de vache.cloud). Sans cet en-tête (accès direct
+  au serveur), on voit les totaux sans pouvoir voter.
+- Votes dans `votes.json` à côté de `--state`.
+- API : `GET /api/votes`, `POST /api/vote/<id>` avec `{"value": 1 | -1 | 0}`
+  (corps JSON obligatoire), code commun dans `packages/c411_core/lib/votes.dart`.
+
+## Favoris
+
+**Les favoris d’un membre, c’est ce qu’il a aimé** : un 👍 (sur la fiche)
+ajoute l’élément en tête de ses favoris ; retirer son vote ou passer à 👎
+l’en sort. On les retrouve dans la page **Favoris** (`#favoris`) et rangée « Mes favoris » sur l’accueil. La liste est **gardée sur le
+serveur**, avec les votes : elle suit le membre sur tous ses appareils.
+
+- Sur : livres.
+- Dans le même fichier que les votes (`votes.json` à côté de `--state`) : `likes`, l’ordre des « j’aime »
+  de chaque membre, sous son empreinte HMAC (jamais son nom). L’ancien format
+  (votes seuls) est relu, ses « j’aime » deviennent des favoris.
+- API : `GET /api/favorites` (plus récent d’abord) ; on les change par
+  `POST /api/vote/<id>`.
+
 ## Sécurité
 
 Comme C411 TV et C411 Music, le serveur n'écoute **qu'en local** par défaut.
@@ -161,7 +224,7 @@ bin/web_books.dart    ligne de commande
 lib/config.dart       réglages (JSON de l'application + section books)
 lib/remote_zip.dart   archive ZIP lue par plages (EPUB, CBZ)
 lib/inspect.dart      métadonnées : OPF des EPUB, ComicInfo.xml, pages
-lib/online.dart       Open Library, Google Books (rythme, choix de la fiche)
+lib/online.dart       Open Library, Google Books, Hardcover, BnF, Wikidata/Wikipédia (rythme, quota, choix de la fiche)
 lib/content.dart      copies locales, pages (ZIP, 7z), couvertures
 lib/library.dart      livres, ce qu'on en sait, séries
 lib/service.dart      relecture de la base, lecture des fichiers, fiches

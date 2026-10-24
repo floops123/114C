@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:c411_core/media_relay.dart';
+import 'package:c411_core/votes.dart';
 import 'package:c411_web_books/config.dart';
 import 'package:c411_web_books/content.dart';
 import 'package:c411_web_books/online.dart';
@@ -26,6 +27,7 @@ Options (prioritaires sur la section « books ») :
                         ~/.local/share/c411_books/books.json) ; couvertures
                         et copies locales dans le même dossier
   --google-books-key <clé>  Google Books en plus d'Open Library
+  --hardcover-key <jeton>   Hardcover en plus d'Open Library
   --cache-gb <Go>       place des copies locales (PDF, CBR ; défaut : 2)
   --host <adresse>      adresse d'écoute (défaut : 127.0.0.1)
   --port <port>         port (défaut : 8413)
@@ -75,7 +77,12 @@ Future<void> main(List<String> args) async {
       tools: tools,
       cacheBytes: config.cacheBytes,
     ),
-    online: OnlineBooks(contact: config.contact, googleKey: config.googleBooksKey),
+    online: OnlineBooks(
+      contact: config.contact,
+      googleKey: config.googleBooksKey,
+      hardcoverKey: config.hardcoverKey,
+      hardcoverQuotaFile: '${config.cacheDir}/hardcover-quota.json',
+    ),
   );
   final root = File.fromUri(Platform.script).parent.parent;
   final server = BooksServer(
@@ -83,6 +90,7 @@ Future<void> main(List<String> args) async {
     service: service,
     publicDir: '${root.path}/public',
     fontsDir: '${root.parent.path}/assets/fonts',
+    votes: Votes('${File(config.state).parent.path}/votes.json'),
   );
   await server.start();
   service.start();
@@ -91,7 +99,12 @@ Future<void> main(List<String> args) async {
   stdout
     ..writeln('$count livres, lus dans ${config.library}'
         '${count == 0 ? ' (lance un parcours de la vidéothèque dans l’application)' : ''}')
-    ..writeln('Fiches : ${config.googleBooksKey.isEmpty ? 'Open Library' : 'Google Books puis Open Library'}')
+    ..writeln('Fiches : ${[
+      if (config.googleBooksKey.isNotEmpty) 'Google Books',
+      if (config.hardcoverKey.isNotEmpty) 'Hardcover',
+      'Open Library',
+      'BnF',
+    ].join(' puis ')}, complétées par Wikidata et Wikipédia')
     ..writeln([
       tools.pdftoppm ? 'pdftoppm : couvertures des PDF' : 'pdftoppm absent : PDF sans couverture',
       tools.sevenZip ? '7z : BD en CBR/CB7' : '7z absent : CBR et CB7 illisibles',

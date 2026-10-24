@@ -85,6 +85,10 @@ class BooksService {
         'books': _catalog.books.length,
         'online': _catalog.books.where((b) => b.info.online != null).length,
         'google': online.googleKey.isNotEmpty,
+        'hardcover': online.hardcoverKey.isNotEmpty,
+        'hardcoverUsed': online.hardcoverUsed,
+        'hardcoverBudget': OnlineBooks.hardcoverDailyBudget,
+        'hardcoverProblem': online.hardcoverProblem,
       };
 
   void _save() {

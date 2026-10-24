@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:c411_core/titles.dart';
+import 'package:xml/xml.dart';
 
 import 'inspect.dart' show plainText;
 
@@ -32,10 +33,12 @@ class OnlineBook {
         coverUrl: j['coverUrl'] as String?,
       );
 
-  /// `openlibrary` ou `google`.
+  /// `openlibrary`, `google`, `hardcover`, `bnf` ou `wikidata`.
   final String source;
 
-  /// Œuvre Open Library (`/works/OL…W`) ou volume Google Books.
+  /// Œuvre Open Library (`/works/OL…W`), volume Google Books, livre
+  /// Hardcover (son slug) ; pour la BnF et Wikidata, l'adresse de la notice
+  /// (ou de l'article Wikipédia).
   final String id;
   final String title;
   final List<String> authors;
@@ -46,9 +49,26 @@ class OnlineBook {
   final String? coverUrl;
 
   /// Lien vers la fiche, pour l'interface.
-  String get url => source == 'google'
-      ? 'https://books.google.com/books?id=$id'
-      : 'https://openlibrary.org$id';
+  String get url => switch (source) {
+        'google' => 'https://books.google.com/books?id=$id',
+        'hardcover' => 'https://hardcover.app/books/$id',
+        'bnf' || 'wikidata' => id,
+        _ => 'https://openlibrary.org$id',
+      };
+
+  /// Cette fiche, complétée par [other] là où il lui manque quelque chose
+  /// (résumé, couverture, année, auteurs, genres) ; la source reste la sienne.
+  OnlineBook completedBy(OnlineBook other) => OnlineBook(
+        source: source,
+        id: id,
+        title: title,
+        authors: authors.isNotEmpty ? authors : other.authors,
+        year: year ?? other.year,
+        description: description ?? other.description,
+        subjects: subjects.isNotEmpty ? subjects : other.subjects,
+        publisher: publisher ?? other.publisher,
+        coverUrl: coverUrl ?? other.coverUrl,
+      );
 
   Map<String, dynamic> toJson() => {
         'source': source,
@@ -98,25 +118,81 @@ class _Paced {
 }
 
 /// Recherche des fiches : Google Books d'abord si une clé est donnée
-/// (meilleurs résumés en français), sinon Open Library, sans clé.
+/// (meilleurs résumés en français), puis Hardcover si une clé est donnée,
+/// puis Open Library, puis le catalogue de la BnF (éditions françaises), sans
+/// clé. Une fiche sans résumé ou sans couverture (ou aucune fiche) est
+/// complétée par Wikidata et l'article Wikipédia en français.
 class OnlineBooks {
   OnlineBooks({
     required String contact,
     this.googleKey = '',
+    String hardcoverKey = '',
+    this.hardcoverQuotaFile,
     HttpClient? http,
     this.openLibrary = 'https://openlibrary.org',
     this.google = 'https://www.googleapis.com/books/v1',
+    this.hardcover = 'https://api.hardcover.app/v1/graphql',
+    this.bnf = 'https://catalogue.bnf.fr/api/SRU',
+    this.wikidata = 'https://query.wikidata.org/sparql',
+    this.wikipedia = 'https://fr.wikipedia.org',
     Duration interval = const Duration(milliseconds: 1100),
   })  : userAgent = 'C411Books/1.0 ( $contact )',
+        // Accepté tel que copié depuis Hardcover, avec ou sans « Bearer ».
+        hardcoverKey = hardcoverKey.trim().replaceFirst(RegExp(r'^Bearer\s+', caseSensitive: false), ''),
         _http = http ?? HttpClient(),
-        _pace = _Paced(interval);
+        _pace = _Paced(interval),
+        _hardcoverPace = _Paced(interval),
+        _bnfPace = _Paced(interval),
+        _wikiPace = _Paced(interval) {
+    _loadQuota();
+  }
 
   final String userAgent;
   final String googleKey;
+  final String hardcoverKey;
   final String openLibrary;
   final String google;
+  final String hardcover;
+  final String bnf;
+  final String wikidata;
+  final String wikipedia;
   final HttpClient _http;
   final _Paced _pace;
+
+  /// La BnF et Wikimedia, chacun à son rythme (une requête par seconde).
+  final _Paced _bnfPace;
+  final _Paced _wikiPace;
+
+  /// Hardcover a son propre rythme (60 requêtes par minute au plus).
+  final _Paced _hardcoverPace;
+
+  /// Requêtes Hardcover permises par jour : 5 000 pour un compte gratuit,
+  /// on s'arrête avant (le compteur du serveur peut différer du nôtre).
+  static const hardcoverDailyBudget = 4500;
+
+  /// Compteur du jour, gardé dans ce fichier pour survivre aux redémarrages.
+  final String? hardcoverQuotaFile;
+  String _hardcoverDay = '';
+  int _hardcoverUsed = 0;
+
+  /// Hardcover refuse (quota, saturation) : Open Library seul d'ici là.
+  DateTime? _hardcoverPausedUntil;
+
+  /// Clé refusée ou droits insuffisants : Hardcover écarté jusqu'au
+  /// redémarrage. Pour l'état affiché.
+  String? hardcoverProblem;
+
+  /// Requêtes Hardcover faites aujourd'hui.
+  int get hardcoverUsed {
+    _rollDay();
+    return _hardcoverUsed;
+  }
+
+  bool get _hardcoverReady =>
+      hardcoverKey.isNotEmpty &&
+      hardcoverProblem == null &&
+      !(_hardcoverPausedUntil?.isAfter(DateTime.now()) ?? false) &&
+      hardcoverUsed < hardcoverDailyBudget;
 
   Future<Map<String, dynamic>?> _get(Uri uri) => _pace.run(() async {
         for (var attempt = 0; attempt < 4; attempt++) {
@@ -142,30 +218,64 @@ class OnlineBooks {
 
   /// La fiche qui correspond à [q], ou null.
   Future<OnlineBook?> find(BookQuery q) async {
-    if (googleKey.isNotEmpty) {
-      final g = await _google(q);
-      if (g != null) return g;
+    OnlineBook? found;
+    if (googleKey.isNotEmpty) found = await _google(q);
+    if (found == null && _hardcoverReady) found = await _hardcover(q);
+    // ISBN connu : les recherches exactes (Open Library, BnF) avant toute
+    // recherche floue par titre, qui prendrait « Récits d'Ellis Island »
+    // pour les « Récits » de Lovecraft.
+    if (q.isbn != null) {
+      found ??= await _openLibraryByIsbn(q);
+      found ??= await _bnf(q, byIsbn: true);
     }
-    return _openLibrary(q);
+    found ??= await _openLibrary(q);
+    found ??= await _bnf(q, byIsbn: false);
+    if (found == null || found.description == null || found.coverUrl == null) {
+      final wiki = await _wikidata(q, found);
+      if (wiki != null) found = found == null ? wiki : found.completedBy(wiki);
+    }
+    return found;
   }
+
+  /// Texte d'une réponse, à [pace] ; null si absent ou refusé (ces sources ne
+  /// bloquent jamais la recherche : on passe à la suivante).
+  Future<String?> _text(_Paced pace, Uri uri, {String accept = '*/*'}) => pace.run(() async {
+        for (var attempt = 0; attempt < 3; attempt++) {
+          try {
+            final request = await _http.getUrl(uri);
+            request.headers
+              ..set(HttpHeaders.userAgentHeader, userAgent)
+              ..set(HttpHeaders.acceptHeader, accept);
+            final reply = await request.close().timeout(const Duration(seconds: 30));
+            final body = await reply.transform(utf8.decoder).join();
+            if (reply.statusCode == 200) return body;
+            if (reply.statusCode != 429 && reply.statusCode != 503) return null;
+          } on Object {
+            // Réseau, délai : nouvel essai.
+          }
+          await Future<void>.delayed(Duration(seconds: 2 << attempt));
+        }
+        return null;
+      });
 
   // ---- Open Library --------------------------------------------------------
 
+  /// L'édition exacte par son ISBN, puis son œuvre.
+  Future<OnlineBook?> _openLibraryByIsbn(BookQuery q) async {
+    final edition = await _get(Uri.parse('$openLibrary/isbn/${q.isbn}.json'));
+    final work = ((edition?['works'] as List?)?.firstOrNull as Map?)?['key'] as String?;
+    if (edition == null || work == null) return null;
+    final covers = (edition['covers'] as List?)?.whereType<num>().where((c) => c > 0);
+    return _work(work,
+        title: edition['title'] as String? ?? q.title,
+        authors: q.author == null ? const [] : [q.author!],
+        year: int.tryParse(RegExp(r'\d{4}').stringMatch('${edition['publish_date'] ?? ''}') ?? ''),
+        cover: covers == null || covers.isEmpty ? null : covers.first.toInt(),
+        publisher: ((edition['publishers'] as List?)?.firstOrNull) as String?);
+  }
+
+  /// Recherche par titre et auteur.
   Future<OnlineBook?> _openLibrary(BookQuery q) async {
-    // ISBN : l'édition exacte, puis son œuvre.
-    if (q.isbn != null) {
-      final edition = await _get(Uri.parse('$openLibrary/isbn/${q.isbn}.json'));
-      final work = ((edition?['works'] as List?)?.firstOrNull as Map?)?['key'] as String?;
-      if (edition != null && work != null) {
-        final covers = (edition['covers'] as List?)?.whereType<num>().where((c) => c > 0);
-        return _work(work,
-            title: edition['title'] as String? ?? q.title,
-            authors: q.author == null ? const [] : [q.author!],
-            year: int.tryParse(RegExp(r'\d{4}').stringMatch('${edition['publish_date'] ?? ''}') ?? ''),
-            cover: covers == null || covers.isEmpty ? null : covers.first.toInt(),
-            publisher: ((edition['publishers'] as List?)?.firstOrNull) as String?);
-      }
-    }
     // L'édition française de chaque œuvre (titre et couverture), s'il y en a.
     const fields = 'key,title,author_name,first_publish_year,cover_i,language,subject,publisher,'
         'editions,editions.key,editions.title,editions.cover_i,editions.language';
@@ -310,6 +420,366 @@ class OnlineBooks {
       );
     }
     return null;
+  }
+
+  // ---- BnF (catalogue général, SRU) ------------------------------------------
+
+  /// Notices de la BnF : par ISBN ([byIsbn] ; le catalogue n'indexe souvent
+  /// que l'ISBN-10 des livres anciens : les deux formes), ou par titre et
+  /// auteur.
+  Future<OnlineBook?> _bnf(BookQuery q, {required bool byIsbn}) async {
+    String clean(String s) => s.replaceAll(RegExp(r'["\\]'), ' ').trim();
+    final isbn10 = q.isbn == null ? null : isbn10Of(q.isbn!);
+    final queries = byIsbn
+        ? [
+            if (q.isbn != null) 'bib.isbn all "${q.isbn}"',
+            if (isbn10 != null) 'bib.isbn all "$isbn10"',
+          ]
+        : ['bib.title all "${clean(q.title)}"${q.author == null ? '' : ' and bib.author all "${clean(q.author!)}"'}'];
+    for (final cql in queries) {
+      final xml = await _text(_bnfPace, Uri.parse(bnf).replace(queryParameters: {
+        'version': '1.2',
+        'operation': 'searchRetrieve',
+        'query': cql,
+        'recordSchema': 'dublincore',
+        'maximumRecords': '20',
+      }));
+      if (xml == null) continue;
+      final best = pickBnf(parseBnf(xml), q);
+      if (best != null) return best;
+    }
+    return null;
+  }
+
+  /// Notices Dublin Core d'une réponse SRU de la BnF, nettoyées : titre sans
+  /// sa mention de responsabilité, auteurs « Prénom Nom », éditeur sans la
+  /// ville, année ; seulement les textes (pas les disques ni les partitions).
+  static List<({OnlineBook book, Set<String> isbns})> parseBnf(String xml) {
+    final XmlDocument doc;
+    try {
+      doc = XmlDocument.parse(xml);
+    } on Object {
+      return const [];
+    }
+    final out = <({OnlineBook book, Set<String> isbns})>[];
+    for (final dc in doc.findAllElements('dc', namespaceUri: '*')) {
+      List<String> all(String name) =>
+          [for (final e in dc.findElements(name, namespaceUri: '*')) e.innerText.trim()];
+      if (!all('type').any((t) => t == 'texte imprimé' || t == 'text')) continue;
+      // « Les fourmis : roman / Bernard Werber » → « Les fourmis ».
+      final title = all('title').firstOrNull?.split(' / ').first.split(' : ').first.trim();
+      final ark = all('identifier').firstWhere((i) => i.contains('ark:'), orElse: () => '');
+      if (title == null || title.isEmpty || ark.isEmpty) continue;
+      String person(String raw) {
+        final name = raw.replaceFirst(RegExp(r'\s*\(.*$'), '').replaceFirst(RegExp(r'\.\s.*$'), '').trim();
+        final parts = name.split(', ');
+        return parts.length == 2 ? '${parts[1]} ${parts[0]}' : name;
+      }
+      out.add((
+        book: OnlineBook(
+          source: 'bnf',
+          id: ark.replaceFirst('http://', 'https://'),
+          title: title,
+          authors: [for (final c in all('creator')) person(c)].where((a) => a.isNotEmpty).toList(),
+          year: int.tryParse(RegExp(r'\d{4}').stringMatch(all('date').firstOrNull ?? '') ?? ''),
+          publisher: all('publisher').firstOrNull?.replaceFirst(RegExp(r'\s*\(.*\)$'), ''),
+        ),
+        isbns: {
+          for (final i in all('identifier'))
+            if (i.startsWith('ISBN')) i.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase(),
+        },
+      ));
+    }
+    return out;
+  }
+
+  /// La notice de la BnF qui correspond : même ISBN, ou titre qui correspond
+  /// et auteur en commun s'il est connu (un recueil qui contient la nouvelle
+  /// cherchée ne passe pas).
+  static OnlineBook? pickBnf(List<({OnlineBook book, Set<String> isbns})> records, BookQuery q) {
+    final wanted = titleKey(q.title);
+    final isbns = {?q.isbn, if (q.isbn != null) ?isbn10Of(q.isbn!)};
+    final authorWords = q.author == null ? <String>{} : titleWords(q.author!).map((w) => w.toLowerCase()).toSet();
+    for (final r in records) {
+      if (r.isbns.intersection(isbns).isNotEmpty) return r.book;
+    }
+    for (final r in records) {
+      final key = titleKey(r.book.title);
+      if (key != wanted && !(key.isNotEmpty && (key.startsWith(wanted) || wanted.startsWith(key)))) continue;
+      final names = {for (final a in r.book.authors) ...titleWords(a).map((w) => w.toLowerCase())};
+      if (authorWords.isNotEmpty && authorWords.intersection(names).isEmpty) continue;
+      return r.book;
+    }
+    return null;
+  }
+
+  /// ISBN-10 d'un ISBN-13 en 978, ou null.
+  static String? isbn10Of(String isbn) {
+    final d = isbn.replaceAll(RegExp(r'[^0-9]'), '');
+    if (d.length != 13 || !d.startsWith('978')) return null;
+    final core = d.substring(3, 12);
+    var sum = 0;
+    for (var i = 0; i < 9; i++) {
+      sum += (10 - i) * int.parse(core[i]);
+    }
+    final check = (11 - sum % 11) % 11;
+    return '$core${check == 10 ? 'X' : '$check'}';
+  }
+
+  // ---- Wikidata et Wikipédia ------------------------------------------------
+
+  /// L'œuvre sur Wikidata (titre et auteur), puis le résumé et l'image de
+  /// son article Wikipédia en français. [found] : la fiche déjà trouvée, pour
+  /// son auteur si [q] n'en a pas.
+  Future<OnlineBook?> _wikidata(BookQuery q, OnlineBook? found) async {
+    final title = q.title;
+    final author = q.author ?? found?.authors.firstOrNull;
+    String literal(String s) => s.replaceAll('\\', ' ').replaceAll('"', ' ').replaceAll('\n', ' ');
+    final sparql = '''
+SELECT ?item ?titre ?auteur ?date ?genre ?article WHERE {
+  SERVICE wikibase:mwapi {
+    bd:serviceParam wikibase:api "EntitySearch"; wikibase:endpoint "www.wikidata.org";
+                    mwapi:search "${literal(title)}"; mwapi:language "fr"; mwapi:limit "10" .
+    ?item wikibase:apiOutputItem mwapi:item .
+  }
+  ?item wdt:P50 ?a .
+  ?a rdfs:label ?auteur . FILTER(LANG(?auteur) IN ("fr", "en"))
+  OPTIONAL { ?item rdfs:label ?titre . FILTER(LANG(?titre) = "fr") }
+  OPTIONAL { ?item wdt:P577 ?date }
+  OPTIONAL { ?item wdt:P136 ?g . ?g rdfs:label ?genre . FILTER(LANG(?genre) = "fr") }
+  OPTIONAL { ?article schema:about ?item ; schema:isPartOf <https://fr.wikipedia.org/> }
+}''';
+    final body = await _text(_wikiPace, Uri.parse(wikidata).replace(queryParameters: {'query': sparql}),
+        accept: 'application/sparql-results+json');
+    final work = body == null ? null : pickWikidata(body, (title: title, author: author, isbn: null, year: null));
+    if (work == null) return null;
+    String? description;
+    String? cover;
+    final article = work.article;
+    if (article != null) {
+      // Segment déjà encodé tel que donné par Wikidata (« ? » ou « / » dans
+      // un titre ne doivent pas casser l'adresse).
+      final page = article.substring(article.lastIndexOf('/') + 1);
+      final summary = await _text(_wikiPace, Uri.parse('$wikipedia/api/rest_v1/page/summary/$page'),
+          accept: 'application/json');
+      try {
+        final j = jsonDecode(summary ?? '') as Map<String, dynamic>;
+        if (j['type'] == 'standard') {
+          description = (j['extract'] as String?)?.trim();
+          cover = ((j['originalimage'] ?? j['thumbnail']) as Map?)?['source'] as String?;
+        }
+      } on Object {
+        // Pas de résumé.
+      }
+    }
+    return OnlineBook(
+      source: 'wikidata',
+      id: article ?? work.item.replaceFirst('http://www.wikidata.org/entity/', 'https://www.wikidata.org/wiki/'),
+      title: work.title ?? title,
+      authors: work.authors,
+      year: work.year,
+      description: description == null || description.isEmpty ? null : description,
+      subjects: _subjects(work.genres),
+      coverUrl: cover,
+    );
+  }
+
+  /// L'œuvre qui correspond dans une réponse SPARQL (une ligne par
+  /// combinaison auteur × genre) : titre qui correspond, auteur en commun s'il
+  /// est connu ; à égalité, celle qui a un article Wikipédia (l'œuvre plutôt
+  /// qu'une de ses éditions), puis la plus ancienne.
+  static ({String item, String? title, List<String> authors, int? year, List<String> genres, String? article})?
+      pickWikidata(String json, BookQuery q) {
+    final List<Object?> rows;
+    try {
+      rows = ((jsonDecode(json) as Map)['results'] as Map)['bindings'] as List;
+    } on Object {
+      return null;
+    }
+    final items = <String, Map<String, Object>>{};
+    String? value(Map row, String k) => (row[k] as Map?)?['value'] as String?;
+    for (final row in rows.whereType<Map>()) {
+      final item = value(row, 'item');
+      if (item == null) continue;
+      final w = items.putIfAbsent(item, () => {'authors': <String>{}, 'genres': <String>{}});
+      if (value(row, 'titre') case final t?) w['title'] = t;
+      if (value(row, 'auteur') case final a?) (w['authors'] as Set<String>).add(a);
+      if (value(row, 'genre') case final g?) (w['genres'] as Set<String>).add(g);
+      if (value(row, 'article') case final a?) w['article'] = a;
+      final year = int.tryParse((value(row, 'date') ?? '').padRight(4).substring(0, 4));
+      if (year != null && (w['year'] == null || year < (w['year'] as int))) w['year'] = year;
+    }
+    final wanted = titleKey(q.title);
+    final authorWords = q.author == null ? <String>{} : titleWords(q.author!).map((w) => w.toLowerCase()).toSet();
+    MapEntry<String, Map<String, Object>>? best;
+    var bestScore = -1;
+    for (final e in items.entries) {
+      final w = e.value;
+      final key = titleKey(w['title'] as String? ?? '');
+      if (key.isEmpty || (key != wanted && !key.startsWith(wanted) && !wanted.startsWith(key))) continue;
+      final names = {for (final a in w['authors'] as Set<String>) ...titleWords(a).map((x) => x.toLowerCase())};
+      if (authorWords.isNotEmpty && authorWords.intersection(names).isEmpty) continue;
+      var score = key == wanted ? 10 : 5;
+      if (w['article'] != null) score += 20;
+      if (w['year'] != null) score += 1;
+      if (score > bestScore) (bestScore, best) = (score, e);
+    }
+    if (best == null) return null;
+    final w = best.value;
+    return (
+      item: best.key,
+      title: w['title'] as String?,
+      authors: (w['authors'] as Set<String>).toList(),
+      year: w['year'] as int?,
+      genres: (w['genres'] as Set<String>).toList(),
+      article: w['article'] as String?,
+    );
+  }
+
+  // ---- Hardcover (GraphQL) -------------------------------------------------
+
+  static const _hardcoverSearch = r'''
+query Livres($q: String!) {
+  search(query: $q, query_type: "book", per_page: 10, page: 1) { results }
+}''';
+
+  /// Une recherche Hardcover : une seule requête (le résultat porte déjà
+  /// résumé, genres et couverture). Jamais d'exception : en cas de souci,
+  /// null, et la recherche continue sur Open Library.
+  Future<OnlineBook?> _hardcover(BookQuery q) async {
+    final query = q.isbn ?? [q.title, ?q.author].join(' ');
+    final data = await _graphql(_hardcoverSearch, {'q': query});
+    final results = (data?['search'] as Map?)?['results'];
+    final hits = results is Map ? results['hits'] as List? ?? const [] : const [];
+    final docs = [
+      for (final h in hits.whereType<Map>())
+        if (h['document'] case final Map d) d.cast<String, dynamic>(),
+    ];
+    final match = pickHardcover(docs, q);
+    if (match == null) return null;
+    final (doc, title) = match;
+    final image = doc['image'];
+    final description = doc['description'] as String?;
+    return OnlineBook(
+      source: 'hardcover',
+      id: '${doc['slug'] ?? doc['id'] ?? ''}',
+      title: title,
+      authors: (doc['author_names'] as List? ?? const []).whereType<String>().toList(),
+      year: (doc['release_year'] as num?)?.toInt(),
+      description: description == null || description.trim().isEmpty ? null : plainText(description),
+      subjects: _subjects((doc['genres'] as List? ?? const []).whereType<String>().toList()),
+      coverUrl: image is Map ? image['url'] as String? : null,
+    );
+  }
+
+  /// Le meilleur résultat Hardcover et le titre qui a correspondu (souvent
+  /// le titre français parmi les `alternative_titles`), ou null. Mêmes
+  /// règles que [pickOpenLibrary] ; un ISBN identique suffit.
+  static (Map<String, dynamic>, String)? pickHardcover(List<Map<String, dynamic>> docs, BookQuery q) {
+    (Map<String, dynamic>, String)? best;
+    var bestScore = 0;
+    final wanted = titleKey(q.title);
+    final authorWords = q.author == null ? <String>{} : titleWords(q.author!).map((w) => w.toLowerCase()).toSet();
+    for (final d in docs) {
+      final isbns = (d['isbns'] as List? ?? const []).map((i) => '$i').toSet();
+      final titles = [d['title'], ...(d['alternative_titles'] as List? ?? const [])].whereType<String>();
+      var score = 0;
+      var matched = d['title'] as String? ?? q.title;
+      if (q.isbn != null && isbns.contains(q.isbn)) {
+        score = 100;
+      } else {
+        for (final t in titles) {
+          final key = titleKey(t);
+          // À égalité (accents ignorés), le titre écrit comme celui cherché :
+          // « Les Misérables » plutôt que « Les Miserables ».
+          final s = key == wanted
+              ? (t.trim() == q.title.trim() ? 51 : 50)
+              : key.isNotEmpty && (wanted.startsWith(key) || key.startsWith(wanted))
+                  ? 30
+                  : 0;
+          if (s > score) (score, matched) = (s, t);
+        }
+        if (score == 0) continue;
+        final names = {
+          for (final a in (d['author_names'] as List? ?? const []).whereType<String>())
+            ...titleWords(a).map((w) => w.toLowerCase()),
+        };
+        if (authorWords.isNotEmpty) {
+          if (authorWords.intersection(names).isEmpty) continue;
+          score += 20;
+        }
+      }
+      if (d['image'] is Map) score += 5;
+      if ((d['description'] as String? ?? '').isNotEmpty) score += 3;
+      if (score > bestScore) {
+        bestScore = score;
+        best = (d, matched);
+      }
+    }
+    return bestScore >= 30 ? best : null;
+  }
+
+  Future<Map<String, dynamic>?> _graphql(String query, Map<String, Object?> variables) =>
+      _hardcoverPace.run(() async {
+        if (!_hardcoverReady) return null;
+        _count();
+        try {
+          final request = await _http.postUrl(Uri.parse(hardcover));
+          request.headers
+            ..set(HttpHeaders.userAgentHeader, userAgent)
+            ..set(HttpHeaders.authorizationHeader, 'Bearer $hardcoverKey')
+            ..contentType = ContentType.json;
+          request.write(jsonEncode({'query': query, 'variables': variables}));
+          final reply = await request.close().timeout(const Duration(seconds: 30));
+          final body = await reply.transform(utf8.decoder).join();
+          switch (reply.statusCode) {
+            case 200:
+              final json = jsonDecode(body) as Map<String, dynamic>;
+              return json['errors'] == null ? json['data'] as Map<String, dynamic>? : null;
+            case 401:
+              hardcoverProblem = 'clé Hardcover refusée ou expirée';
+            case 403:
+              hardcoverProblem = 'clé Hardcover sans le droit de lire les livres';
+            case 429:
+              // Quota du jour ou de la minute : on laisse Hardcover tranquille.
+              _hardcoverPausedUntil = DateTime.now().add(const Duration(hours: 1));
+          }
+          return null;
+        } on Object {
+          return null; // Réseau, délai : Open Library prend le relais.
+        }
+      });
+
+  void _rollDay() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    if (today != _hardcoverDay) {
+      _hardcoverDay = today;
+      _hardcoverUsed = 0;
+    }
+  }
+
+  void _count() {
+    _rollDay();
+    _hardcoverUsed++;
+    final file = hardcoverQuotaFile;
+    if (file == null) return;
+    try {
+      File(file).writeAsStringSync(jsonEncode({'day': _hardcoverDay, 'used': _hardcoverUsed}));
+    } on FileSystemException {
+      // Compteur en mémoire seulement.
+    }
+  }
+
+  void _loadQuota() {
+    final file = hardcoverQuotaFile;
+    if (file == null) return;
+    try {
+      final j = jsonDecode(File(file).readAsStringSync()) as Map;
+      _hardcoverDay = j['day'] as String? ?? '';
+      _hardcoverUsed = (j['used'] as num?)?.toInt() ?? 0;
+    } on Object {
+      // Pas encore de compteur.
+    }
   }
 
   void close() => _http.close(force: true);

@@ -15,6 +15,7 @@ import 'package:c411_core/ftp.dart';
 ///   "library": "/chemin/vers/shared_preferences.json",
 ///   "state": "/chemin/vers/books.json",
 ///   "googleBooksKey": "",
+///   "hardcoverKey": "",
 ///   "cacheGb": 2,
 ///   "contact": "https://exemple.org/moi"
 /// }
@@ -28,6 +29,7 @@ class BooksConfig {
     this.port = 8413,
     this.password = '',
     this.googleBooksKey = '',
+    this.hardcoverKey = '',
     this.cacheBytes = 2 << 30,
     this.contact = defaultContact,
   });
@@ -50,6 +52,11 @@ class BooksConfig {
   /// Clé Google Books (gratuite) : de meilleurs résumés en français. Sans
   /// elle, Open Library seul.
   final String googleBooksKey;
+
+  /// Jeton d'API Hardcover (hardcover.app → Réglages → Hardcover API) :
+  /// fiches, genres et couvertures, 5 000 requêtes par jour. Sans lui,
+  /// Hardcover n'est pas interrogé.
+  final String hardcoverKey;
 
   /// Place des copies locales (PDF, CBR lus en entier).
   final int cacheBytes;
@@ -90,6 +97,7 @@ class BooksConfig {
       port: int.tryParse(overrides['port'] ?? '') ?? (books['port'] as num?)?.toInt() ?? 8413,
       password: overrides['password'] ?? (books['password'] as String? ?? ''),
       googleBooksKey: option('google-books-key', text(books, 'googleBooksKey')),
+      hardcoverKey: option('hardcover-key', text(books, 'hardcoverKey')),
       cacheBytes: (cacheGb * (1 << 30)).round(),
       contact: option('contact', defaultContact),
     );
