@@ -45,6 +45,38 @@ puis ouvrir <http://127.0.0.1:8411/>.
 
 Les options `--host`, `--port`, `--password`, `--library` passent avant.
 
+## Votes des membres
+
+Chaque membre peut dire « j’aime » ou « je n’aime pas » sur les films et séries
+(boutons 👍 / 👎 sur la fiche (bouton « Plus d’infos »)) ; recliquer sur son vote le retire, cliquer
+sur l’autre le change. Les vignettes montrent le score (pour − contre), et
+on s’en sert pour la rangée « Préférés des membres » sur l’accueil, tri « Préférés des membres » dans Films et Séries.
+
+- **Anonymes** : le serveur ne garde pas le nom, seulement une empreinte
+  HMAC-SHA256 avec une clé propre au serveur (`votes.json.key`, créée au
+  premier lancement, lisible du seul propriétaire). On sait qu’un membre a
+  déjà voté, sans pouvoir dire qui ; seuls les totaux sont affichés.
+- **Qui vote** : le membre annoncé par le proxy dans `Remote-User` (Caddy,
+  après la connexion Authelia de vache.cloud). Sans cet en-tête (accès direct
+  au serveur), on voit les totaux sans pouvoir voter.
+- Votes dans `~/.local/share/c411_player/votes.json`. Un film reconnu par TMDB après coup change d’identifiant et repart de zéro.
+- API : `GET /api/votes`, `POST /api/vote/<id>` avec `{"value": 1 | -1 | 0}`
+  (corps JSON obligatoire), code commun dans `packages/c411_core/lib/votes.dart`.
+
+## Favoris
+
+**Les favoris d’un membre, c’est ce qu’il a aimé** : un 👍 (sur la fiche)
+ajoute l’élément en tête de ses favoris ; retirer son vote ou passer à 👎
+l’en sort. On les retrouve dans la page **Favoris** (`#favoris`) et rangée « Mes favoris » sur l’accueil. La liste est **gardée sur le
+serveur**, avec les votes : elle suit le membre sur tous ses appareils.
+
+- Sur : films et séries.
+- Dans le même fichier que les votes (`~/.local/share/c411_player/votes.json`) : `likes`, l’ordre des « j’aime »
+  de chaque membre, sous son empreinte HMAC (jamais son nom). L’ancien format
+  (votes seuls) est relu, ses « j’aime » deviennent des favoris.
+- API : `GET /api/favorites` (plus récent d’abord) ; on les change par
+  `POST /api/vote/<id>`.
+
 ## Sécurité
 
 Par défaut, le serveur n'écoute **qu'en local** (`127.0.0.1`). Pour
@@ -82,6 +114,13 @@ image non décodée, rien au bout de 20 s), le lecteur bascule tout seul sur
 ffmpeg, à la même position. En conversion, l'avance rapide relance ffmpeg à
 la bonne position.
 
+Vidéo copiée : la conversion part toujours d'une **image clé**
+(`/api/keyframe/<fichier>?t=`, puis `-noaccurate_seek`), et le lecteur cale
+son horloge dessus. Avec une recherche précise, ffmpeg faisait partir le son
+pile à la position demandée et la vidéo à l'image clé précédente, avec un
+trou au début de la piste audio que les navigateurs ignorent : le son était
+en avance de plusieurs secondes après une reprise ou une avance rapide.
+
 Raccourcis du lecteur : Espace (lecture/pause), ← / → (10 s), F (plein
 écran), Échap (retour). Les positions de reprise sont gardées dans le
 navigateur. Liens directs : `#films`, `#series`, `#t=<titre>`.
@@ -91,6 +130,15 @@ Comme dans l'application, un fichier ne compte que s'il fait au moins
 petits fichiers sont ignorés. Seuls les titres reconnus par TMDB sont mis en avant ; les autres (fichiers
 épars, vidéos de jeux…) restent accessibles par la recherche et « Tout
 afficher » dans Films et Séries.
+
+## Apparence
+
+Aux couleurs de vache.cloud : bleu ciel en clair, ardoise en sombre (selon le
+thème du système), accent rose, police à chasse fixe, bordures en pointillés,
+favicon tête de vache et pied de page « made with ♥ ». Les couleurs sont des
+variables en tête de `public/style.css` (les voiles posés sur les affiches
+passent par `--bg-rgb` et `--surface-rgb`). Le lecteur vidéo reste sombre.
+`public/` est lu à chaque requête : une retouche s'applique sans recompiler.
 
 ## Code
 

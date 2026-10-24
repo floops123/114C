@@ -101,6 +101,7 @@ function card(t, extra = {}) {
     <div class="art">
       ${t.poster ? `<img loading="lazy" src="${esc(t.poster)}" alt="">` : `<div class="fallback">${esc(t.title)}</div>`}
       ${isNew(t) && !p ? '<span class="tag new">NOUVEAU</span>' : ''}
+      ${voteBadge(t.id)}
       ${p ? `<div class="progress"><span style="width:${Math.min(100, (p.t / p.d) * 100).toFixed(1)}%"></span></div>` : ''}
     </div>
     <div class="label">${esc(t.title)}</div>
@@ -170,7 +171,9 @@ function renderHome() {
   renderHero(pool[Math.floor(Math.random() * pool.length)] || recent[0]);
   $('#content').innerHTML = [
     row('Reprendre', resume),
+    row('Mes favoris', favorites.ids.map((id) => state.byId.get(id)).filter(Boolean).slice(0, 30).map((t) => card(t))),
     row('Ajoutés récemment', recent.slice(0, 30).map((t) => card(t))),
+    row('Préférés des membres', liked(all).slice(0, 30).map((t) => card(t))),
     row('Films', movies.slice(0, 40).map((t) => card(t)), movies.length),
     row('Séries', series.slice(0, 40).map((t) => card(t)), series.length),
     row('Les mieux notés', rated.slice(0, 30).map((t) => card(t))),
@@ -180,26 +183,30 @@ function renderHome() {
 function renderGrid() {
   $('#hero').hidden = true;
   const q = state.query.trim().toLowerCase();
-  const inView = state.titles.filter((t) => state.view === 'search' || t.type === state.view);
-  const hidden = state.view === 'search' ? 0 : inView.filter((t) => !known(t)).length;
-  let list = inView.filter((t) => (state.view === 'search' || state.all || known(t))
+  const fav = state.view === 'fav';
+  // Favoris : dans l'ordre où on les a ajoutés, le plus récent d'abord.
+  const inView = fav ? favorites.ids.map((id) => state.byId.get(id)).filter(Boolean)
+    : state.titles.filter((t) => state.view === 'search' || t.type === state.view);
+  const hidden = state.view === 'search' || fav ? 0 : inView.filter((t) => !known(t)).length;
+  let list = inView.filter((t) => (state.view === 'search' || fav || state.all || known(t))
     && (!q || t.title.toLowerCase().includes(q) || t.files.some((f) => f.name.toLowerCase().includes(q))));
-  const sorts = { added: (a, b) => addedOf(b) - addedOf(a), title: (a, b) => a.title.localeCompare(b.title, 'fr'), rating: (a, b) => (b.rating || 0) - (a.rating || 0) };
-  list = list.sort(sorts[state.sort]);
-  const heading = state.view === 'search' ? `Résultats pour « ${state.query.trim()} »` : state.view === 'tv' ? 'Séries' : 'Films';
+  const sorts = { added: (a, b) => addedOf(b) - addedOf(a), title: (a, b) => a.title.localeCompare(b.title, 'fr'), rating: (a, b) => (b.rating || 0) - (a.rating || 0), votes: (a, b) => byVotes(a.id, b.id) };
+  if (!fav) list = list.sort(sorts[state.sort]);
+  const heading = state.view === 'search' ? `Résultats pour « ${state.query.trim()} »` : fav ? 'Mes favoris' : state.view === 'tv' ? 'Séries' : 'Films';
   $('#content').innerHTML = `<div class="grid-head">
       <h1>${esc(heading)}</h1><span class="count">${list.length}</span>
       <div class="sorts">
         ${hidden ? `<button class="chip${state.all ? ' on' : ''}" data-all>Tout afficher (+${hidden} sans fiche)</button>` : ''}
-        ${[['added', 'Récents'], ['title', 'A → Z'], ['rating', 'Mieux notés']].map(([k, l]) =>
+        ${fav ? '' : [['added', 'Récents'], ['title', 'A → Z'], ['rating', 'Mieux notés'], ['votes', 'Préférés des membres']].map(([k, l]) =>
           `<button class="chip${state.sort === k ? ' on' : ''}" data-sort="${k}">${l}</button>`).join('')}
       </div>
     </div>
-    <div class="grid">${list.map((t) => card(t)).join('') || '<p class="status">Rien ne correspond.</p>'}</div>`;
+    <div class="grid">${list.map((t) => card(t)).join('') || `<p class="status">${fav
+      ? 'Aucun favori pour l’instant : ce que tu aimes (👍 sur la fiche d’un film ou d’une série) arrive ici.' : 'Rien ne correspond.'}</p>`}</div>`;
 }
 
-// Liens directs : #films, #series, #t=<titre>.
-const VIEW_HASH = { home: '', movie: '#films', tv: '#series' };
+// Liens directs : #films, #series, #favoris, #t=<titre>.
+const VIEW_HASH = { home: '', movie: '#films', tv: '#series', fav: '#favoris' };
 function syncHash(titleId) {
   const hash = titleId ? `#t=${titleId}` : (VIEW_HASH[state.view] ?? '');
   if (location.hash !== hash) history.replaceState(null, '', hash || location.pathname);
@@ -210,7 +217,7 @@ function fromHash() {
     const t = state.byId.get(h.slice(3));
     if (t) { state.view = t.type; render(); openDetail(t); return; }
   }
-  state.view = h === '#films' ? 'movie' : h === '#series' ? 'tv' : 'home';
+  state.view = h === '#films' ? 'movie' : h === '#series' ? 'tv' : h === '#favoris' ? 'fav' : 'home';
   render();
 }
 
@@ -272,6 +279,7 @@ function openDetail(t, season) {
           <span>${isSeries ? `${t.files.length} épisode${t.files.length > 1 ? 's' : ''}` : fmtSize(t.files[0].size)}</span>
         </div>
         <p class="overview">${esc(t.overview || 'Pas de résumé.')}</p>
+        ${voteBar(t.id)}
       </div>
       <aside>${t.poster ? `<img src="${esc(t.poster)}" alt="">` : ''}</aside>
       <div class="items">
@@ -330,7 +338,7 @@ function choose(info, audioIndex) {
 const player = {
   el: $('#player'), video: $('#video'),
   file: null, title: null, info: null,
-  mode: 'direct', copy: false, offset: 0, duration: 0, audio: null, stallTimer: 0,
+  mode: 'direct', copy: false, offset: 0, duration: 0, audio: null, stallTimer: 0, loads: 0,
   idleTimer: 0, saveTimer: 0, dragging: false,
 
   async open(fileId) {
@@ -380,13 +388,25 @@ const player = {
   },
 
   /** Charge la vidéo à partir de [at] secondes. */
-  load(at) {
+  async load(at) {
     const v = this.video;
+    const token = ++this.loads;
     $('#player-spinner').hidden = false;
     clearTimeout(this.stallTimer);
     if (this.mode === 'stream') {
+      // Vidéo copiée : la conversion part de l'image clé qui précède (sinon
+      // le son se décale) ; l'horloge du lecteur se cale dessus.
+      if (at > 0) {
+        try {
+          const params = new URLSearchParams({ t: at.toFixed(3) });
+          if (this.copy) params.set('copy', '1');
+          const res = await fetch(`api/keyframe/${encodeURIComponent(this.file.id)}?${params}`);
+          if (res.ok) at = (await res.json()).t;
+        } catch { /* position demandée, à défaut */ }
+        if (token !== this.loads) return; // Autre position demandée entre-temps.
+      }
       this.offset = at;
-      const params = new URLSearchParams({ t: at.toFixed(1) });
+      const params = new URLSearchParams({ t: at.toFixed(3) });
       if (this.audio != null) params.set('audio', this.audio);
       if (this.copy) params.set('copy', '1');
       v.src = `${this.info.streamUrl || this.info.url}?${params}`;
@@ -551,6 +571,103 @@ function bindPlayer() {
 }
 
 // ---------------------------------------------------------------------------
+// Votes des membres : j'aime / je n'aime pas, anonymes (api/votes, voir
+// c411_core/votes.dart). Le membre est celui de la connexion vache.cloud,
+// transmis par le proxy ; sans connexion, on voit les totaux sans voter.
+
+const thumbs = {
+  up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21h4V9H2v12Zm20-11a2 2 0 0 0-2-2h-6.3l.95-4.57.03-.32a1.5 1.5 0 0 0-.44-1.06L13.17 1 6.59 7.59A1.98 1.98 0 0 0 6 9v10a2 2 0 0 0 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2Z"/></svg>',
+  down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 3h-4v12h4V3ZM2 14a2 2 0 0 0 2 2h6.3l-.95 4.57-.03.32c0 .41.17.79.44 1.06L10.83 23l6.58-6.59c.37-.36.59-.86.59-1.41V5a2 2 0 0 0-2-2H7c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2Z"/></svg>',
+};
+const votes = { user: false, items: new Map() };
+
+async function loadVotes() {
+  try {
+    const res = await fetch('api/votes');
+    if (!res.ok) return;
+    const data = await res.json();
+    votes.user = Boolean(data.user);
+    votes.items = new Map(Object.entries(data.items || {}));
+  } catch { /* serveur sans votes : rien à afficher */ }
+}
+
+/** [pour, contre, mon vote] ; score = pour − contre. */
+const tallyOf = (id) => votes.items.get(id) || [0, 0, 0];
+const scoreOf = (id) => { const [up, down] = tallyOf(id); return up - down; };
+/** Tri « préférés des membres » : score, puis nombre de « j'aime ». */
+const byVotes = (a, b) => scoreOf(b) - scoreOf(a) || tallyOf(b)[0] - tallyOf(a)[0];
+/** Éléments au score positif, du mieux voté au moins bien. */
+const liked = (items, idOf = (x) => x.id) => items.filter((x) => scoreOf(idOf(x)) > 0)
+  .sort((a, b) => byVotes(idOf(a), idOf(b)));
+
+/** Boutons j'aime / je n'aime pas ; recliquer retire son vote. */
+function voteBar(id) {
+  const [up, down, mine] = tallyOf(id);
+  const off = votes.user ? '' : ' disabled';
+  const hint = votes.user ? '' : ' — connecte-toi par vache.cloud pour voter';
+  const button = (value, label, count) => `<button class="vote-btn${value < 0 ? ' down' : ''}${mine === value ? ' on' : ''}" data-vote="${value}"
+    aria-pressed="${mine === value}" title="${label}${mine === value ? ' (cliquer pour retirer)' : ''}${hint}"${off}>${value > 0 ? thumbs.up : thumbs.down}<span>${count}</span></button>`;
+  return `<div class="votes" data-votes="${esc(id)}">${button(1, 'J’aime', up)}${button(-1, 'Je n’aime pas', down)}<span class="votes-note">votes anonymes · 👍 ajoute à tes favoris</span></div>`;
+}
+
+/** Pastille du score sur une vignette (vide sans vote). */
+function voteBadge(id) {
+  const [up, down] = tallyOf(id);
+  const s = up - down;
+  const inner = up || down ? `${s < 0 ? thumbs.down : thumbs.up}${s > 0 ? '+' : ''}${s}` : '';
+  return `<span class="vote-badge${s < 0 ? ' neg' : ''}${inner ? '' : ' empty'}" data-badge="${esc(id)}" title="${up} j’aime · ${down} je n’aime pas">${inner}</span>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const button = e.target.closest('[data-vote]');
+  if (!button) return;
+  // Avant les autres clics : le bouton peut être dans une carte ou un lien.
+  e.preventDefault();
+  e.stopPropagation();
+  const id = button.closest('[data-votes]').dataset.votes;
+  const wanted = Number(button.dataset.vote);
+  const value = tallyOf(id)[2] === wanted ? 0 : wanted;
+  try {
+    const res = await fetch(`api/vote/${encodeURIComponent(id)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    votes.items.set(id, await res.json());
+    // Aimer, c'est mettre dans ses favoris (en tête) ; sinon, il en sort.
+    favorites.ids = [...(value === 1 ? [id] : []), ...favorites.ids.filter((x) => x !== id)];
+  } catch (err) {
+    (typeof toast === 'function' ? toast : alert)(`Vote impossible : ${err.message}`);
+    return;
+  }
+  for (const el of document.querySelectorAll(`[data-votes="${CSS.escape(id)}"]`)) el.outerHTML = voteBar(id);
+  for (const el of document.querySelectorAll(`[data-badge="${CSS.escape(id)}"]`)) el.outerHTML = voteBadge(id);
+  if (typeof onFavoritesChange === 'function') onFavoritesChange();
+}, { capture: true });
+
+// ---------------------------------------------------------------------------
+// Favoris : ce que le membre a aimé (👍), du plus récent au plus ancien.
+// Gardés sur le serveur (api/favorites), donc les mêmes sur tous ses
+// appareils ; sans connexion vache.cloud, pas de favoris (lien masqué).
+
+const favorites = { user: false, ids: [] };
+
+async function loadFavorites() {
+  try {
+    const res = await fetch('api/favorites');
+    if (!res.ok) return;
+    const data = await res.json();
+    favorites.user = Boolean(data.user);
+    favorites.ids = data.items || [];
+  } catch { /* serveur sans favoris */ }
+  for (const el of document.querySelectorAll('[data-favorites-only]')) el.hidden = !favorites.user;
+}
+
+/** Favori ajouté ou retiré : la page « Favoris » suit. */
+function onFavoritesChange() {
+  if (state.view === 'fav') renderGrid();
+}
+
+// ---------------------------------------------------------------------------
 // Navigation
 
 function bind() {
@@ -602,7 +719,7 @@ function bind() {
   bind();
   bindPlayer();
   try {
-    await load();
+    await Promise.all([load(), loadVotes(), loadFavorites()]);
   } catch (e) {
     $('#status').textContent = `Vidéothèque indisponible : ${e.message}`;
     return;

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:c411_core/media_relay.dart';
+import 'package:c411_core/votes.dart';
 import 'config.dart';
 import 'library.dart';
 import 'transcode.dart';
@@ -15,8 +16,13 @@ import 'transcode.dart';
 /// - `GET /api/play/<fichier>` : comment le lire (direct ou converti,
 ///   durée, pistes audio) ;
 /// - `GET /media/<fichier>` : le fichier tel quel, avec `Range` ;
+/// - `GET /api/keyframe/<fichier>?t=<secondes>&copy=1` : position réelle de
+///   départ d'une conversion (image clé quand la vidéo est copiée) ;
 /// - `GET /stream/<fichier>?t=<secondes>&audio=<piste>` : MP4 fragmenté ;
-/// - `GET /api/art/<movie|tv>/<id TMDB>` : image de fond (clé TMDB requise).
+/// - `GET /api/art/<movie|tv>/<id TMDB>` : image de fond (clé TMDB requise) ;
+/// - `GET /api/votes`, `POST /api/vote/<titre>` : votes « j'aime / je n'aime
+///   pas » anonymes des membres ; `GET /api/favorites` :
+///   ce que le membre a aimé (`c411_core/votes.dart`).
 class WebPlayerServer {
   WebPlayerServer(
     this.config, {
@@ -24,12 +30,15 @@ class WebPlayerServer {
     required this.relay,
     required this.publicDir,
     this.fontsDir,
+    this.votes,
     this.ffmpeg = 'ffmpeg',
     this.ffprobe = 'ffprobe',
     this.canTranscode = true,
     Future<MediaInfo> Function(String url)? probe,
+    Future<double> Function(String url, double t)? keyframe,
     HttpClient? http,
   })  : _probe = probe ?? ((url) => _ffprobe(url, ffprobe)),
+        _keyframeBefore = keyframe ?? ((url, t) => keyframeBefore(url, t, ffprobe: ffprobe)),
         _http = http ?? HttpClient();
 
   final WebConfig config;
@@ -39,6 +48,10 @@ class WebPlayerServer {
 
   /// Police Inter de l'application (`assets/fonts`), servie sous `/fonts/`.
   final String? fontsDir;
+
+  /// Votes des membres (absent : pas de votes).
+  final Votes? votes;
+
   final String ffmpeg;
   final String ffprobe;
 
@@ -46,6 +59,7 @@ class WebPlayerServer {
   final bool canTranscode;
 
   final Future<MediaInfo> Function(String url) _probe;
+  final Future<double> Function(String url, double t) _keyframeBefore;
   final HttpClient _http;
   final _infos = <String, Future<MediaInfo>>{};
   final _backdrops = <String, Future<String?>>{};
@@ -87,6 +101,8 @@ class WebPlayerServer {
         await response.close();
         return;
       }
+      final votes = this.votes;
+      if (votes != null && await votes.serve(request, exists: (id) => catalog.current.titles.any((t) => t.id == id))) return;
       final segments = request.uri.pathSegments;
       final route = segments.firstOrNull ?? '';
       switch ((route, segments.length)) {
@@ -98,6 +114,8 @@ class WebPlayerServer {
           });
         case ('api', 3) when segments[1] == 'play':
           await _play(response, segments[2]);
+        case ('api', 3) when segments[1] == 'keyframe':
+          await _keyframe(request, segments[2]);
         case ('api', 4) when segments[1] == 'art':
           await _art(response, segments[2], segments[3]);
         case ('media', >= 2):
@@ -229,6 +247,20 @@ class WebPlayerServer {
     } finally {
       await response.close();
     }
+  }
+
+  /// Position réelle de départ d'une conversion à partir de `t` : l'image clé
+  /// qui précède quand la vidéo est copiée (le lecteur y cale son horloge),
+  /// sinon `t` lui-même.
+  Future<void> _keyframe(HttpRequest request, String id) async {
+    final file = catalog.current.file(id);
+    if (file == null || !canTranscode) return _notFound(request.response);
+    final t = double.tryParse(request.uri.queryParameters['t'] ?? '') ?? 0;
+    final copy = request.uri.queryParameters['copy'] == '1';
+    final info = await _info(file);
+    if (t <= 0 || !info.copiesVideo(copyVideo: copy)) return _json(request.response, {'t': t});
+    final url = await relay.urlFor(file.path);
+    await _json(request.response, {'t': await _keyframeBefore(url.toString(), t)});
   }
 
   /// Converti à la volée en MP4 fragmenté, à partir de `t` secondes.

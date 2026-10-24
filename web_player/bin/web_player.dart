@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:c411_core/media_relay.dart';
+import 'package:c411_core/votes.dart';
 import 'package:c411_web_player/config.dart';
 import 'package:c411_web_player/library.dart';
 import 'package:c411_web_player/server.dart';
@@ -66,6 +67,7 @@ Future<void> main(List<String> args) async {
     publicDir: '${File.fromUri(Platform.script).parent.parent.path}/public',
     fontsDir: '${File.fromUri(Platform.script).parent.parent.parent.path}/assets/fonts',
     canTranscode: transcode,
+    votes: Votes('${Platform.environment['HOME'] ?? '.'}/.local/share/c411_player/votes.json'),
   );
   await server.start();
 

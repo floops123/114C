@@ -142,19 +142,31 @@ class MediaInfo {
     return (mp4 || webm) && video && sound;
   }
 
+  /// La vidéo sera-t-elle copiée telle quelle (voir [ffmpegArgs]) ?
+  bool copiesVideo({bool copyVideo = false}) => _h264 || (copyVideo && videoMime != null);
+
   /// Arguments ffmpeg pour servir le fichier en MP4 fragmenté, à partir de
   /// [start] secondes. Vidéo copiée (rapide, quasiment sans calcul) si elle
   /// est en H.264 8 bits, ou si le navigateur a dit savoir la décoder
   /// ([copyVideo] : H.265, AV1…) ; sinon réencodée en H.264 (1080p au plus).
   /// Audio en AAC stéréo, piste [audioIndex] (par défaut, la française).
+  ///
+  /// Vidéo copiée : elle ne peut partir que d'une image clé, alors qu'une
+  /// recherche précise ferait partir l'audio pile à [start]. ffmpeg comble
+  /// l'écart par un trou au début de la piste audio, que les navigateurs
+  /// ignorent : le son passait en avance de plusieurs secondes. On part donc
+  /// d'une image clé pour les deux pistes (`-noaccurate_seek`) ; [start] doit
+  /// être cette image clé ([keyframeBefore]). +0,2 s : ffmpeg recule de 3/23 s
+  /// avant de chercher dans un MKV, et retomberait sur l'image clé précédente.
   List<String> ffmpegArgs(String input,
       {double start = 0, int? audioIndex, bool copyVideo = false}) {
     final track = audio.where((a) => a.index == audioIndex).firstOrNull ?? preferredAudio;
     final copyAudio = track != null && track.codec == 'aac' && track.channels <= 2;
-    final copy = _h264 || (copyVideo && videoMime != null);
+    final copy = copiesVideo(copyVideo: copyVideo);
     return [
       '-hide_banner', '-loglevel', 'error', '-nostdin',
-      if (start > 0) ...['-ss', start.toStringAsFixed(2)],
+      if (start > 0 && copy) ...['-noaccurate_seek', '-ss', (start + 0.2).toStringAsFixed(3)]
+      else if (start > 0) ...['-ss', start.toStringAsFixed(2)],
       '-i', input,
       '-map', '0:v:0',
       if (track != null) ...['-map', '0:${track.index}'],
@@ -196,6 +208,33 @@ Future<MediaInfo> probe(String url, {String ffprobe = 'ffprobe'}) async {
     throw ProcessException(ffprobe, const [], '${result.stderr}'.trim(), result.exitCode);
   }
   return MediaInfo.parse(result.stdout as String);
+}
+
+/// Dernière image clé de la vidéo de [url] à [t] secondes ou avant, ou [t]
+/// si aucune n'est trouvée dans la minute qui précède. Seuls les paquets sont
+/// lus (pas de décodage), sur cette minute : rapide, même à distance.
+Future<double> keyframeBefore(String url, double t, {String ffprobe = 'ffprobe'}) async {
+  if (t <= 0) return 0;
+  final from = t > 60 ? t - 60 : 0;
+  final result = await Process.run(ffprobe, [
+    '-v', 'error', '-select_streams', 'v:0',
+    '-read_intervals', '${from.toStringAsFixed(3)}%${t.toStringAsFixed(3)}',
+    '-show_entries', 'packet=pts_time,flags', '-of', 'csv=p=0', url,
+  ]);
+  if (result.exitCode != 0) return t;
+  return parseKeyframeBefore(result.stdout as String, t) ?? t;
+}
+
+/// Sortie `pts_time,flags` de ffprobe : la dernière image clé (K) <= [t].
+double? parseKeyframeBefore(String csv, double t) {
+  double? best;
+  for (final line in const LineSplitter().convert(csv)) {
+    final parts = line.split(',');
+    if (parts.length < 2 || !parts[1].contains('K')) continue;
+    final pts = double.tryParse(parts[0]);
+    if (pts != null && pts <= t && (best == null || pts > best)) best = pts;
+  }
+  return best;
 }
 
 /// L'outil [command] est-il installé ?
