@@ -1,17 +1,19 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'discogs.dart';
 import 'library.dart';
 import 'musicbrainz.dart';
 
 /// La discothèque vivante : la musique que l'application a relevée pendant
 /// son parcours (relue quand sa base change), complétée album par album par
-/// MusicBrainz.
+/// MusicBrainz, et par Discogs si un jeton est donné.
 class MusicService {
   MusicService({
     required this.appLibrary,
     required this.statePath,
     required this.musicBrainz,
+    this.discogs,
     this.checkEvery = const Duration(seconds: 30),
     this.busyPause = const Duration(minutes: 1),
   }) : _library = MusicLibrary(mb: MusicLibrary.readMb(statePath)) {
@@ -24,6 +26,9 @@ class MusicService {
   /// Fiches MusicBrainz (et pochettes à côté).
   final String statePath;
   final MusicBrainz musicBrainz;
+
+  /// Albums inconnus de MusicBrainz, pochettes et styles manquants.
+  final Discogs? discogs;
 
   /// Intervalle de vérification de la base de l'application.
   final Duration checkEvery;
@@ -77,8 +82,12 @@ class MusicService {
         'step': step,
         'error': error,
         'scannedAt': _library.scannedAt?.toIso8601String(),
-        'albums': _catalog.albums.length,
-        'identified': _catalog.albums.where((a) => a.release != null).length,
+        'albums': _catalog.music.length,
+        'identified': _catalog.music.where((a) => a.release != null).length,
+        'audiobooks': _catalog.albums.where((a) => a.kind == AlbumKind.audiobook).length,
+        'discogs': discogs != null,
+        'fromDiscogs': _catalog.albums.where((a) => a.release?.source == 'discogs').length,
+        'discogsProblem': discogs?.problem,
       };
 
   void _save() {
@@ -90,17 +99,36 @@ class MusicService {
     }
   }
 
+  /// Discogs n'a pas encore été consulté pour [m], alors qu'il pourrait
+  /// apporter quelque chose (fiche, pochette, styles).
+  bool _wantsDiscogs(MbMatch? m) =>
+      discogs != null &&
+      m != null &&
+      m.discogs == null &&
+      (m.release == null || (m.release!.source == 'musicbrainz' && (!m.release!.cover || m.release!.genres.isEmpty)));
+
   /// Albums pas encore cherchés (ou cherchés en vain il y a plus d'une
-  /// semaine) : leur fiche MusicBrainz, un par un.
+  /// semaine) : leur fiche MusicBrainz, un par un. Puis Discogs, une fois par
+  /// album : la fiche s'il est inconnu de MusicBrainz, sinon pochette et
+  /// styles s'il en manque.
   Future<void> identify() async {
     if (identifying) return;
     identifying = true;
     try {
       final pending = [
-        for (final a in _catalog.albums)
-          if (_library.mb[a.dir] == null || _library.mb[a.dir]!.stale) a,
+        // La musique seulement : un livre audio n'a pas de fiche MusicBrainz.
+        for (final a in _catalog.music)
+          if (_library.mb[a.dir] == null || _library.mb[a.dir]!.stale || _wantsDiscogs(_library.mb[a.dir])) a,
       ];
       for (final (i, album) in pending.indexed) {
+        final known = _library.mb[album.dir];
+        if (known != null && !known.stale) {
+          // Déjà cherché sur MusicBrainz : seulement Discogs.
+          step = 'Discogs ${i + 1}/${pending.length} : ${album.guess.title}';
+          _library.mb[album.dir] = await _withDiscogs(album, known.release, checked: known.checked);
+          if (i % 10 == 9) _save();
+          continue;
+        }
         step = 'MusicBrainz ${i + 1}/${pending.length} : ${album.guess.title}';
         MbRelease? release;
         Object? failure;
@@ -125,7 +153,8 @@ class MusicService {
           error = 'MusicBrainz injoignable : $failure';
           break;
         }
-        _library.mb[album.dir] = MbMatch(checked: DateTime.now(), release: release);
+        final match = MbMatch(checked: DateTime.now(), release: release);
+        _library.mb[album.dir] = _wantsDiscogs(match) ? await _withDiscogs(album, release, checked: match.checked) : match;
         // Enregistré et visible au fil de l'eau.
         if (release != null || i % 10 == 9) _save();
       }
@@ -134,6 +163,16 @@ class MusicService {
       identifying = false;
       step = null;
     }
+  }
+
+  /// [release] (de MusicBrainz, ou null) complétée ou remplacée par Discogs.
+  Future<MbMatch> _withDiscogs(Album album, MbRelease? release, {required DateTime checked}) async {
+    final d = discogs!;
+    if (!d.ready) return MbMatch(checked: checked, release: release);
+    final result = release == null
+        ? await d.find(album.guess, trackCount: album.tracks.length)
+        : await d.complete(release, album.guess);
+    return MbMatch(checked: checked, release: result ?? release, discogs: DateTime.now());
   }
 
   /// Oublie la fiche d'un album et la recherche à nouveau.
@@ -147,5 +186,6 @@ class MusicService {
   void close() {
     _timer?.cancel();
     musicBrainz.close();
+    discogs?.close();
   }
 }

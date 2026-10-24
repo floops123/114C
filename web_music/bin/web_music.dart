@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:c411_core/media_relay.dart';
+import 'package:c411_core/votes.dart';
 import 'package:c411_web_music/config.dart';
+import 'package:c411_web_music/discogs.dart';
 import 'package:c411_web_music/musicbrainz.dart';
 import 'package:c411_web_music/server.dart';
 import 'package:c411_web_music/service.dart';
@@ -23,6 +25,7 @@ Options (prioritaires sur la section « music ») :
                         shared_preferences.json)
   --state <fichier>     fiches MusicBrainz (défaut : ~/.local/share/
                         c411_music/library.json)
+  --discogs-token <jeton>  Discogs en plus de MusicBrainz
   --host <adresse>      adresse d'écoute (défaut : 127.0.0.1)
   --port <port>         port (défaut : 8412)
   --password <mot>      mot de passe (obligatoire hors de 127.0.0.1)
@@ -65,6 +68,7 @@ Future<void> main(List<String> args) async {
     appLibrary: config.library,
     statePath: config.state,
     musicBrainz: MusicBrainz(contact: config.contact),
+    discogs: config.discogsToken.isEmpty ? null : Discogs(contact: config.contact, token: config.discogsToken),
   );
   final root = File.fromUri(Platform.script).parent.parent;
   final server = MusicServer(
@@ -74,6 +78,7 @@ Future<void> main(List<String> args) async {
     publicDir: '${root.path}/public',
     fontsDir: '${root.parent.path}/assets/fonts',
     canTranscode: transcode,
+    votes: Votes('${File(config.state).parent.path}/votes.json'),
   );
   await server.start();
   service.start();
@@ -85,6 +90,7 @@ Future<void> main(List<String> args) async {
     ..writeln(transcode
         ? 'ffmpeg trouvé : WMA, APE, ALAC… sont convertis à la volée.'
         : 'ffmpeg absent : lecture directe seulement (MP3, FLAC, AAC, Ogg, WAV).')
+    ..writeln('Fiches : MusicBrainz${config.discogsToken.isEmpty ? '' : ', puis Discogs (albums inconnus, pochettes et styles manquants)'}')
     ..writeln('Ouvre http://${config.host}:${config.port}/'
         '${config.password.isEmpty ? '' : '  (mot de passe demandé)'}');
 }

@@ -6,6 +6,7 @@ import 'package:c411_core/ftp.dart';
 import 'package:c411_core/media_relay.dart';
 import 'package:c411_core/music_name.dart';
 import 'package:c411_web_music/config.dart';
+import 'package:c411_web_music/discogs.dart';
 import 'package:c411_web_music/library.dart';
 import 'package:c411_web_music/musicbrainz.dart';
 import 'package:c411_web_music/server.dart';
@@ -15,6 +16,54 @@ import 'package:test/test.dart';
 const _mo = 1024 * 1024;
 
 void main() {
+  test('livres audio : titre et auteur d’après le dossier', () {
+    String show(String dir) {
+      final b = AudiobookName.parse('/x/Livres/$dir');
+      return '${b.title} | ${b.author ?? '-'}${b.year == null ? '' : ' | ${b.year}'}';
+    }
+    expect(show('Ada Palmer - Terra ignota 2 - Sept redditions'), 'Terra ignota 2 - Sept redditions | Ada Palmer');
+    expect(show('Aimé Césaire - Une biographie expliquée - Véronique Corinus'), 'Aimé Césaire - Une biographie expliquée | Véronique Corinus');
+    expect(show('Alexandre VI, La famille Borgia - Jean-Yves Boriaud'), 'Alexandre VI, La famille Borgia | Jean-Yves Boriaud');
+    expect(show('James Dashner - L\'Épreuve 1 - Le Labyrinthe'), 'L\'Épreuve 1 - Le Labyrinthe | James Dashner');
+    expect(show('Jennifer L. Armentrout - La Chair et le Feu T01 - Une ombre dans la braise'), 'La Chair et le Feu T01 - Une ombre dans la braise | Jennifer L. Armentrout');
+    expect(show('Cinq - Ilona Bannister'), 'Cinq | Ilona Bannister');
+    expect(show('Anne-Laure Bondoux - L\'aube sera grandiose'), 'L\'aube sera grandiose | Anne-Laure Bondoux');
+    expect(show('David Goudreault - La bête à sa mère (2015)'), 'La bête à sa mère | David Goudreault | 2015');
+    expect(show('Les.morts.ont.la.parole.Philippe.Boxho.FR.[MP3.128.kbps]-NOTAG'), 'Les morts ont la parole Philippe Boxho | -');
+    expect(show('Antoine et les étoiles'), 'Antoine et les étoiles | -');
+  });
+
+  group('AlbumKind', () {
+    const root = '/apps/x/torrents/completed';
+    test('dossier de catégorie de Transmission', () {
+      expect(AlbumKind.of('$root/Musique/Air - Moon Safari', ['$root/Musique/Air - Moon Safari/01 La femme d\'argent.flac']), AlbumKind.music);
+      expect(AlbumKind.of('$root/Livres/Lisa Jewell - Rien n\'est vrai', ['$root/Livres/Lisa Jewell - Rien n\'est vrai/01.mp3']), AlbumKind.audiobook);
+      expect(AlbumKind.of('$root/Logiciels/Disco and Funk Library/Samples/Kit', ['$root/Logiciels/Disco and Funk Library/Samples/Kit/Bass 1.wav']), AlbumKind.other);
+      expect(AlbumKind.of('$root/Jeux vidéo/Jardinains/music', ['$root/Jeux vidéo/Jardinains/music/SONG01.mp3']), AlbumKind.other);
+    });
+    test('sans catégorie : .m4b, référence Audible, chapitres', () {
+      expect(AlbumKind.of('$root/Dune', ['$root/Dune/Dune.m4b']), AlbumKind.audiobook);
+      expect(AlbumKind.of('$root/AlterWorld Tome 1', [
+        '$root/AlterWorld Tome 1/AlterWorld (t. 1) [B0H9MD3W8Q] - 06 - Chapitre 3.2.mp3',
+      ]), AlbumKind.audiobook);
+      expect(AlbumKind.of('$root/Roman', ['$root/Roman/Chapitre 1.mp3', '$root/Roman/Chapitre 2.mp3', '$root/Roman/Fin.mp3']), AlbumKind.audiobook);
+      expect(AlbumKind.of('$root/Pink Floyd - Wish You Were Here', [
+        '$root/Pink Floyd - Wish You Were Here/01 Shine On You Crazy Diamond (Parts I-V).flac',
+        '$root/Pink Floyd - Wish You Were Here/02 Welcome to the Machine.flac',
+      ]), AlbumKind.music);
+    });
+    test('livre audio : jamais de fiche MusicBrainz, même ancienne', () {
+      final file = MusicFile(path: '$root/Livres/Pax/01 PAX 01.mp3', size: 1);
+      final release = MbRelease(id: 'x', title: 'Faux album', artist: 'Quelqu\'un', tracks: const []);
+      final catalog = Catalog.of(MusicLibrary(files: [file], mb: {file.albumDir: MbMatch(checked: DateTime(2026), release: release)}));
+      final album = catalog.albums.single;
+      expect(album.kind, AlbumKind.audiobook);
+      expect(album.release, isNull);
+      expect(catalog.toJson()['artists'], isEmpty, reason: 'pas d’artiste pour un livre audio');
+      expect((catalog.toJson()['albums'] as List).single['kind'], 'audiobook');
+    });
+  });
+
   group('noms', () {
     AlbumGuess album(String dir) => AlbumGuess.parse(dir);
 
@@ -210,6 +259,142 @@ void main() {
     expect(calls, 4, reason: '2 refus, la fiche, puis les genres du groupe');
     calls = -10; // Toujours saturé.
     await expectLater(mb.release('rel'), throwsA(isA<MusicBrainzBusy>()));
+  });
+
+  group('Discogs', () {
+    test('fiche convertie : positions vinyle et multi-disque, intertitres, durées, homonymes', () {
+      final r = Discogs.parseRelease({
+        'id': 42, 'title': 'Moon Safari', 'year': 1998, 'released': '1998-01-16', 'country': 'France',
+        'artists': [{'name': 'Air (2)', 'anv': '', 'join': ''}],
+        'labels': [{'name': 'Source (3)', 'catno': 'V2848'}],
+        'formats': [{'name': 'CD', 'descriptions': ['Album']}],
+        'genres': ['Electronic'], 'styles': ['Downtempo', 'Trip Hop'],
+        'images': [{'type': 'secondary', 'uri': 'https://i.discogs.com/dos.jpg'}, {'type': 'primary', 'uri': 'https://i.discogs.com/face.jpg'}],
+        'tracklist': [
+          {'position': '', 'type_': 'heading', 'title': 'Face A', 'duration': ''},
+          {'position': 'A1', 'type_': 'track', 'title': 'La Femme d’argent', 'duration': '7:07'},
+          {'position': 'A2', 'type_': 'track', 'title': 'Sexy Boy', 'duration': '4:58',
+            'artists': [{'name': 'Air (2)', 'join': 'feat.'}, {'name': 'Beth Hirsch', 'join': ''}]},
+          {'position': 'B1', 'type_': 'track', 'title': 'Kelly Watch the Stars', 'duration': '1:03:44'},
+        ],
+      });
+      expect((r.source, r.id, r.artist, r.artistName, r.year, r.label, r.type, r.country),
+          ('discogs', '42', 'Air', 'Air', 1998, 'Source', 'Album', 'France'));
+      expect(r.genres, ['Downtempo', 'Trip Hop', 'Electronic'], reason: 'styles d’abord');
+      expect(r.coverUrl, 'https://i.discogs.com/face.jpg', reason: 'l’image principale');
+      expect(r.url, 'https://www.discogs.com/release/42');
+      expect([for (final t in r.tracks) (t.disc, t.position, t.title, t.length, t.artist)], [
+        (1, 1, 'La Femme d’argent', 427000, null),
+        (1, 2, 'Sexy Boy', 298000, 'Air feat. Beth Hirsch'),
+        (1, 3, 'Kelly Watch the Stars', 3824000, null),
+      ]);
+      final cd = Discogs.parseRelease({'id': 1, 'tracklist': [
+        {'position': '1-1', 'title': 'a'}, {'position': '1-2', 'title': 'b'}, {'position': 'CD2-1', 'title': 'c'}, {'position': '7', 'title': 'd'},
+      ]});
+      expect([for (final t in cd.tracks) (t.disc, t.position)], [(1, 1), (1, 2), (2, 1), (1, 7)]);
+      // Rechargée depuis le fichier d'état : rien de perdu.
+      final back = MbRelease.fromJson(jsonDecode(jsonEncode(r.toJson())) as Map<String, dynamic>);
+      expect((back.source, back.coverUrl, back.url), ('discogs', r.coverUrl, r.url));
+    });
+
+    test('résultats classés : titre, artiste, CD ou numérique plutôt que vinyle, année', () {
+      const guess = AlbumGuess(artist: 'Air', title: 'Moon Safari', year: 1998);
+      final ids = Discogs.rank([
+        {'id': 1, 'title': 'Air (2) - Moon Safari', 'format': ['Vinyl', 'LP'], 'year': '1998'},
+        {'id': 2, 'title': 'Air (2) - Moon Safari', 'format': ['CD', 'Album'], 'year': '1998', 'cover_image': 'x'},
+        {'id': 3, 'title': 'Air (2) - Talkie Walkie', 'format': ['CD']},
+        {'id': 4, 'title': 'Autre - Moon Safari', 'format': ['CD']},
+      ], guess);
+      expect(ids, ['2', '1']);
+    });
+
+    group('avec la discothèque (faux Discogs)', () {
+      late HttpServer server;
+      late List<String> calls;
+      late int status;
+
+      setUp(() async {
+        calls = [];
+        status = 200;
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        server.listen((r) async {
+          calls.add('${r.uri.path}${r.uri.path == '/database/search' ? ' ${r.uri.queryParameters['release_title']}' : ''}');
+          expect(r.headers.value(HttpHeaders.authorizationHeader), 'Discogs token=jeton');
+          final body = switch (r.uri.path) {
+            '/database/search' when r.uri.queryParameters['release_title'] == 'Inconnu' => {
+                'results': [{'id': 77, 'title': 'Groupe - Inconnu', 'format': ['File'], 'cover_image': 'https://i.discogs.com/i.jpg'}],
+              },
+            '/database/search' => {
+                'results': [{'id': 42, 'title': 'Air (2) - Moon Safari', 'format': ['CD'], 'year': '1998',
+                  'cover_image': 'https://i.discogs.com/ms.jpg', 'style': ['Downtempo'], 'genre': ['Electronic']}],
+              },
+            '/releases/77' => {
+                'id': 77, 'title': 'Inconnu', 'artists': [{'name': 'Groupe'}],
+                'images': [{'type': 'primary', 'uri': 'https://i.discogs.com/i.jpg'}],
+                'tracklist': [{'position': '1', 'title': 'Première'}],
+              },
+            _ => null,
+          };
+          r.response.statusCode = status != 200 ? status : body == null ? 404 : 200;
+          r.response.write(jsonEncode(body));
+          await r.response.close();
+        });
+      });
+      tearDown(() => server.close(force: true));
+
+      Future<MusicService> service() async {
+        final dir = Directory.systemTemp.createTempSync('c411_discogs');
+        addTearDown(() => dir.deleteSync(recursive: true));
+        final prefs = '${dir.path}/prefs.json';
+        // Moon Safari : reconnu par MusicBrainz, sans pochette ni genres.
+        final sansPochette = MbRelease.fromJson(
+            {...MusicBrainz.parseRelease(_release).toJson(), 'cover': false, 'groupCover': false, 'genres': <String>[]});
+        MusicLibrary(mb: {
+          '/m/Air/Moon Safari': MbMatch(checked: DateTime.now(), release: sansPochette),
+          '/m/Groupe/Inconnu': MbMatch(checked: DateTime.now()),
+        }).writeMb('${dir.path}/state.json');
+        _writeApp(prefs, [
+          {'path': '/m/Air/Moon Safari/01 - femme.flac', 'size': 9 * _mo},
+          {'path': '/m/Groupe/Inconnu/01 - premiere.mp3', 'size': 9 * _mo},
+        ]);
+        final s = MusicService(
+          appLibrary: prefs,
+          statePath: '${dir.path}/state.json',
+          musicBrainz: MusicBrainz(contact: 't', base: 'http://127.0.0.1:9/ws/2', interval: Duration.zero),
+          discogs: Discogs(contact: 't', token: 'jeton', base: 'http://127.0.0.1:${server.port}', interval: Duration.zero),
+        );
+        addTearDown(s.close);
+        s.refresh(); // Lance l'identification en arrière-plan : on attend sa fin.
+        while (s.identifying) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        return s;
+      }
+
+      test('album inconnu : fiche Discogs ; sans pochette : complété ; une seule fois', () async {
+        final s = await service();
+        final byTitle = {for (final a in s.catalog.albums) a.title: a};
+        final inconnu = byTitle['Inconnu']!.release!;
+        expect((inconnu.source, inconnu.coverUrl, inconnu.tracks.single.title),
+            ('discogs', 'https://i.discogs.com/i.jpg', 'Première'));
+        final moon = byTitle['Moon Safari']!.release!;
+        expect((moon.source, moon.coverUrl), ('musicbrainz', 'https://i.discogs.com/ms.jpg'));
+        expect(moon.genres, ['Downtempo', 'Electronic']);
+        expect(s.error, isNull, reason: 'MusicBrainz pas interrogé : déjà cherché');
+        expect(s.status()['fromDiscogs'], 1);
+        calls.clear();
+        await s.identify();
+        expect(calls, isEmpty, reason: 'Discogs consulté une fois par album');
+      });
+
+      test('jeton refusé : signalé, rien de bloqué', () async {
+        status = 401;
+        final s = await service();
+        expect(s.status()['discogsProblem'], contains('refusé'));
+        expect(s.catalog.albums.firstWhere((a) => a.title == 'Moon Safari').release?.source, 'musicbrainz');
+        expect(s.error, isNull);
+      });
+    });
   });
 
   group('discothèque', () {

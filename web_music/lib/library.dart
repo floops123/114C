@@ -81,6 +81,7 @@ class MbTrack {
 /// Une parution (release) MusicBrainz, ce qu'on en garde.
 class MbRelease {
   const MbRelease({
+    this.source = 'musicbrainz',
     required this.id,
     required this.title,
     required this.artist,
@@ -93,11 +94,13 @@ class MbRelease {
     this.type,
     this.cover = false,
     this.groupCover = false,
+    this.image,
     this.genres = const [],
     this.tracks = const [],
   });
 
   factory MbRelease.fromJson(Map<String, dynamic> j) => MbRelease(
+        source: j['source'] as String? ?? 'musicbrainz',
         id: j['id'] as String,
         title: j['title'] as String? ?? '',
         artist: j['artist'] as String? ?? '',
@@ -110,6 +113,7 @@ class MbRelease {
         type: j['type'] as String?,
         cover: j['cover'] as bool? ?? false,
         groupCover: j['groupCover'] as bool? ?? false,
+        image: j['image'] as String?,
         genres: (j['genres'] as List? ?? const []).cast<String>(),
         tracks: [
           for (final t in (j['tracks'] as List? ?? const []).whereType<Map>())
@@ -117,6 +121,10 @@ class MbRelease {
         ],
       );
 
+  /// `musicbrainz` ou `discogs` (album que MusicBrainz ne connaît pas).
+  final String source;
+
+  /// Identifiant de la parution chez sa [source].
   final String id;
   final String title;
 
@@ -138,18 +146,34 @@ class MbRelease {
   /// une de son groupe de parutions.
   final bool cover;
   final bool groupCover;
+
+  /// Pochette Discogs (fiche Discogs, ou complément d'une fiche MusicBrainz
+  /// sans pochette propre).
+  final String? image;
   final List<String> genres;
   final List<MbTrack> tracks;
 
   int? get year => date == null || date!.length < 4 ? null : int.tryParse(date!.substring(0, 4));
 
+  /// La pochette de la parution (Cover Art Archive), sinon celle de Discogs,
+  /// sinon peut-être celle du groupe de parutions.
   String? get coverUrl => cover
       ? 'https://coverartarchive.org/release/$id/front-500'
-      : groupCover && groupId != null
-          ? 'https://coverartarchive.org/release-group/$groupId/front-500'
-          : null;
+      : image ??
+          (groupCover && groupId != null
+              ? 'https://coverartarchive.org/release-group/$groupId/front-500'
+              : null);
 
-  MbRelease withGenres(List<String> genres) => MbRelease(
+  /// La fiche chez sa source.
+  String get url => source == 'discogs'
+      ? 'https://www.discogs.com/release/$id'
+      : 'https://musicbrainz.org/release/$id';
+
+  MbRelease withGenres(List<String> genres) => withExtras(genres: genres);
+
+  /// Complétée par Discogs : pochette, genres (null : inchangés).
+  MbRelease withExtras({String? image, List<String>? genres}) => MbRelease(
+        source: source,
         id: id,
         title: title,
         artist: artist,
@@ -162,11 +186,13 @@ class MbRelease {
         type: type,
         cover: cover,
         groupCover: groupCover,
-        genres: genres,
+        image: image ?? this.image,
+        genres: genres ?? this.genres,
         tracks: tracks,
       );
 
   Map<String, dynamic> toJson() => {
+        if (source != 'musicbrainz') 'source': source,
         'id': id,
         'title': title,
         'artist': artist,
@@ -179,6 +205,7 @@ class MbRelease {
         'type': ?type,
         'cover': cover,
         'groupCover': groupCover,
+        'image': ?image,
         'genres': genres,
         'tracks': [for (final t in tracks) t.toJson()],
       };
@@ -187,10 +214,11 @@ class MbRelease {
 /// Résultat d'une recherche MusicBrainz pour un album : la parution
 /// retenue, ou rien (on réessaiera plus tard).
 class MbMatch {
-  const MbMatch({required this.checked, this.release});
+  const MbMatch({required this.checked, this.release, this.discogs});
 
   factory MbMatch.fromJson(Map<String, dynamic> j) => MbMatch(
         checked: DateTime.tryParse(j['checked'] as String? ?? '') ?? DateTime(2000),
+        discogs: DateTime.tryParse(j['discogs'] as String? ?? ''),
         release: j['release'] == null
             ? null
             : MbRelease.fromJson((j['release'] as Map).cast<String, dynamic>()),
@@ -199,12 +227,16 @@ class MbMatch {
   final DateTime checked;
   final MbRelease? release;
 
+  /// Quand Discogs a été consulté pour cet album (null : jamais).
+  final DateTime? discogs;
+
   /// Une recherche infructueuse est refaite au bout d'une semaine.
   bool get stale => release == null && DateTime.now().difference(checked).inDays >= 7;
 
   Map<String, dynamic> toJson() => {
         'checked': checked.toIso8601String(),
         'release': ?release?.toJson(),
+        'discogs': ?discogs?.toIso8601String(),
       };
 }
 
@@ -294,6 +326,110 @@ class Track {
       };
 }
 
+/// Ce qu'est un dossier de fichiers audio : de la musique, un livre audio,
+/// ou des sons sans rapport (samples d'un logiciel, musiques d'un jeu…).
+enum AlbumKind {
+  music,
+  audiobook,
+  other;
+
+  // Dossiers de catégorie : ceux de l'application dans Transmission
+  // (`ContentKind.plural` : Musique, Livres, Logiciels…), sans accents ni
+  // majuscules ; le premier rencontré depuis la racine décide.
+  static const _categories = {
+    'musique': music, 'music': music,
+    'livres': audiobook, 'livre': audiobook, 'livres audio': audiobook, 'livre audio': audiobook,
+    'audiobooks': audiobook, 'audiobook': audiobook, 'ebooks': audiobook, 'ebook': audiobook,
+    'logiciels': other, 'jeux video': other, 'films': other, 'series': other,
+    'documentaires': other, 'animation': other, 'adulte': other, 'autres': other,
+  };
+  static final _chapter = RegExp(r'\b(chapitre|chapter|chap)\b', caseSensitive: false);
+  // Référence Audible (ASIN) dans les noms : [B0H9MD3W8Q].
+  static final _asin = RegExp(r'\[B0[A-Z0-9]{8}\]');
+  static final _named = RegExp(r'livres? audio|audio ?books?|\blu par\b', caseSensitive: false);
+
+  /// D'après le dossier de catégorie, puis l'extension .m4b, puis les noms :
+  /// « livre audio » dans le dossier, référence Audible, ou une majorité de
+  /// pistes « Chapitre … ».
+  static AlbumKind of(String dir, List<String> paths) {
+    for (final segment in dir.split('/')) {
+      if (_categories[_fold(segment)] case final kind?) return kind;
+    }
+    if (paths.any((p) => p.toLowerCase().endsWith('.m4b'))) return audiobook;
+    if (_named.hasMatch(dir) || _asin.hasMatch(dir)) return audiobook;
+    final names = [for (final p in paths) p.split('/').last];
+    if (names.any(_asin.hasMatch)) return audiobook;
+    if (names.isNotEmpty && names.where(_chapter.hasMatch).length * 2 >= names.length) return audiobook;
+    return music;
+  }
+
+  static String _fold(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp('[éèêë]'), 'e')
+      .replaceAll(RegExp('[àâä]'), 'a')
+      .replaceAll(RegExp('[îï]'), 'i')
+      .replaceAll(RegExp('[ôö]'), 'o')
+      .replaceAll(RegExp('[ùûü]'), 'u')
+      .replaceAll('ç', 'c')
+      .replaceAll(RegExp(r'[\s_.-]+'), ' ')
+      .trim();
+}
+
+/// Titre et auteur d'un livre audio, d'après le nom de son dossier :
+/// « Auteur - Titre », « Titre - Auteur », « Sujet - Titre - Auteur »
+/// (biographies), ou un nom de release (« Les.morts.ont.la.parole.FR.
+/// [MP3.128.kbps]-NOTAG »).
+class AudiobookName {
+  const AudiobookName(this.title, this.author, this.year);
+
+  final String title;
+  final String? author;
+  final int? year;
+
+  static const _articles = {'le', 'la', 'les', 'l', 'un', 'une', 'des', 'du', 'the', 'a', 'an'};
+  static const _particles = {'de', 'du', 'des', 'd', 'von', 'van', 'der', 'den', 'le', 'la', 'y', 'et'};
+
+  /// « Prénom Nom » : deux à quatre mots qui commencent par une majuscule
+  /// (particules permises), sans chiffre, et pas un article en tête.
+  static bool _person(String text) {
+    final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.length < 2 || words.length > 4 || RegExp(r'\d').hasMatch(text)) return false;
+    if (_articles.contains(words.first.toLowerCase().replaceAll(RegExp("['’]\$"), ''))) return false;
+    if (words.first.contains(RegExp("['’]"))) return false; // « L'aube »
+    return words.every((w) => _particles.contains(w.toLowerCase()) || RegExp(r'^[A-ZÀ-Ý][^\s]*$').hasMatch(w));
+  }
+
+  static AudiobookName parse(String dir) {
+    var name = dir.split('/').where((s) => s.isNotEmpty).lastOrNull ?? dir;
+    // Nom de release, sans espaces : les points et soulignés en tiennent lieu.
+    final release = !name.contains(' ');
+    name = name
+        .replaceAll(RegExp(r'\[[^\]]*\]'), ' ') // [MP3.128.kbps], [B0H9MD3W8Q]
+        .replaceAll(RegExp(r'-[A-Za-z0-9]+$'), ''); // -NOTAG (groupe de release)
+    if (release) name = name.replaceAll(RegExp(r'[._]'), ' ');
+    name = name.replaceAll(RegExp(r'\b(FR|FRENCH|MP3|M4B|AAC|\d+ ?kbps)\b', caseSensitive: false), ' ');
+    int? year;
+    name = name.replaceAllMapped(RegExp(r'\((\d{4})\)'), (m) {
+      year = int.parse(m[1]!);
+      return ' ';
+    });
+    name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final parts = [for (final p in name.split(' - ')) if (p.trim().isNotEmpty) p.trim()];
+    if (parts.length < 2) return AudiobookName(name, null, year);
+    final int at;
+    if (parts.length >= 3 && _person(parts.last)) {
+      at = parts.length - 1;
+    } else if (_person(parts.first)) {
+      at = 0;
+    } else if (_person(parts.last)) {
+      at = parts.length - 1;
+    } else {
+      return AudiobookName(name, null, year);
+    }
+    return AudiobookName([for (final (i, p) in parts.indexed) if (i != at) p].join(' - '), parts[at], year);
+  }
+}
+
 /// Un album : un dossier de fichiers audio, et sa fiche MusicBrainz.
 class Album {
   Album({required this.dir, required this.guess, required this.tracks, this.release});
@@ -304,9 +440,16 @@ class Album {
   final MbRelease? release;
 
   late final String id = fileId('album:$dir');
-  String get title => release?.title ?? guess.title;
-  String get artist => release?.artist ?? guess.artist ?? 'Artiste inconnu';
-  int? get year => release?.year ?? guess.year;
+
+  /// Musique, livre audio ou autre ; seule la musique est cherchée sur
+  /// MusicBrainz et Discogs.
+  late final AlbumKind kind = AlbumKind.of(dir, [for (final t in tracks) t.file.path]);
+  late final AudiobookName? _book = kind == AlbumKind.audiobook ? AudiobookName.parse(dir) : null;
+  String get title => _book?.title ?? release?.title ?? guess.title;
+
+  /// L'artiste ; pour un livre audio, l'auteur (vide s'il n'est pas dans le nom).
+  String get artist => _book != null ? _book.author ?? '' : release?.artist ?? guess.artist ?? 'Artiste inconnu';
+  int? get year => _book != null ? _book.year : release?.year ?? guess.year;
 
   /// Nom de l'artiste principal (le premier crédité).
   String get artistName => release?.artistName ?? artist;
@@ -319,6 +462,7 @@ class Album {
   /// [artistId] : celui de son artiste dans le catalogue.
   Map<String, Object?> toJson({required String artistId}) => {
         'id': id,
+        'kind': kind.name,
         'title': title,
         'artist': artist,
         'artistId': artistId,
@@ -328,7 +472,10 @@ class Album {
         'label': release?.label,
         'country': release?.country,
         'genres': release?.genres ?? const [],
-        'mbid': release?.id,
+        'mbid': release?.source == 'musicbrainz' ? release?.id : null,
+        'source': release?.source,
+        'link': release?.url,
+        'coverFrom': release == null ? null : release!.cover ? 'musicbrainz' : release!.image != null ? 'discogs' : release!.coverUrl != null ? 'musicbrainz' : null,
         'cover': release?.coverUrl != null,
         'added': added?.toIso8601String(),
         'formats': {for (final t in tracks) t.file.format}.toList(),
@@ -433,7 +580,10 @@ class Catalog {
     return Catalog([
       for (final MapEntry(key: dir, value: files) in byDir.entries)
         () {
-          final release = library.mb[dir]?.release;
+          // Un livre audio ou des sons sans rapport : pas de fiche, même si
+          // une ancienne recherche en avait trouvé une.
+          final music = AlbumKind.of(dir, [for (final f in files) f.path]) == AlbumKind.music;
+          final release = music ? library.mb[dir]?.release : null;
           return Album(
             dir: dir,
             guess: AlbumGuess.parse(dir),
@@ -444,9 +594,13 @@ class Catalog {
     ]..sort((a, b) => titleKey(a.title).compareTo(titleKey(b.title))));
   }
 
+  /// Albums de musique (sans les livres audio ni les sons sans rapport).
+  Iterable<Album> get music => albums.where((a) => a.kind == AlbumKind.music);
+
   Map<String, Object?> toJson() {
     final artists = <String, Map<String, Object?>>{};
-    for (final a in albums) {
+    // Artistes : ceux de la musique seulement (pas les auteurs des livres audio).
+    for (final a in music) {
       final id = _artistOf[a.id]!;
       final entry = artists[id] ??= {'id': id, 'name': a.artistName, 'mbid': null, 'albums': <String>[]};
       // Le nom et l'identifiant de MusicBrainz, s'il en a un.

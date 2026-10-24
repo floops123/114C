@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:c411_core/media_relay.dart';
+import 'package:c411_core/votes.dart';
 
 import 'config.dart';
 import 'library.dart';
@@ -33,7 +34,10 @@ const browserTypes = {
 ///   le disque à côté de la discothèque ;
 /// - `GET /api/play/<piste>` : comment la lire (directement ou convertie) ;
 /// - `GET /media/<piste>` : le fichier tel quel, avec `Range` ;
-/// - `GET /stream/<piste>?t=<secondes>` : AAC converti à la volée.
+/// - `GET /stream/<piste>?t=<secondes>` : AAC converti à la volée ;
+/// - `GET /api/votes`, `POST /api/vote/<album>` : votes « j'aime / je n'aime
+///   pas » anonymes des membres ; `GET /api/favorites` :
+///   ce que le membre a aimé (`c411_core/votes.dart`).
 class MusicServer {
   MusicServer(
     this.config, {
@@ -41,6 +45,7 @@ class MusicServer {
     required this.relay,
     required this.publicDir,
     this.fontsDir,
+    this.votes,
     this.ffmpeg = 'ffmpeg',
     this.ffprobe = 'ffprobe',
     this.canTranscode = true,
@@ -54,6 +59,10 @@ class MusicServer {
 
   /// Polices de l'application (`assets/fonts`), servies sous `/fonts/`.
   final String? fontsDir;
+
+  /// Votes des membres (absent : pas de votes).
+  final Votes? votes;
+
   final String ffmpeg;
   final String ffprobe;
 
@@ -97,6 +106,9 @@ class MusicServer {
         await response.close();
         return;
       }
+      final votes = this.votes;
+      // Un album, un livre audio ou un titre précis.
+      if (votes != null && await votes.serve(request, exists: (id) => service.catalog.album(id) != null || service.catalog.file(id) != null)) return;
       final segments = request.uri.pathSegments;
       final post = request.method == 'POST';
       switch ((segments.firstOrNull ?? '', segments.length, post)) {

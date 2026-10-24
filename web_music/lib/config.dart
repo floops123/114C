@@ -14,7 +14,8 @@ import 'package:c411_core/ftp.dart';
 ///   "password": "",
 ///   "library": "/chemin/vers/shared_preferences.json",
 ///   "state": "/chemin/vers/music.json",
-///   "contact": "https://exemple.org/moi"
+///   "contact": "https://exemple.org/moi",
+///   "discogsToken": ""
 /// }
 /// ```
 class MusicConfig {
@@ -26,6 +27,7 @@ class MusicConfig {
     this.port = 8412,
     this.password = '',
     this.contact = defaultContact,
+    this.discogsToken = '',
   });
 
   final FilesConfig files;
@@ -44,6 +46,11 @@ class MusicConfig {
 
   /// Adresse de contact envoyée à MusicBrainz (User-Agent), qui l'exige.
   final String contact;
+
+  /// Jeton personnel Discogs (discogs.com → Réglages → Développeurs) : albums
+  /// inconnus de MusicBrainz, pochettes et styles manquants. Sans lui,
+  /// Discogs n'est pas interrogé.
+  final String discogsToken;
 
   static const defaultContact = 'https://codeberg.org/vachounet/114C';
 
@@ -74,6 +81,7 @@ class MusicConfig {
       port: int.tryParse(overrides['port'] ?? '') ?? (music['port'] as num?)?.toInt() ?? 8412,
       password: overrides['password'] ?? (music['password'] as String? ?? ''),
       contact: option('contact', defaultContact),
+      discogsToken: option('discogs-token', text(music, 'discogsToken')),
     );
   }
 
