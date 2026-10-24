@@ -25,16 +25,12 @@ caches), `cached_network_image` (affiches), `media_kit` (lecteur, mpv),
 ## Les dossiers
 
 ```
-packages/c411_core/            Dart pur partagé avec web_player, web_music et
-                               web_books : client FTP, relais HTTP, lecture
-                               des noms de release, de musique et de livres
-                               (lib/api/ftp.dart… ne font que ré-exporter)
-web_player/                    C411 TV : la vidéothèque dans un navigateur
-                               (voir web_player/README.md)
-web_music/                     C411 Music : la musique dans un navigateur,
-                               fiches MusicBrainz (voir web_music/README.md)
-web_books/                     C411 Books : livres, BD, mangas, magazines
-                               dans un navigateur (voir web_books/README.md)
+packages/c411_core/            Dart pur : client FTP et WebDAV, relais HTTP,
+                               lecture des noms de release, de musique et de
+                               livres (lib/api/ftp.dart… ne font que
+                               ré-exporter). Les serveurs web (C411 TV, Music,
+                               Books) en ont une copie dans leur dépôt,
+                               vache-media, depuis le 24/10/2026.
 tool/
 └── build_personal.dart        convertit un JSON de réglages en --dart-define
                                pour produire une variante avec identifiants

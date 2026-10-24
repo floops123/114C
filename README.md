@@ -61,40 +61,13 @@ dart run tool/build_personal.dart personal.json --build apk
 Les valeurs sont compilées dans le binaire au moment du build (le JSON
 n'est pas embarqué dans l'APK). Détails : [Compilation personnalisée](docs/dev/build.md).
 
-## C411 TV : la vidéothèque dans le navigateur
+## Dans le navigateur : vache-media
 
-Le dossier [`web_player/`](web_player/README.md) contient un petit serveur
-qui diffuse ta vidéothèque **à la manière d'un Netflix** : il lit la base de
-l'application et les vidéos sur ton FTP (identifiants du JSON de réglages),
-et convertit à la volée avec ffmpeg ce que le navigateur ne sait pas lire.
-
-```sh
-cd web_player && dart pub get && dart run bin/web_player.dart ../personal.json
-```
-
-## C411 Music : la musique dans le navigateur
-
-Le dossier [`web_music/`](web_music/README.md) fait de même pour la musique.
-Il lit la musique que le parcours de l'application relève (torrents terminés
-et dossiers du FTP), identifie chaque album sur
-[MusicBrainz](https://musicbrainz.org/) (pochettes de la Cover Art Archive)
-et le propose dans un lecteur avec file d'attente.
-
-```sh
-cd web_music && dart pub get && dart run bin/web_music.dart ../personal.json
-```
-
-## C411 Books : la bibliothèque dans le navigateur
-
-Le dossier [`web_books/`](web_books/README.md) fait de même pour les livres,
-BD, mangas et magazines relevés par le parcours de l'application. Les
-informations viennent des fichiers eux-mêmes (EPUB, `ComicInfo.xml` des BD),
-d'[Open Library](https://openlibrary.org/), et au besoin de Google Books.
-Les liseuses EPUB, PDF et BD sont dans le navigateur.
-
-```sh
-cd web_books && dart pub get && dart run bin/web_books.dart ../personal.json
-```
+Les serveurs web C411 TV, C411 Music et C411 Books (vidéothèque, musique et
+livres dans le navigateur) ont quitté ce dépôt le 24/10/2026 : ils vivent
+dans leur propre dépôt, `~/vache-media`, avec leur historique et leur propre
+copie de `c411_core`. Ils lisent toujours la base de l'application et le
+JSON de réglages (sections `web`, `music`, `books`).
 
 ## Documentation
 
@@ -141,8 +114,7 @@ le service auquel ils appartiennent.
 
 ## Licences
 
-Code de l'application (et de `packages/c411_core`, `web_player`, `web_music`,
-`web_books`) : licence
+Code de l'application (et de `packages/c411_core`) : licence
 [WTFPL](LICENSE) — fais-en ce que tu veux. Police
 [Inter](https://rsms.me/inter/) et polices code et rétro sous licence OFL
 (`assets/fonts/`, `assets/fonts/licenses/`). Copie corrigée de `media_kit_video` sous
@@ -151,5 +123,4 @@ Données de films et séries fournies par [TMDB](https://www.themoviedb.org/)
 (l'application n'est ni approuvée ni certifiée par TMDB). Données musicales
 de [MusicBrainz](https://musicbrainz.org/) (CC0 et CC BY-NC-SA) et pochettes
 de la [Cover Art Archive](https://coverartarchive.org/). Fiches de livres
-d'[Open Library](https://openlibrary.org/). C411 Books intègre PDF.js (Apache
-2.0), epub.js (BSD) et JSZip (MIT) : `web_books/public/vendor/LICENSES.txt`.
+d'[Open Library](https://openlibrary.org/).

@@ -32,7 +32,7 @@ bandes-annonces) sont ignorées, y compris dans une base enregistrée avant
 cette règle, sans nouveau parcours.
 
 Le même parcours relève aussi **la musique**, pour
-[C411 Music](../../web_music/README.md) ; l'application ne l'affiche pas.
+C411 Music (serveur web, dépôt vache-media) ; l'application ne l'affiche pas.
 Les règles :
 
 - un torrent terminé ne compte que si l'audio fait au moins la moitié de ses
@@ -42,7 +42,7 @@ Les règles :
 - une piste de moins de 300 Ko est ignorée.
 
 Et **les livres numériques** (EPUB, PDF, CBZ, CBR, MOBI…), pour
-[C411 Books](../../web_books/README.md) :
+C411 Books (serveur web, dépôt vache-media) :
 
 - un torrent terminé ne compte que si les livres font au moins la moitié de
   ses octets. La notice PDF d'un jeu n'en fait pas partie ;

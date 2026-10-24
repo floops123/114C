@@ -157,8 +157,7 @@ Le fichier `.github/workflows/build.yml` compile l'application à chaque
 poussée sur `master`, à chaque tag `v…`, à chaque pull request, ou à la
 demande (*Actions › Build › Run workflow*). Ses tâches :
 
-1. **Analyse et tests** : `flutter analyze`, `flutter test`, puis les tests
-   des serveurs web (`web_player`, `web_music`, `web_books`).
+1. **Analyse et tests** : `flutter analyze`, `flutter test`.
 2. Ensuite, en parallèle :
    - **APK Android** : `flutter build apk --release`, signé avec la clé de
      débogage comme en local ;

@@ -37,9 +37,6 @@ analyze:
     - flutter pub get
     - flutter analyze --no-fatal-infos
     - flutter test
-    # C411 TV (web_player) : Dart pur. Le test de bout en bout avec ffmpeg
-    # est ignoré si ffmpeg n'est pas installé dans l'image.
-    - cd web_player && dart pub get && dart analyze && dart test
 
 build_android_apk:
   stage: build

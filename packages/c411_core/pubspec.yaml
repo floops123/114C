@@ -1,5 +1,5 @@
 name: c411_core
-description: "Code Dart pur partagé par C411 Remote, web_player, web_music et web_books : client FTP, relais HTTP, lecture des noms de release, de musique et de livres."
+description: "Code Dart pur de C411 Remote : clients FTP et WebDAV, relais HTTP, lecture des noms de release, de musique et de livres."
 publish_to: 'none'
 version: 1.0.0
 
@@ -7,7 +7,5 @@ environment:
   sdk: ^3.13.5
 
 dependencies:
-  # Empreintes anonymes des votes (votes.dart).
-  crypto: ^3.0.0
   # Réponses PROPFIND du client WebDAV.
   xml: ^7.1.0

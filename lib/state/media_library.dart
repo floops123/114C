@@ -22,8 +22,8 @@ import 'torrents.dart';
 // terminés et des dossiers choisis, lus sur le FTP du serveur, reconnus
 // d'après leur nom puis rattachés à leur fiche TMDB. Rangée sur l'appareil.
 // Le même parcours relève aussi la musique et les livres numériques, pour
-// C411 Music (web_music/) et C411 Books (web_books/), qui les lisent ici
-// comme C411 TV lit les vidéos.
+// les serveurs web de vache-media (dépôt à part), qui les lisent ici comme
+// les vidéos.
 
 /// Un fichier vidéo du serveur, chemin FTP.
 class MediaFile {

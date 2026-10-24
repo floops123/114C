@@ -33,15 +33,6 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
-      # Serveurs web (Dart pur) : C411 TV, C411 Music, C411 Books. Le test de
-      # bout en bout de C411 TV avec ffmpeg est ignoré si ffmpeg est absent.
-      - name: Serveurs web
-        run: |
-          for project in web_player web_music web_books; do
-            echo "::group::$project"
-            (cd "$project" && dart pub get && dart analyze && dart test)
-            echo "::endgroup::"
-          done
 
   android:
     name: APK Android
