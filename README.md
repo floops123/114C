@@ -5,7 +5,7 @@
 
 C411 Remote est un client **Flutter** multiplateforme (Linux, Android…) qui
 parle directement à ton serveur **Transmission**, aux trackers **C411**,
-**tr4ker**, **Nostradamus**, **Draupnirr** et **AstraTorrent**, à **TMDB**
+**tr4ker**, **Nostradamus**, **Draupnirr**, **V3X** et **AstraTorrent**, à **TMDB**
 et aux fichiers de ta seedbox (**FTP**, **WebDAV** ou dossier local). Aucun
 serveur intermédiaire : tout se passe entre l'application et tes services.
 

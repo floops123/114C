@@ -24,6 +24,9 @@ enum Tracker {
       announceHint: 'nostradamus'),
   draupnirr('Draupnirr', 'https://draupnirr.xyz/torznab/api',
       apiKeyHeader: 'X-Api-Key', announceHint: 'draupnirr'),
+  // Annonce 200 requêtes par fenêtre (`x-ratelimit-*`), sans en dire la
+  // durée : le défaut de 120 / min.
+  v3x('V3X', 'https://api.v3x.club/torznab', announceHint: 'v3x'),
 
   // Limite non publiée : prudence.
   astra('AstraTorrent', 'https://astratorrent.la',
@@ -76,7 +79,7 @@ enum Tracker {
 
   TrackerApi client(String apiKey) => switch (this) {
         c411 => C411Api(apiKey),
-        tr4ker || nostradamus || draupnirr => TorznabApi(this, apiKey),
+        tr4ker || nostradamus || draupnirr || v3x => TorznabApi(this, apiKey),
         astra => AstraApi(apiKey),
       };
 }

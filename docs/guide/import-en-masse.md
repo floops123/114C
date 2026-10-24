@@ -80,7 +80,7 @@ petits torrents efficace :
   directement à la bonne page (quelques requêtes, par dichotomie) au
   lieu de parcourir des centaines de fichiers de quelques Ko.
 - **AstraTorrent** trie de même, sur ses 1 000 dernières sorties.
-- **tr4ker, Nostradamus, Draupnirr** (Torznab) ne savent donner que les
+- **tr4ker, Nostradamus, Draupnirr, V3X** (Torznab) ne savent donner que les
   plus récentes : leurs pages sont parcourues dans cet ordre et filtrées.
 - Avec **plusieurs catégories cochées**, chacune fait l'objet de sa
   propre recherche (même ordre, même arrêt à la taille max), et les

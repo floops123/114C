@@ -7,7 +7,7 @@ formats, pièges. À lire avant de toucher à un client de `lib/api/`.
 
 - [C411 (HTTP)](#c411--api-http)
 - [C411 (WebSocket et discussion)](#c411--websocket-et-discussion)
-- [Torznab : tr4ker, Nostradamus, Draupnirr](#torznab--tr4ker-nostradamus-draupnirr)
+- [Torznab : tr4ker, Nostradamus, Draupnirr, V3X](#torznab--tr4ker-nostradamus-draupnirr-v3x)
 - [Draupnirr (compte, missions)](#draupnirr--compte-missions)
 - [AstraTorrent](#astratorrent)
 - [Transmission](#transmission)
@@ -150,16 +150,20 @@ versés. Requêtes dans le budget du cookie (`c411SessionQuota`).
   `GET /api/messages/channels/{id}?limit=N` (historique, `pinnedMessage`),
   même cookie. Avatars et images `/uploads/…` sont publics.
 
-## Torznab : tr4ker, Nostradamus, Draupnirr
+## Torznab : tr4ker, Nostradamus, Draupnirr, V3X
 
 Client générique `TorznabApi` ([spécification](https://torznab.github.io/spec-1.3-draft/)).
 
-| | tr4ker | Nostradamus | Draupnirr |
-|---|---|---|---|
-| Endpoint | `https://tr4ker.net/api/` | `https://nostradamus.foo/api` | `https://draupnirr.xyz/torznab/api` |
-| Clé | en-tête `X-Api-Key` **et** paramètre `apikey` | paramètre `apikey` | en-tête `X-Api-Key` **et** paramètre `apikey` |
-| Limite | 120/min clé | 120/min clé | 120/min clé (300/min IP) |
+| | tr4ker | Nostradamus | Draupnirr | V3X |
+|---|---|---|---|---|
+| Endpoint | `https://tr4ker.net/api/` | `https://nostradamus.foo/api` | `https://draupnirr.xyz/torznab/api` | `https://api.v3x.club/torznab` |
+| Clé | en-tête `X-Api-Key` **et** paramètre `apikey` | paramètre `apikey` | en-tête `X-Api-Key` **et** paramètre `apikey` | paramètre `apikey` (portée `torznab`) |
+| Limite | 120/min clé | 120/min clé | 120/min clé (300/min IP) | 200 par fenêtre (`x-ratelimit-*`, durée non publiée) : 120/min retenu |
 
+- V3X : `t=caps` public ; ses sous-catégories sont nommées sans leur
+  parente (« Anime », « Documentary » sous « TV », « Games » sous « PC ») ;
+  sans clé valide, `<error code="100" description="Invalid API Key or
+  missing 'torznab' scope"/>`.
 - tr4ker : `/api` redirige vers `/api/` ; `/api/torznab` est déprécié ; la
   clé est exigée même pour `t=caps` (sinon 401).
 - Draupnirr expose aussi un catalogue JSON (`/api/torrents`, avec

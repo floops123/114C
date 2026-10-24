@@ -53,7 +53,7 @@ void main() {
     // À chaque nouveau champ ajouté à AppSettings, il faut aussi ajouter
     // la variable correspondante ici ET dans `BuildDefaults.toAppSettings`.
     expect(BuildDefaults.allVariables, contains('C411_WEBDAV_URL'));
-    expect(BuildDefaults.allVariables.length, 23);
+    expect(BuildDefaults.allVariables.length, 24);
     // Chaque tracker a sa variable (build_personal produit C411_<TRACKER>_KEY).
     for (final t in Tracker.values) {
       final name = t == Tracker.astra ? 'ASTRATORRENT' : t.name.toUpperCase();

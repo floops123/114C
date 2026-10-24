@@ -42,6 +42,7 @@ Un champ par tracker ; laisse vide ceux que tu n'utilises pas.
 | tr4ker | clé API | profil sur tr4ker.net |
 | Nostradamus | clé API | profil sur nostradamus.foo |
 | Draupnirr | clé API (passkey) | profil sur draupnirr.xyz |
+| V3X | clé API (portée `torznab`) | profil sur v3x.club |
 | AstraTorrent | **passkey** | profil sur astratorrent.la |
 
 Chaque tracker renseigné rejoint la vue **Trackers** et la vérification de

@@ -23,7 +23,9 @@ Release _release(Tracker tracker, List<String> categories,
 void main() {
   // Noms réels : C411 (fixtures et sorties vues), Nostradamus (son `caps`
   // public), AstraTorrent (ses catégories fixes), Torznab standard (Prowlarr,
-  // Jackett). Chaque groupe doit donner la même étiquette dans Transmission.
+  // Jackett), V3X (son `caps` public : noms de sous-catégories sans le
+  // parent, « Anime » sous « TV »). Chaque groupe doit donner la même
+  // étiquette dans Transmission.
   final cases = <String, List<Release>>{
     'Films': [
       _release(Tracker.c411, ['Films & Vidéos', 'Film'], mediaKind: 'movie'),
@@ -32,6 +34,7 @@ void main() {
       _release(Tracker.nostradamus, ['Films', 'Films/Spectacle']),
       _release(Tracker.astra, ['Films'], sub: 'Longs-métrages / Cinéma'),
       _release(Tracker.tr4ker, ['Movies', 'Movies/HD']),
+      _release(Tracker.v3x, ['Movies']),
     ],
     'Séries': [
       _release(Tracker.c411, ['Films & Vidéos', 'Série TV'],
@@ -41,12 +44,14 @@ void main() {
       _release(Tracker.nostradamus, ['Séries TV', 'Séries TV/Émission TV'], name: 'Emission.2024-GRP'),
       _release(Tracker.astra, ['Séries'], name: 'Serie.S01.1080p.WEB-GRP'),
       _release(Tracker.draupnirr, ['TV', 'TV/HD'], name: 'Serie.S01E01.1080p.WEB-GRP'),
+      _release(Tracker.v3x, ['TV'], name: 'Serie.S01E01.1080p.WEB-GRP'),
     ],
     'Documentaires': [
       _release(Tracker.c411, ['Films & Vidéos', 'Série Documentaire'], mediaKind: 'tv'),
       _release(Tracker.nostradamus, ['Films', 'Films/Documentaire']),
       _release(Tracker.nostradamus, ['Séries TV', 'Séries TV/Documentaire']),
       _release(Tracker.tr4ker, ['TV', 'TV/Documentary']),
+      _release(Tracker.v3x, ['TV', 'Documentary']),
     ],
     'Animation': [
       _release(Tracker.c411, ['Films & Vidéos', 'Animation Série'], mediaKind: 'tv'),
@@ -55,6 +60,7 @@ void main() {
       _release(Tracker.nostradamus, ['Séries TV', 'Séries TV/Animation Série']),
       _release(Tracker.astra, ['Animés']),
       _release(Tracker.tr4ker, ['TV', 'TV/Anime']),
+      _release(Tracker.v3x, ['TV', 'Anime'], name: 'Anime.S01E01.1080p.WEB-GRP'),
     ],
     'Musique': [
       _release(Tracker.c411, ['Audio', 'Musique'], name: 'Artiste.Album.2024.FLAC-GRP'),
@@ -62,6 +68,9 @@ void main() {
       _release(Tracker.nostradamus, ['Audio', 'Audio/Podcast Radio'], name: 'Podcast.2024-GRP'),
       _release(Tracker.astra, ['Musique'], name: 'Artiste.Album.2024.FLAC-GRP'),
       _release(Tracker.tr4ker, ['Audio', 'Audio/Lossless'], name: 'Artiste.Album.2024.FLAC-GRP'),
+      _release(Tracker.v3x, ['Audio', 'Lossless'], name: 'Artiste.Album.2024.FLAC-GRP'),
+      _release(Tracker.v3x, ['Audio', 'MP3'], name: 'Artiste.Album.2024.MP3-GRP'),
+      _release(Tracker.v3x, ['Audio', 'Video'], name: 'Artiste.Concert.2024.1080p-GRP'),
     ],
     'Livres': [
       _release(Tracker.c411, ['Ebook', 'Livres'], name: 'Auteur.Roman.FRENCH.EPUB-GRP'),
@@ -74,6 +83,11 @@ void main() {
       _release(Tracker.astra, ['Livres'], name: 'Auteur.Roman.FRENCH.EPUB-GRP'),
       _release(Tracker.tr4ker, ['Books', 'Books/EBook'], name: 'Auteur.Roman.FRENCH.EPUB-GRP'),
       _release(Tracker.tr4ker, ['Audio', 'Audio/Audiobook'], name: 'Auteur.Roman.FRENCH.MP3-GRP'),
+      _release(Tracker.v3x, ['Books', 'EBook'], name: 'Auteur.Roman.FRENCH.EPUB-GRP'),
+      _release(Tracker.v3x, ['Books', 'Comics'], name: 'Serie.BD.T01.CBZ-GRP'),
+      _release(Tracker.v3x, ['Books', 'Mags'], name: 'Journal.2024.PDF-GRP'),
+      _release(Tracker.v3x, ['Books', 'Technical'], name: 'Manuel.2024.PDF-GRP'),
+      _release(Tracker.v3x, ['Audio', 'Audiobook'], name: 'Auteur.Roman.FRENCH.MP3-GRP'),
     ],
     'Jeux vidéo': [
       _release(Tracker.c411, ['Jeux Vidéo', 'Windows'], name: 'Jeu.v1.2-GRP'),
@@ -83,11 +97,15 @@ void main() {
       _release(Tracker.astra, ['Jeux'], name: 'Jeu.v1.2-GRP'),
       _release(Tracker.tr4ker, ['PC', 'PC/Games'], name: 'Jeu.v1.2-GRP'),
       _release(Tracker.tr4ker, ['Console', 'Console/PS4'], name: 'Jeu.PS4-GRP'),
+      _release(Tracker.v3x, ['PC', 'Games'], name: 'Jeu.v1.2-GRP'),
+      _release(Tracker.v3x, ['Console'], name: 'Jeu.NSW-GRP'),
     ],
     'Logiciels': [
       _release(Tracker.c411, ['Applications', 'Windows'], name: 'Logiciel.v3.0.x64-GRP'),
       _release(Tracker.astra, ['Logiciels'], name: 'Logiciel.v3.0.x64-GRP'),
       _release(Tracker.tr4ker, ['PC', 'PC/0day'], name: 'Logiciel.v3.0.x64-GRP'),
+      _release(Tracker.v3x, ['PC', 'Mac'], name: 'Logiciel.v3.0.macOS-GRP'),
+      _release(Tracker.v3x, ['PC', 'Mobile-Android'], name: 'Appli.v3.0.APK-GRP'),
     ],
     'Adulte': [
       _release(Tracker.astra, ['XXX']),

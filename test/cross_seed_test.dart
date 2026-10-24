@@ -192,6 +192,7 @@ void main() {
     expect(Tracker.fromAnnounces(['https://tracker.c411.org/x/announce']), Tracker.c411);
     expect(Tracker.fromAnnounces(['https://tr4ker.net/announce']), Tracker.tr4ker);
     expect(Tracker.fromAnnounces(['https://nostradamus.foo/announce/abc']), Tracker.nostradamus);
+    expect(Tracker.fromAnnounces(['https://tracker.v3x.club/announce/abc']), Tracker.v3x);
     expect(Tracker.fromAnnounces(['udp://open.example:80']), isNull);
     expect(crossSeedQuery('Serie.S01E01.1080p-GRP.mkv'), 'Serie.S01E01.1080p-GRP');
     expect(crossSeedQuery('Film.2024.MULTi.1080p.WEB-GRP'), 'Film.2024.MULTi.1080p.WEB-GRP');

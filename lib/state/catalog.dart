@@ -100,7 +100,7 @@ bool _sameYear(Release r, TmdbTitle t) =>
 
 /// Ordre de vérification : les trackers les moins sollicités d'abord, C411
 /// (quota partagé avec tout le reste) en dernier.
-const _checkOrder = [Tracker.astra, Tracker.tr4ker, Tracker.nostradamus, Tracker.c411];
+const _checkOrder = [Tracker.astra, Tracker.tr4ker, Tracker.nostradamus, Tracker.v3x, Tracker.c411];
 
 abstract class AvailabilityStore {
   Map<String, Availability> load();
