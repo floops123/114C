@@ -7,5 +7,7 @@ environment:
   sdk: ^3.13.5
 
 dependencies:
+  # Empreintes anonymes des votes (votes.dart).
+  crypto: ^3.0.0
   # Réponses PROPFIND du client WebDAV.
   xml: ^7.1.0
